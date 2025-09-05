@@ -7,7 +7,8 @@
   "css": "style.css",
   "author": "DeepSeek和反死",
   "version": "1.3.0",
-  "homePage": "https://github.com/xs138144-sys/-",
+  "homePage": "https://github.com/xs138144-sys/st_image_player.git",
   "description": "带窗口控制和AI检测的图片播放器扩展",
   "module": true
 }
+
