@@ -610,7 +610,7 @@
     box-shadow: none;
 }
 
-/* 无边框模式样式 */
+/* 无边框模式样式（优化：视频控制栏hover显示） */
 .image-player-window.no-border {
     border: none;
     box-shadow: none;
@@ -618,18 +618,53 @@
     backdrop-filter: none;
 }
 
+/* 边框隐藏时：隐藏标题栏、控制栏、调整手柄，但保留视频控制栏（默认隐藏） */
 .image-player-window.no-border .image-player-header,
 .image-player-window.no-border .image-player-controls,
 .image-player-window.no-border .resize-handle {
     display: none;
-    /* 隐藏标题栏、控制栏、调整手柄 */
 }
 
 .image-player-window.no-border .image-player-body {
     padding: 0;
 }
 
+/* 新增：给视频容器加底部内边距，避免控制栏遮挡视频底部 */
+.image-player-window.no-border .image-container {
+    padding-bottom: 40px;
+    /* 与视频控制栏高度一致（控制栏约38px，留2px余量） */
+    box-sizing: border-box;
+    /* 确保内边距不影响容器总高度 */
+}
+
+/* 边框隐藏时：视频控制栏默认隐藏，位于底部并添加过渡效果 */
+.image-player-window.no-border .video-controls {
+    display: block;
+    position: absolute;
+    bottom: 0;
+    /* 默认隐藏在窗口底部外 */
+    left: 0;
+    right: 0;
+    transition: bottom 0.3s ease, opacity 0.3s ease;
+    /* 平滑弹出/隐藏 */
+    opacity: 0;
+}
+
+/* 鼠标悬浮到视频区域时：显示视频控制栏 */
+.image-player-window.no-border .image-container:hover .video-controls {
+    bottom: 0;
+    /* 从底部弹出 */
+    opacity: 1;
+    /* 显示不透明 */
+}
+
+/* 边框隐藏时：媒体信息栏可选保留（hover时也显示） */
 .image-player-window.no-border .image-info {
     background: rgba(0, 0, 0, 0.5);
-    /* 半透明信息栏（可选保留） */
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-player-window.no-border .image-container:hover .image-info {
+    opacity: 1;
 }

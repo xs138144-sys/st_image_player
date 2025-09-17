@@ -248,7 +248,10 @@ const initWebSocket = () => {
     ws = new WebSocket(wsUrl);
     ws.onopen = () => {
       console.log(`[${EXTENSION_ID}] WebSocket连接成功`);
-      // 移除烦人的"实时连接建立"提示
+      // 新增：WebSocket连接成功后刷新媒体列表
+      refreshMediaList().then(() => {
+        showImage("current"); // 重新显示当前媒体
+      });
     };
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
@@ -486,6 +489,21 @@ const positionWindow = (windowId) => {
     .toggleClass("locked", settings.isLocked)
     .toggle(settings.isWindowVisible)
     .toggleClass("no-border", settings.hideBorder); // 应用边框隐藏样式
+
+  // 新增：边框隐藏时确保视频控制栏事件正常（兼容hover显示）
+  if (settings.hideBorder && settings.showVideoControls) {
+    const videoContainer = win.find(".image-container");
+    const videoControls = win.find(".video-controls");
+    // 鼠标离开容器后3秒隐藏控制栏
+    videoContainer.on("mouseleave", () => {
+      setTimeout(() => {
+        if (videoControls.is(":visible") && !progressDrag && !volumeDrag) {
+          videoControls.css({ bottom: "-40px", opacity: 0 });
+        }
+      }, 3000); // 3秒延迟，避免频繁隐藏
+    });
+  }
+
   adjustVideoControlsLayout();
 };
 
@@ -619,18 +637,28 @@ const setupWindowEvents = (windowId) => {
     }
     progressDrag = false;
     volumeDrag = false;
+    // 进度条/音量条拖拽结束后，延迟1秒再允许隐藏控制栏
+    if (settings.hideBorder) {
+      setTimeout(() => {
+        const videoControls = $(winSelector).find(".video-controls");
+        const videoContainer = $(winSelector).find(".image-container");
+        if (!videoContainer.is(":hover")) {
+          videoControls.css({ bottom: "-40px", opacity: 0 });
+        }
+      }, 1000);
+    }
   });
 
-  // 窗口锁定
-  $(`${winSelector} .lock`).on("click", function () {
+  // 窗口锁定（事件委托，支持动态元素）
+  $(document).on("click", `${winSelector} .lock`, function () {
     const settings = getExtensionSettings();
+    // 总开关关闭时不执行
+    if (!settings.enabled) return;
     settings.isLocked = !settings.isLocked;
     saveSafeSettings();
-    $(this)
-      .find("i")
-      .toggleClass("fa-lock fa-lock-open")
-      .closest(".image-player-window")
-      .toggleClass("locked");
+    // 更新图标和窗口样式
+    $(this).find("i").toggleClass("fa-lock fa-lock-open");
+    $(this).closest(".image-player-window").toggleClass("locked");
     toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
   });
 
@@ -693,13 +721,20 @@ const setupWindowEvents = (windowId) => {
     showImage("current");
   });
 
-  // 显示/隐藏媒体信息（移除冗余提示）
-  $(`${winSelector} .toggle-info`).on("click", function () {
+  // 显示/隐藏媒体信息（事件委托，支持动态元素）
+  $(document).on("click", `${winSelector} .toggle-info`, function () {
     const settings = getExtensionSettings();
+    // 总开关关闭时不执行
+    if (!settings.enabled) return;
     settings.showInfo = !settings.showInfo;
     saveSafeSettings();
+    // 更新按钮状态和信息栏显示
     $(this).toggleClass("active", settings.showInfo);
-    $(`${winSelector} .image-info`).toggle(settings.showInfo);
+    // 可靠获取当前窗口的信息栏（避免选择器冲突）
+    $(this)
+      .closest(".image-player-body")
+      .find(".image-info")
+      .toggle(settings.showInfo);
   });
 
   // 显示/隐藏视频控制（移除冗余提示）
@@ -901,13 +936,20 @@ const startProgressUpdate = () => {
     !settings.customVideoControls.showProgress &&
     !settings.customVideoControls.showTime
   )
-    return; // 无需要更新的控件则不启动
+    return;
 
   stopProgressUpdate();
   settings.progressUpdateInterval = setInterval(() => {
     const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
     if (!videoElement || videoElement.paused || isNaN(videoElement.duration))
       return;
+
+    // 新增：视频播放时临时显示控制栏（方便用户看进度）
+    if (settings.hideBorder && settings.showVideoControls) {
+      const videoControls = $(`#${PLAYER_WINDOW_ID} .video-controls`);
+      videoControls.css({ bottom: 0, opacity: 1 });
+    }
+
     const progress = videoElement.currentTime / videoElement.duration;
     updateProgressBar(progress);
     if (settings.customVideoControls.showTime) {
@@ -1000,28 +1042,47 @@ const getRandomMediaIndex = () => {
   return availableIndices[randomIndex];
 };
 
-// 媒体预加载（区分图片/视频）
 const preloadMediaItem = async (mediaUrl, mediaType) => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return null; // 总开关关闭则不预加载
-
+  if (!settings.enabled) return null;
   if (mediaType === "video" && !settings.preloadVideos) return null;
-  return new Promise((resolve) => {
-    if (mediaType === "image") {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);
-      img.src = mediaUrl;
-    } else if (mediaType === "video") {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.onloadedmetadata = () => resolve(video);
-      video.onerror = () => resolve(null);
-      video.src = mediaUrl;
-    } else {
-      resolve(null);
+
+  const maxRetries = 3;
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      return await new Promise((resolve, reject) => {
+        if (mediaType === "image") {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("图片预加载失败"));
+          img.src = mediaUrl;
+        } else if (mediaType === "video") {
+          const video = document.createElement("video");
+          video.preload = "metadata";
+          video.onloadedmetadata = () => resolve(video);
+          video.onerror = () => reject(new Error("视频预加载失败"));
+          video.src = mediaUrl;
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (error) {
+      retries++;
+      console.warn(
+        `[${EXTENSION_ID}] 预加载${mediaType}失败，重试中（${retries}/${maxRetries}）`,
+        error
+      );
+      if (retries >= maxRetries) {
+        console.error(
+          `[${EXTENSION_ID}] 预加载${mediaType}失败（已达最大重试次数）`
+        );
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-  });
+  }
+  return null;
 };
 
 // 应用过渡效果（视频不应用）
@@ -1931,6 +1992,8 @@ const updateExtensionMenu = () => {
   // 7. 视频循环状态同步（播放器+设置面板）
   $(`#${PLAYER_WINDOW_ID} .loop-btn`).toggleClass("active", settings.videoLoop);
   $("#player-video-loop").prop("checked", settings.videoLoop);
+  // 新增：同步播放器循环按钮的active类（修正变量未定义问题）
+  $(`#${PLAYER_WINDOW_ID} .loop-btn`).toggleClass("active", settings.videoLoop);
 
   // 8. 边框隐藏状态同步（播放器+设置面板）
   $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
