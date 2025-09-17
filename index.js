@@ -2185,18 +2185,17 @@ const initExtension = async () => {
       window.extension_settings = {};
     }
     if (!window.extension_settings[EXTENSION_ID]) {
-      // 引入深拷贝（若扩展有lodash可使用，无则手动复制）
-      window.extension_settings[EXTENSION_ID] = {
-        enabled: settings.enabled,
-        serviceUrl: settings.serviceUrl,
-        playMode: settings.playMode,
-        // 手动复制所有字段，或使用JSON.parse(JSON.stringify(settings))（简单场景）
-        isMediaLoading: false,
-        currentRandomIndex: -1,
-        showMediaUpdateToast: false,
-        aiEventRegistered: false,
-        filterTriggerSource: null,
-      };
+      // 用JSON深拷贝快速覆盖所有默认设置，避免手动复制遗漏
+      window.extension_settings[EXTENSION_ID] = JSON.parse(
+        JSON.stringify(settings)
+      );
+      // 补充修复相关字段（覆盖默认值）
+      window.extension_settings[EXTENSION_ID].isMediaLoading = false;
+      window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
+      window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
+      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
+      window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
+      // 修复：将save和log缩进进if块内，且删除多余的“};”
       saveSafeSettings();
       console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
     }
