@@ -130,8 +130,18 @@ class MediaDBHandler(FileSystemEventHandler):
     def on_created(self, event):
         if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
             MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
-            time.sleep(1.5)  # 等待大文件写入
-            self.update_db()
+            LARGE_FILE_THRESHOLD = 200 * 1024 * 1024  
+    
+    def on_created(self, event):
+        if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
+            MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
+            LARGE_FILE_THRESHOLD = 200 * 1024 * 1024  # 200MB阈值
+        # 若为大文件，延长等待时间
+        if os.path.exists(event.src_path) and os.path.getsize(event.src_path) > LARGE_FILE_THRESHOLD:
+            time.sleep(5)  # 大文件等待5秒
+        else:
+            time.sleep(1.5)  # 普通文件等待1.5秒
+        self.update_db()
 
     def on_deleted(self, event):
         global MEDIA_DB
@@ -145,8 +155,12 @@ class MediaDBHandler(FileSystemEventHandler):
     def on_modified(self, event):
         if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
             MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
-            time.sleep(1)
-            self.update_db()
+            LARGE_FILE_THRESHOLD = 200 * 1024 * 1024
+        if os.path.exists(event.src_path) and os.path.getsize(event.src_path) > LARGE_FILE_THRESHOLD:
+            time.sleep(3)  # 大文件修改等待3秒
+        else:
+            time.sleep(1)   # 普通文件修改等待1秒
+        self.update_db()
 
 
 def setup_watchdog():

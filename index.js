@@ -2055,8 +2055,6 @@ const registerAIEventListeners = () => {
         );
       }
 
-      eventSource.on(event_types.MESSAGE_RECEIVED, onAIResponse);
-
       // AI回复事件（适配SillyTavern全局eventSource）
       eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
