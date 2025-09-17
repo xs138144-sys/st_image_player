@@ -1108,10 +1108,13 @@ const showImage = async (direction) => {
   const videoElement = $(winId).find(".image-player-video")[0];
   const loadingElement = $(winId).find(".loading-animation")[0];
 
+  // 【修复核心】提前声明空的 handleVideoEnd 函数，避免后续移除事件时未定义
+  let handleVideoEnd = () => {};
+
   // 关键修复：切换媒体前强制暂停当前视频
   if (videoElement) {
     videoElement.pause();
-    videoElement.removeEventListener("ended", handleVideoEnd); // 移除旧的结束事件
+    videoElement.removeEventListener("ended", handleVideoEnd); // 现在函数已存在，不报错
   }
 
   stopProgressUpdate();
@@ -1251,14 +1254,15 @@ const showImage = async (direction) => {
     }
 
     if (mediaType === "video" && settings.isPlaying) {
-      const handleVideoEnd = () => {
+      handleVideoEnd = () => {
+        // 注意：这里用 = 赋值，而非 const 重新声明
         if (!settings.videoLoop && settings.isPlaying) {
           videoElement.removeEventListener("ended", handleVideoEnd);
           showImage("next");
         }
       };
-      videoElement.removeEventListener("ended", handleVideoEnd);
-      videoElement.addEventListener("ended", handleVideoEnd);
+      videoElement.removeEventListener("ended", handleVideoEnd); // 先解绑旧事件
+      videoElement.addEventListener("ended", handleVideoEnd); // 再绑定新事件
     }
 
     if (settings.showInfo) {
