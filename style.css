@@ -86,6 +86,7 @@
     padding: 0;
 }
 
+/* 图片容器 - 确保图片居中不被遮挡 */
 .image-container {
     flex: 1;
     display: flex;
@@ -132,7 +133,7 @@
     transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
 }
 
-/* 图片信息 */
+/* 图片信息 - 在图片下方显示 */
 .image-info {
     padding: 2px 4px;
     background: rgba(0, 0, 0, 0.7);
@@ -208,6 +209,7 @@
     min-width: 80px;
 }
 
+/* 控制按钮组 */
 .controls-group {
     display: flex;
     gap: 4px;
@@ -345,7 +347,7 @@
     margin: 0;
 }
 
-/* ==================== 设置面板折叠效果 ==================== */
+/* ==================== 设置面板折叠效果 - 兼容ST ==================== */
 .extension_settings.inline-drawer {
     margin-top: 0.7em;
     position: relative;
@@ -429,214 +431,4 @@
 .function-toggle span {
     font-size: 10px;
     color: #d0d0d0;
-}
-
-/* ==================== 视频控制栏样式 ==================== */
-.video-controls {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 4px 8px;
-    background: rgba(43, 45, 49, 0.9);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    box-sizing: border-box;
-    z-index: 15;
-}
-
-.progress-container {
-    width: 100%;
-    height: 6px;
-    margin-bottom: 4px;
-    cursor: pointer;
-}
-
-.progress-bar {
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
-    position: relative;
-    overflow: hidden;
-}
-
-.progress-loaded {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-    transition: width 0.3s ease;
-}
-
-.progress-played {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background: #7289da;
-    border-radius: 3px;
-    transition: width 0.1s linear;
-}
-
-.progress-handle {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: white;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-}
-
-.progress-bar:hover .progress-handle {
-    opacity: 1;
-}
-
-.video-control-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 24px;
-}
-
-.video-control-btn {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: none;
-    background: transparent;
-    color: #b0b0b0;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-}
-
-.video-control-btn:hover {
-    background: rgba(114, 137, 218, 0.3);
-    color: #7289da;
-}
-
-.video-control-btn.active {
-    color: #7289da;
-    background: rgba(114, 137, 218, 0.2);
-}
-
-.volume-slider-container {
-    width: 80px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 2px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-}
-
-.volume-slider {
-    width: 100%;
-    height: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    outline: none;
-}
-
-.volume-slider::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 2px;
-}
-
-.volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #7289da;
-    cursor: pointer;
-    margin-top: -3px;
-}
-
-.time-display {
-    color: #b0b0b0;
-    font-size: 10px;
-    min-width: 80px;
-    text-align: right;
-    margin-left: auto;
-}
-
-/* 媒体筛选按钮组样式 */
-.media-filter-group {
-    display: flex;
-    gap: 2px;
-}
-
-.media-filter-btn {
-    width: 26px;
-    height: 26px;
-    background: rgba(43, 45, 49, 0.7);
-}
-
-.media-filter-btn.active {
-    background: rgba(114, 137, 218, 0.5);
-    box-shadow: none;
-}
-
-/* 无边框模式样式 */
-.image-player-window.no-border {
-    border: none;
-    box-shadow: none;
-    background: transparent;
-    backdrop-filter: none;
-}
-
-.image-player-window.no-border .image-player-header,
-.image-player-window.no-border .image-player-controls,
-.image-player-window.no-border .resize-handle {
-    display: none;
-}
-
-.image-player-window.no-border .image-player-body {
-    padding: 0;
-}
-
-.image-player-window.no-border .image-container {
-    padding-bottom: 40px;
-    box-sizing: border-box;
-    position: relative;
-}
-
-.image-player-window.no-border .video-controls {
-    display: block;
-    position: absolute;
-    bottom: -40px;
-    left: 0;
-    right: 0;
-    transition: bottom 0.3s ease, opacity 0.3s ease;
-    opacity: 1;
-    z-index: 100;
-}
-
-.image-player-window.no-border .image-container:hover .video-controls {
-    bottom: 0;
-}
-
-.image-player-window.no-border .image-info {
-    background: rgba(0, 0, 0, 0.5);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.image-player-window.no-border .image-container:hover .image-info {
-    opacity: 1;
 }
