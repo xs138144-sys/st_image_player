@@ -693,53 +693,48 @@ const setupWindowEvents = (windowId) => {
     toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
   });
 
-  // 事件委托：播放/暂停
+  // 事件委托：播放/暂停按钮（覆盖原逻辑）
   $(document).off("click", `${winSelector} .play-pause`);
   $(document).on("click", `${winSelector} .play-pause`, function () {
+    const settings = getExtensionSettings();
     if (!settings.enabled) return;
     const videoElement = $(winSelector).find(".image-player-video")[0];
     const isCurrentVideo = videoElement && $(videoElement).is(":visible");
     const icon = $(this).find("i");
 
-    if (isCurrentVideo) {
-      if (videoElement.paused) {
-        videoElement
-          .play()
-          .then(() => {
-            settings.isPlaying = true;
-            icon.removeClass("fa-play").addClass("fa-pause");
-            startProgressUpdate();
-          })
-          .catch((err) => {
-            console.warn("视频播放失败（浏览器限制）:", err);
-            toastr.warning("视频自动播放受浏览器限制，请点击视频播放");
-          });
-      } else {
+    // 1. 暂停逻辑（统一处理图片/视频）
+    if (settings.isPlaying) {
+      settings.isPlaying = false;
+      icon.removeClass("fa-pause").addClass("fa-play");
+      clearTimeout(switchTimer); // 彻底清除图片切换定时器
+      stopProgressUpdate(); // 停止视频进度条更新
+
+      // 视频额外处理：暂停播放
+      if (isCurrentVideo && !videoElement.paused) {
         videoElement.pause();
-        settings.isPlaying = false;
-        icon.removeClass("fa-pause").addClass("fa-play");
-        stopProgressUpdate();
-        clearTimeout(switchTimer);
-      }
-    } else {
-      const wasPlaying = settings.isPlaying;
-      settings.isPlaying = !wasPlaying;
-      icon.toggleClass("fa-play fa-pause");
-      if (settings.isPlaying && !wasPlaying) {
-        startPlayback();
-      } else {
-        clearTimeout(switchTimer);
-        stopProgressUpdate();
-        const imgElement = $(winSelector).find(".image-player-img")[0];
-        if (imgElement)
-          imgElement.classList.remove(
-            "fade-transition",
-            "slide-transition",
-            "zoom-transition"
-          );
       }
     }
+    // 2. 播放逻辑（统一处理图片/视频）
+    else {
+      settings.isPlaying = true;
+      icon.removeClass("fa-play").addClass("fa-pause");
+
+      // 视频：直接播放
+      if (isCurrentVideo) {
+        videoElement.play().catch((err) => {
+          console.warn("视频播放失败:", err);
+          toastr.warning("请点击视频手动播放（浏览器限制）");
+        });
+        startProgressUpdate();
+      }
+      // 图片：启动定时切换
+      else {
+        startPlayback();
+      }
+    }
+
     saveSafeSettings();
+    updateExtensionMenu(); // 暂停/播放后同步菜单按钮
   });
 
   // 事件委托：模式切换
@@ -759,17 +754,34 @@ const setupWindowEvents = (windowId) => {
     showImage("current");
   });
 
-  // 事件委托：显示/隐藏媒体信息
+  // 事件委托：显示/隐藏媒体信息（覆盖原逻辑）
   $(document).off("click", `${winSelector} .toggle-info`);
   $(document).on("click", `${winSelector} .toggle-info`, function () {
+    const settings = getExtensionSettings();
     if (!settings.enabled) return;
+
+    // 1. 切换状态
     settings.showInfo = !settings.showInfo;
     saveSafeSettings();
+
+    // 2. 同步按钮样式（active类）
     $(this).toggleClass("active", settings.showInfo);
-    $(this)
-      .closest(".image-player-body")
-      .find(".image-info")
-      .toggle(settings.showInfo);
+
+    // 3. 同步信息栏显示（确保找到当前窗口的信息栏）
+    const infoElement = $(this)
+      .closest(".image-player-window") // 限定当前窗口
+      .find(".image-info");
+
+    if (settings.showInfo) {
+      infoElement.show();
+      // 显示时立即更新信息（避免空白）
+      const mediaName = infoElement.text() || "未加载媒体";
+      infoElement.text(mediaName);
+    } else {
+      infoElement.hide();
+    }
+
+    updateExtensionMenu(); // 同步菜单中的信息显示状态
   });
 
   // 事件委托：显示/隐藏视频控制
@@ -982,26 +994,39 @@ const updateVolume = (volume) => {
 const startPlayback = () => {
   const settings = getExtensionSettings();
   if (!settings.enabled || !settings.isPlaying) return;
-  clearTimeout(switchTimer);
+  clearTimeout(switchTimer); // 清空历史定时器，避免叠加
+
   const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   const isCurrentVideo = videoElement && $(videoElement).is(":visible");
 
   if (settings.autoSwitchMode === "timer") {
     if (isCurrentVideo) {
-      const playEndHandler = () => {
-        if (!settings.videoLoop) {
-          videoElement.removeEventListener("ended", playEndHandler);
+      // 视频逻辑：仅在视频结束且不循环时切换
+      const handleVideoEnd = () => {
+        if (!settings.videoLoop && settings.isPlaying) {
+          // 必须满足「播放中」+「不循环」
+          videoElement.removeEventListener("ended", handleVideoEnd);
           showImage("next");
         }
       };
-      videoElement.addEventListener("ended", playEndHandler);
+      // 防止重复绑定事件
+      videoElement.removeEventListener("ended", handleVideoEnd);
+      videoElement.addEventListener("ended", handleVideoEnd);
+
+      // 仅在视频暂停时才播放（避免重复触发）
       if (videoElement.paused) {
-        videoElement.play().catch((err) => console.warn("视频播放失败:", err));
+        videoElement.play().catch((err) => {
+          console.warn("视频播放失败:", err);
+          toastr.warning("请点击视频手动播放（浏览器限制）");
+        });
         startProgressUpdate();
       }
     } else {
-      showImage("next");
-      switchTimer = setTimeout(startPlayback, settings.switchInterval);
+      // 图片逻辑：定时切换（仅播放中生效）
+      if (settings.isPlaying) {
+        showImage("next");
+        switchTimer = setTimeout(startPlayback, settings.switchInterval);
+      }
     }
   }
 };
@@ -1083,7 +1108,14 @@ const showImage = async (direction) => {
   const videoElement = $(winId).find(".image-player-video")[0];
   const loadingElement = $(winId).find(".loading-animation")[0];
 
+  // 关键修复：切换媒体前强制暂停当前视频
+  if (videoElement) {
+    videoElement.pause();
+    videoElement.removeEventListener("ended", handleVideoEnd); // 移除旧的结束事件
+  }
+
   stopProgressUpdate();
+  clearTimeout(switchTimer); // 切换时清空定时器，避免残留切换
   $(imgElement).hide();
   $(videoElement).hide();
   $(loadingElement).show();
@@ -1216,6 +1248,17 @@ const showImage = async (direction) => {
             $(winId).find(".control-text").text("点击视频播放");
           });
       }
+    }
+
+    if (mediaType === "video" && settings.isPlaying) {
+      const handleVideoEnd = () => {
+        if (!settings.videoLoop && settings.isPlaying) {
+          videoElement.removeEventListener("ended", handleVideoEnd);
+          showImage("next");
+        }
+      };
+      videoElement.removeEventListener("ended", handleVideoEnd);
+      videoElement.addEventListener("ended", handleVideoEnd);
     }
 
     if (settings.showInfo) {
@@ -1488,9 +1531,6 @@ const saveCurrentSettings = () => {
 
   startPollingService();
   updateExtensionMenu();
-  if (settings.isPlaying && settings.autoSwitchMode === "timer") {
-    startPlayback();
-  }
 
   if (!settings.enabled) {
     $(`#${PLAYER_WINDOW_ID}`).hide();
@@ -1830,17 +1870,24 @@ const createSettingsPanel = () => {
 const updateExtensionMenu = () => {
   const settings = getExtensionSettings();
   if (!settings.enabled) return;
+  const winSelector = `#${PLAYER_WINDOW_ID}`;
 
-  // 播放/暂停按钮状态
-  $(`#${PLAYER_WINDOW_ID} .play-pause i`)
+  // 1. 播放/暂停状态同步（核心：菜单按钮与播放器按钮一致）
+  const playPauseIcon = $(`${winSelector} .play-pause i`);
+  playPauseIcon
     .toggleClass("fa-play", !settings.isPlaying)
     .toggleClass("fa-pause", settings.isPlaying);
+  // 若菜单有播放状态标识（如文字/图标），此处补充同步（示例）：
+  // $(`#ext_menu_${EXTENSION_ID} .play-status`).text(settings.isPlaying ? "播放中" : "已暂停");
 
-  // 播放模式状态
-  $(`#${PLAYER_WINDOW_ID} .mode-switch i`)
+  // 2. 播放模式同步（播放器 + 设置面板 + 菜单）
+  $(`${winSelector} .mode-switch i`)
     .toggleClass("fa-shuffle", settings.playMode === "random")
     .toggleClass("fa-list-ol", settings.playMode === "sequential");
   $("#player-play-mode").val(settings.playMode);
+  $(`#ext_menu_${EXTENSION_ID} .mode-text`).text(
+    settings.playMode === "random" ? "随机" : "顺序"
+  ); // 菜单文本同步
 
   // 切换模式按钮状态
   $(`#${PLAYER_WINDOW_ID} .switch-mode-toggle`)
@@ -1865,41 +1912,41 @@ const updateExtensionMenu = () => {
   ).addClass("active");
   $("#player-media-filter").val(settings.mediaFilter);
 
-  // 图片信息显示状态
-  $(`#${PLAYER_WINDOW_ID} .toggle-info`).toggleClass(
-    "active",
-    settings.showInfo
-  );
-  $(`#${PLAYER_WINDOW_ID} .image-info`).toggle(settings.showInfo);
+  // 3. 信息显示状态同步（播放器 + 设置面板）
+  $(`${winSelector} .toggle-info`).toggleClass("active", settings.showInfo);
+  $(`${winSelector} .image-info`).toggle(settings.showInfo);
   $("#player-show-info").prop("checked", settings.showInfo);
 
-  // 视频控制栏状态
-  $(`#${PLAYER_WINDOW_ID} .toggle-video-controls`).toggleClass(
+  // 4. 视频控制栏状态同步
+  $(`${winSelector} .toggle-video-controls`).toggleClass(
     "active",
     settings.showVideoControls
   );
-  $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(settings.showVideoControls);
+  $(`${winSelector} .video-controls`).toggle(settings.showVideoControls);
   $("#player-show-video-controls").prop("checked", settings.showVideoControls);
 
-  // 视频循环状态
-  $(`#${PLAYER_WINDOW_ID} .loop-btn`).toggleClass("active", settings.videoLoop);
+  // 5. 视频循环状态同步
+  $(`${winSelector} .loop-btn`).toggleClass("active", settings.videoLoop);
   $("#player-video-loop").prop("checked", settings.videoLoop);
 
-  // 边框隐藏状态
-  $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
+  // 6. 边框隐藏状态同步
+  $(`${winSelector}`).toggleClass("no-border", settings.hideBorder);
   $("#player-hide-border").prop("checked", settings.hideBorder);
 
-  // 自定义视频控制栏状态
-  $("#custom-show-progress").prop(
-    "checked",
-    settings.customVideoControls.showProgress
+  // 7. 自动切换模式同步（检测/定时）
+  $(`${winSelector} .switch-mode-toggle`).toggleClass(
+    "active",
+    settings.autoSwitchMode === "detect"
   );
-  $("#custom-show-volume").prop(
-    "checked",
-    settings.customVideoControls.showVolume
+  $("#toggle-timer-mode").toggleClass(
+    "active",
+    settings.autoSwitchMode === "timer"
   );
-  $("#custom-show-loop").prop("checked", settings.customVideoControls.showLoop);
-  $("#custom-show-time").prop("checked", settings.customVideoControls.showTime);
+  $("#toggle-detect-mode").toggleClass(
+    "active",
+    settings.autoSwitchMode === "detect"
+  );
+  $("#detect-sub-options").toggle(settings.autoSwitchMode === "detect");
 
   // 图片过渡效果
   $("#player-transition-effect").val(settings.transitionEffect);
@@ -2111,34 +2158,65 @@ const setupSettingsEvents = () => {
   ).on("change", saveCurrentSettings);
 };
 
-// 事件监听注册（带重试）
 function registerEventListenersWithRetry() {
-  const maxRetries = 5;
-  const delay = 1000;
+  const maxRetries = 10; // 增加重试次数
+  const delay = 3000; // 延长重试间隔（3秒/次）
   let retries = 0;
+
+  const checkDependencies = () => {
+    // 明确检查依赖是否就绪
+    if (!window.eventSource) return "eventSource 未加载";
+    if (!window.event_types) return "event_types 未定义";
+    if (!window.event_types.MESSAGE_RECEIVED)
+      return "MESSAGE_RECEIVED 事件未定义";
+    if (!window.event_types.MESSAGE_SENT) return "MESSAGE_SENT 事件未定义";
+    return null; // 依赖就绪
+  };
+
   const tryRegister = () => {
-    try {
-      if (!eventSource || !event_types) {
-        throw new Error("事件源未就绪");
+    const dependencyError = checkDependencies();
+    if (dependencyError) {
+      retries++;
+      if (retries < maxRetries) {
+        console.warn(
+          `[${EXTENSION_ID}] AI事件监听依赖缺失（${dependencyError}），${delay}ms后重试（${retries}/${maxRetries}）`
+        );
+        setTimeout(tryRegister, delay);
+        return;
+      } else {
+        console.error(
+          `[${EXTENSION_ID}] AI事件监听注册失败（已达最大重试次数），请检查：1. script.js 是否正常加载 2. eventSource 是否正确初始化`
+        );
+        toastr.error("AI检测切换功能失效，请刷新页面并检查script.js加载状态");
+        return;
       }
-      // AI回复事件
-      eventSource.off(event_types.MESSAGE_RECEIVED, onAIResponse);
-      eventSource.on(event_types.MESSAGE_RECEIVED, () => {
-        const settings = getExtensionSettings();
-        if (
-          settings.enabled &&
-          settings.autoSwitchMode === "detect" &&
-          settings.aiDetectEnabled &&
-          settings.isPlaying &&
-          settings.isWindowVisible
-        ) {
-          console.log(`[${EXTENSION_ID}] 检测到AI回复完成`);
-          onAIResponse();
+    }
+
+    try {
+      // 1. 先解绑所有旧事件，避免重复
+      window.eventSource.off(window.event_types.MESSAGE_RECEIVED, onAIResponse);
+      window.eventSource.off(window.event_types.MESSAGE_SENT, onPlayerMessage);
+
+      // 2. 注册AI回复事件
+      window.eventSource.on(
+        window.event_types.MESSAGE_RECEIVED,
+        (eventData) => {
+          const settings = getExtensionSettings();
+          if (
+            settings.enabled &&
+            settings.autoSwitchMode === "detect" &&
+            settings.aiDetectEnabled &&
+            settings.isPlaying &&
+            settings.isWindowVisible
+          ) {
+            console.log(`[${EXTENSION_ID}] 检测到AI回复，触发切换`);
+            onAIResponse();
+          }
         }
-      });
-      // 玩家消息事件
-      eventSource.off(event_types.MESSAGE_SENT, onPlayerMessage);
-      eventSource.on(event_types.MESSAGE_SENT, () => {
+      );
+
+      // 3. 注册玩家消息事件
+      window.eventSource.on(window.event_types.MESSAGE_SENT, (eventData) => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
@@ -2147,29 +2225,33 @@ function registerEventListenersWithRetry() {
           settings.isPlaying &&
           settings.isWindowVisible
         ) {
-          console.log(`[${EXTENSION_ID}] 检测到玩家发送消息`);
+          console.log(`[${EXTENSION_ID}] 检测到玩家消息，触发切换`);
           onPlayerMessage();
         }
       });
-      console.log(`[${EXTENSION_ID}] 成功注册事件监听器（AI回复+玩家消息）`);
+
+      console.log(`[${EXTENSION_ID}] AI检测切换事件监听注册成功`);
+      toastr.success("AI检测/玩家消息切换功能已就绪");
     } catch (e) {
       retries++;
       if (retries < maxRetries) {
         console.warn(
-          `[${EXTENSION_ID}] 事件监听注册失败，${delay}ms后重试(${retries}/${maxRetries})`
+          `[${EXTENSION_ID}] AI事件监听注册失败（${e.message}），${delay}ms后重试（${retries}/${maxRetries}）`
         );
         setTimeout(tryRegister, delay);
       } else {
         console.error(
-          `[${EXTENSION_ID}] 事件监听注册失败（已达最大重试次数）`,
+          `[${EXTENSION_ID}] AI事件监听注册失败（已达最大重试次数）`,
           e
         );
-        toastr.error("事件监听注册失败，请刷新页面重试");
+        toastr.error(`AI检测切换功能失效：${e.message}，请刷新页面重试`);
       }
     }
   };
-  console.log(`[${EXTENSION_ID}] 计划2000ms后注册事件监听`);
-  setTimeout(tryRegister, 2000);
+
+  // 延迟5秒开始首次尝试（确保页面核心脚本加载完成）
+  console.log(`[${EXTENSION_ID}] 计划5秒后开始注册AI事件监听`);
+  setTimeout(tryRegister, 5000);
 }
 
 // 扩展菜单按钮
@@ -2181,6 +2263,8 @@ function addMenuButton() {
         <div id="ext_menu_${EXTENSION_ID}" class="list-group-item flex-container flexGap5">
             <div class="fa-solid fa-film"></div>
             <span>${EXTENSION_NAME}</span>
+            <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">已暂停</span>
+            <span class="mode-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">顺序</span>
         </div>`;
   $("#extensionsMenu").append(buttonHtml);
   $(`#ext_menu_${EXTENSION_ID}`).on("click", function () {
@@ -2200,10 +2284,7 @@ function addMenuButton() {
 // 扩展初始化
 async function initExtension() {
   const settings = getExtensionSettings();
-  if (!settings.enabled) {
-    console.log(`[${EXTENSION_ID}] 扩展已禁用，跳过初始化`);
-    return;
-  }
+  if (!settings.enabled) return;
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化媒体播放器扩展`);
     if (typeof window.extension_settings === "undefined") {
@@ -2231,8 +2312,14 @@ async function initExtension() {
     const winSelector = `#${PLAYER_WINDOW_ID}`;
     bindVideoControlEvents(winSelector);
     positionWindow(PLAYER_WINDOW_ID);
-    console.log(`[${EXTENSION_ID}] 扩展初始化完成`);
-    toastr.success(`${EXTENSION_NAME}扩展加载成功（支持图片+视频播放）`);
+    settings.isPlaying = false;
+    $(`#${PLAYER_WINDOW_ID} .play-pause i`)
+      .removeClass("fa-pause")
+      .addClass("fa-play");
+    saveSafeSettings();
+
+    console.log(`[${EXTENSION_ID}] 扩展初始化完成（默认暂停）`);
+    toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
   } catch (e) {
     console.error(`[${EXTENSION_ID}] 初始化错误:`, e);
     const retryDelay = 1500;
