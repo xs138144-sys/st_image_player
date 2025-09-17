@@ -916,21 +916,23 @@ const setupWindowEvents = () => {
 // 替换 index.js 中的 startPlayback 函数（约第 1290-1320 行）
 const startPlayback = () => {
   const settings = getExtensionSettings();
-  // 严格判断播放状态和模式（修复定时器不触发）
+  // 严格判断播放状态和模式（避免无效触发）
   if (
     !settings.enabled ||
     !settings.isPlaying ||
     settings.autoSwitchMode !== "timer"
-  )
+  ) {
+    clearTimeout(switchTimer); // 无效状态时清除定时器，避免残留
     return;
+  }
 
-  clearTimeout(switchTimer); // 先清除旧定时器，避免叠加
+  clearTimeout(switchTimer); // 先清除旧定时器，防止叠加
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const video = win.find(".image-player-video")[0];
   const isVideoVisible = video && video.style.display !== "none";
 
   if (isVideoVisible) {
-    // 视频播放逻辑（不变）
+    // 视频逻辑：播放时仍重置定时器（避免切换模式后定时器残留）
     if (video.paused) {
       video.play().catch((err) => {
         console.warn("视频自动播放失败（浏览器限制）:", err);
@@ -938,21 +940,20 @@ const startPlayback = () => {
       });
       startProgressUpdate();
     }
-    // 视频播放时也需重置定时器（避免切换模式后定时器残留）
     switchTimer = setTimeout(startPlayback, settings.switchInterval);
   } else {
-    // 图片播放逻辑：用 finally 兜底，确保定时器必重置
+    // 图片逻辑：用 finally 强制重置定时器（核心修复，无论成功/失败都续期）
     showMedia("next")
       .then(() => {
         console.log(`[${EXTENSION_ID}] 图片定时切换成功，重置定时器`);
       })
       .catch((err) => {
         console.warn(`[${EXTENSION_ID}] 图片切换失败，仍继续定时`, err);
-        // 失败时重试一次当前媒体，避免空白
+        // 失败时重试当前媒体，避免空白
         if (settings.isPlaying) showMedia("current");
       })
       .finally(() => {
-        // 无论成功/失败，都重置定时器（核心修复）
+        // 关键：只要仍在“定时播放模式”且“播放中”，就强制续设定时器
         if (
           settings.enabled &&
           settings.isPlaying &&
@@ -963,29 +964,34 @@ const startPlayback = () => {
       });
   }
 };
-
 // 修复随机索引管理：确保始终有可用索引
 const getRandomMediaIndex = () => {
   const settings = getExtensionSettings();
   const list = settings.randomMediaList || [];
+  if (list.length === 0) return 0; // 空列表兜底
 
-  // 所有媒体播放过：重置并重新获取（修复无可用索引）
+  // 所有媒体播放过：强制重置已播放索引（核心修复）
   if (settings.randomPlayedIndices.length >= list.length) {
     settings.randomPlayedIndices = [];
+    toastr.info("随机播放列表已循环，重新开始"); // 可选：提示用户
   }
 
+  // 筛选可用索引（排除已播放）
   let availableIndices = list
     .map((_, i) => i)
     .filter((i) => !settings.randomPlayedIndices.includes(i));
-  // 极端情况：索引筛选为空时强制重置
+
+  // 极端情况：索引筛选为空时强制重置（避免死循环）
   if (availableIndices.length === 0) {
     settings.randomPlayedIndices = [];
     availableIndices = list.map((_, i) => i);
   }
 
+  // 随机选择索引并记录
   const randomIndex =
     availableIndices[Math.floor(Math.random() * availableIndices.length)];
   settings.currentRandomIndex = randomIndex;
+  settings.randomPlayedIndices.push(randomIndex); // 记录已播放，避免重复
   return randomIndex;
 };
 
@@ -1996,48 +2002,47 @@ const updateExtensionMenu = () => {
   const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
   if (!win.length || !panel.length || !menuBtn.length) return;
 
-  // 1. 播放状态同步（菜单+播放器+面板）
-  win
-    .find(".play-pause i")
+  // 1. 播放状态同步（菜单+播放器按钮）
+  const playIcon = win.find(".play-pause i");
+  playIcon
     .toggleClass("fa-play", !settings.isPlaying)
     .toggleClass("fa-pause", settings.isPlaying);
   menuBtn.find(".play-status").text(settings.isPlaying ? "播放中" : "已暂停");
 
-  // 2. 播放模式同步
-  win
-    .find(".mode-switch i")
+  // 2. 播放模式同步（菜单+播放器+面板下拉框）
+  const modeIcon = win.find(".mode-switch i");
+  modeIcon
     .toggleClass("fa-shuffle", settings.playMode === "random")
     .toggleClass("fa-list-ol", settings.playMode === "sequential");
   menuBtn
     .find(".mode-text")
     .text(settings.playMode === "random" ? "随机" : "顺序");
-  panel.find("#player-play-mode").val(settings.playMode);
+  panel.find("#player-play-mode").val(settings.playMode); // 同步面板下拉框
 
-  // 3. 媒体筛选同步（根据触发源避免循环）
+  // 3. 媒体筛选同步（菜单+播放器按钮+面板下拉框）
   if (settings.filterTriggerSource === null) {
+    // 避免循环同步
+    // 同步播放器筛选按钮
     win.find(".media-filter-btn").removeClass("active");
     win
       .find(`.media-filter-btn[data-type="${settings.mediaFilter}"]`)
       .addClass("active");
+    // 同步面板下拉框
     panel.find("#player-media-filter").val(settings.mediaFilter);
+    // 同步菜单文本
+    const filterTextMap = { all: "所有", image: "图片", video: "视频" };
     menuBtn
       .find(".filter-text")
-      .text(
-        settings.mediaFilter === "all"
-          ? "所有"
-          : settings.mediaFilter === "image"
-          ? "图片"
-          : "视频"
-      );
+      .text(filterTextMap[settings.mediaFilter] || "所有");
   }
 
-  // 4. AI检测/定时切换同步（菜单+播放器+面板）
-  win
-    .find(".switch-mode-toggle")
+  // 4. 定时/检测模式同步（播放器按钮+面板切换器）
+  const switchModeBtn = win.find(".switch-mode-toggle");
+  switchModeBtn
     .toggleClass("active", settings.autoSwitchMode === "detect")
     .find("i")
     .toggleClass("fa-robot", settings.autoSwitchMode === "detect")
-    .toggleClass("fa-clock", settings.autoSwitchMode !== "detect");
+    .toggleClass("fa-clock", settings.autoSwitchMode === "timer");
   panel
     .find("#toggle-timer-mode")
     .toggleClass("active", settings.autoSwitchMode === "timer");
@@ -2048,22 +2053,13 @@ const updateExtensionMenu = () => {
     .find("#detect-sub-options")
     .toggle(settings.autoSwitchMode === "detect");
 
-  // 5. 视频控制栏状态同步
-  win
-    .find(".toggle-video-controls")
-    .toggleClass("active", settings.showVideoControls);
-  win.find(".video-controls").toggle(settings.showVideoControls);
-  panel
-    .find("#player-show-video-controls")
-    .prop("checked", settings.showVideoControls);
-
-  // 6. 视频循环状态同步
+  // 5. 视频循环同步（播放器按钮+面板复选框）
   win.find(".loop-btn").toggleClass("active", settings.videoLoop);
   panel.find("#player-video-loop").prop("checked", settings.videoLoop);
   const video = win.find(".image-player-video")[0];
   if (video) video.loop = settings.videoLoop;
 
-  // 7. 边框隐藏模式同步
+  // 6. 边框隐藏同步（播放器样式+面板复选框）
   win.toggleClass("no-border", settings.hideBorder);
   panel.find("#player-hide-border").prop("checked", settings.hideBorder);
 };
