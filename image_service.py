@@ -127,11 +127,7 @@ class MediaDBHandler(FileSystemEventHandler):
                     active_websockets.remove(ws)
 
     # 文件创建/删除/修改时更新DB
-    def on_created(self, event):
-        if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
-            MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
-            LARGE_FILE_THRESHOLD = 200 * 1024 * 1024  
-    
+ 
     def on_created(self, event):
         if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
             MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
@@ -156,6 +152,7 @@ class MediaDBHandler(FileSystemEventHandler):
         if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
             MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
             LARGE_FILE_THRESHOLD = 200 * 1024 * 1024
+            # 缩进：仅非目录且是媒体文件时执行
         if os.path.exists(event.src_path) and os.path.getsize(event.src_path) > LARGE_FILE_THRESHOLD:
             time.sleep(3)  # 大文件修改等待3秒
         else:

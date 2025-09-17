@@ -2,7 +2,6 @@
 import { saveSettingsDebounced } from "../../../../script.js";
 
 // 全局依赖直接使用window对象（老版本兼容，避免导入时机问题）
-const eventSource = window.eventSource;
 const event_types = window.event_types;
 
 const EXTENSION_ID = "st_image_player";
@@ -1151,7 +1150,7 @@ const showMedia = async (direction) => {
     }
 
     if (settings.showInfo) {
-      $(infoElement).text(`${mediaName}（${mediaType}）`).show();
+      $(infoElement).text(`${mediaName}(${mediaType})`).show();
     } else {
       $(infoElement).hide();
     }
@@ -1169,7 +1168,7 @@ const showMedia = async (direction) => {
       .text(
         `${
           settings.playMode === "random" ? "随机模式" : "顺序模式"
-        }: ${currentCount}/${totalCount}（${mediaType}）`
+        }: ${currentCount}/${totalCount}(${mediaType})`
       );
 
     retryCount = 0;
@@ -1207,7 +1206,7 @@ const showMedia = async (direction) => {
 
     if (retryCount < 3 && settings.enabled) {
       retryCount++;
-      toastr.warning(`${errorMsg}，重试中（${retryCount}/3）`);
+      toastr.warning(`${errorMsg}，重试中（${retryCount}/3)`);
       setTimeout(() => showMedia(direction), 3000);
     } else {
       toastr.error(`${errorMsg}，已停止重试`);
@@ -1223,13 +1222,13 @@ const showMedia = async (direction) => {
 
 // ==================== AI/玩家消息检测（无修改） ====================
 const onAIResponse = () => {
-  console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发（来自SillyTavern）`); // 新增日志
+  console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
   if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
-    console.log(`[${EXTENSION_ID}] 视频循环中，跳过AI切换`);
+    console.log(`[${EXTENSION_ID}] 视频循环中,跳过AI切换`);
     return;
   }
 
@@ -2045,37 +2044,43 @@ const registerAIEventListeners = () => {
   const maxRetries = 8;
   const retryDelay = 1500;
   let retries = 0;
-
   const tryRegister = () => {
     try {
-      // 老版本核心依赖检查：必须等待 eventSource 和 event_types 全局可用
+      // 关键修改：动态获取eventSource和event_types，而非静态变量
+      const eventSource = window.eventSource;
+      const event_types = window.event_types;
+      console.log(
+        `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
+      );
+
+      // 原有依赖检查逻辑（使用动态获取的变量）
       if (!eventSource || !event_types) {
         throw new Error(
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
         );
       }
 
-      // AI回复事件（适配SillyTavern全局eventSource）
+      // AI回复事件（使用动态获取的eventSource）
       eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
-          settings.isWindowVisible // 移除isPlaying等冗余条件
+          settings.isWindowVisible
         ) {
           onAIResponse();
         }
       });
 
-      // 玩家消息事件（适配SillyTavern全局eventSource）
+      // 玩家消息事件（同上）
       eventSource.on(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
-          settings.isWindowVisible // 移除isPlaying等冗余条件
+          settings.isWindowVisible
         ) {
           onPlayerMessage();
         }
@@ -2090,14 +2095,15 @@ const registerAIEventListeners = () => {
       );
       toastr.success("AI检测/玩家消息切换功能就绪");
     } catch (error) {
+      console.error(`[st_image_player] AI事件注册失败原因:${error.message}`);
       retries++;
       if (retries < maxRetries) {
         console.warn(
-          `[${EXTENSION_ID}] AI事件注册失败（${retries}/${maxRetries}），原因：${error.message}，${retryDelay}ms后重试`
+          `[${EXTENSION_ID}] AI事件注册失败(${retries}/${maxRetries}），原因：${error.message}，${retryDelay}ms后重试`
         );
         setTimeout(tryRegister, retryDelay);
       } else {
-        console.error(`[${EXTENSION_ID}] AI事件注册失败（已达最大重试次数）`);
+        console.error(`[${EXTENSION_ID}] AI事件注册失败(已达最大重试次数）`);
         toastr.error("AI/玩家消息切换功能未启用，请刷新页面重试");
       }
     }
@@ -2166,21 +2172,25 @@ const addMenuButton = () => {
 const initExtension = async () => {
   const settings = getExtensionSettings();
   if (!settings.enabled) {
-    console.log(`[${EXTENSION_ID}] 扩展当前禁用，3秒后重新检查`);
+    console.log(`[${EXTENSION_ID}] 扩展当前禁用,3秒后重新检查`);
     setTimeout(initExtension, 3000);
     return;
   }
 
   try {
-    console.log(`[${EXTENSION_ID}] 开始初始化（SillyTavern老版本适配）`);
+    console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
 
     // 1. 初始化全局设置容器（兼容老版本存储）
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
     }
     if (!window.extension_settings[EXTENSION_ID]) {
+      // 引入深拷贝（若扩展有lodash可使用，无则手动复制）
       window.extension_settings[EXTENSION_ID] = {
-        ...settings,
+        enabled: settings.enabled,
+        serviceUrl: settings.serviceUrl,
+        playMode: settings.playMode,
+        // 手动复制所有字段，或使用JSON.parse(JSON.stringify(settings))（简单场景）
         isMediaLoading: false,
         currentRandomIndex: -1,
         showMediaUpdateToast: false,
@@ -2224,7 +2234,7 @@ const initExtension = async () => {
     toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
   } catch (error) {
     console.error(`[${EXTENSION_ID}] 初始化错误:`, error);
-    toastr.error(`初始化失败: ${error.message}，1.5秒后重试`);
+    toastr.error(`初始化失败: ${error.message},1.5秒后重试`);
     // 重试时重置关键状态
     const resetSettings = getExtensionSettings();
     resetSettings.isMediaLoading = false;
@@ -2236,7 +2246,7 @@ const initExtension = async () => {
 
 // ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载（等待SillyTavern核心就绪）`);
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待SillyTavern核心就绪)`);
 
   const initWhenReady = () => {
     // 等待核心DOM（extensionsMenu 和 extensions_settings）加载完成
@@ -2265,4 +2275,4 @@ jQuery(() => {
 });
 
 // 脚本加载完成标识
-console.log(`[${EXTENSION_ID}] 脚本文件加载完成（SillyTavern老版本适配版）`);
+console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
