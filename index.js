@@ -25,7 +25,7 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
-// 扩展设置（新增视频相关配置）
+// 扩展设置（新增视频相关配置 + 状态锁）
 const getExtensionSettings = () => {
   const settings = getSafeGlobal("extension_settings", {});
   if (!settings[EXTENSION_ID]) {
@@ -64,6 +64,10 @@ const getExtensionSettings = () => {
       },
       progressUpdateInterval: null,
       serviceDirectory: "",
+      // 新增状态锁：防止媒体重复加载/切换
+      isMediaLoading: false,
+      // 新增：记录当前播放的媒体索引（解决切换回退）
+      currentRandomIndex: -1,
     };
   }
   return settings[EXTENSION_ID];
@@ -93,6 +97,9 @@ let dragData = null;
 let resizeData = null;
 let progressDrag = false;
 let volumeDrag = false;
+// 新增：WebSocket重连延迟（防止频繁重连导致闪烁）
+let wsReconnectDelay = 10000; // 10秒重连一次
+let wsReconnectTimer = null;
 
 // ==================== API 通信 ====================
 // 检查服务状态
@@ -205,30 +212,42 @@ const cleanupInvalidMedia = async () => {
   }
 };
 
-// 刷新媒体列表
+// 刷新媒体列表（仅刷新，不自动切换媒体）
 const refreshMediaList = async () => {
   const settings = getExtensionSettings();
+  const oldListLength = mediaList.length;
   mediaList = await fetchMediaList(settings.mediaFilter);
   settings.randomMediaList = [...mediaList];
-  currentMediaIndex = 0;
-  settings.randomPlayedIndices = [];
+
+  // 仅当列表为空或长度变化时重置索引（避免切换回退）
+  if (mediaList.length === 0 || mediaList.length !== oldListLength) {
+    currentMediaIndex = 0;
+    settings.randomPlayedIndices = [];
+    settings.currentRandomIndex = -1;
+  }
+
   clearTimeout(switchTimer);
   return mediaList;
 };
 
-// ==================== WebSocket 实时更新 ====================
+// ==================== WebSocket 实时更新（修复频繁重连） ====================
 const initWebSocket = () => {
   const settings = getExtensionSettings();
+  // 防止重复创建连接
   if (!settings.enabled || ws) return;
 
   try {
     const wsUrl =
       settings.serviceUrl.replace("http://", "ws://") + "/socket.io";
     ws = new WebSocket(wsUrl);
+    console.log(`[${EXTENSION_ID}] 尝试连接WebSocket: ${wsUrl}`);
 
     ws.onopen = () => {
       console.log(`[${EXTENSION_ID}] WebSocket连接成功`);
-      refreshMediaList().then(() => showMedia("current"));
+      // 清除重连定时器
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      // 仅刷新列表，不自动切换媒体（解决闪烁）
+      refreshMediaList();
     };
 
     ws.onmessage = async (event) => {
@@ -238,6 +257,7 @@ const initWebSocket = () => {
           serviceStatus.totalCount = data.total_count;
           serviceStatus.imageCount = data.image_count;
           serviceStatus.videoCount = data.video_count;
+          // 仅刷新列表，不自动切换（避免闪烁）
           await refreshMediaList();
           toastr.info(
             `媒体库更新: 总计${data.total_count}（图片${data.image_count} | 视频${data.video_count}）`
@@ -250,27 +270,36 @@ const initWebSocket = () => {
     };
 
     ws.onclose = () => {
-      console.log(`[${EXTENSION_ID}] WebSocket关闭`);
+      console.log(`[${EXTENSION_ID}] WebSocket连接关闭`);
       ws = null;
-      if (settings.enabled) setTimeout(initWebSocket, 5000);
+      // 延迟重连（10秒一次，避免频繁触发）
+      if (settings.enabled) {
+        wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
+      }
     };
 
     ws.onerror = (e) => {
       console.error(`[${EXTENSION_ID}] WebSocket错误`, e);
       ws = null;
-      if (settings.enabled) setTimeout(initWebSocket, 5000);
+      // 延迟重连
+      if (settings.enabled) {
+        wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
+      }
     };
 
-    // 心跳保持
+    // 心跳保持（30秒一次，减少通信频率）
     setInterval(() => {
       if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
       }
-    }, 10000);
+    }, 30000);
   } catch (e) {
     console.error(`[${EXTENSION_ID}] WebSocket初始化失败`, e);
     ws = null;
-    if (settings.enabled) setTimeout(initWebSocket, 5000);
+    // 延迟重连
+    if (settings.enabled) {
+      wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
+    }
   }
 };
 
@@ -291,7 +320,6 @@ const formatTime = (seconds) => {
 const updateProgressBar = (progress) => {
   const settings = getExtensionSettings();
   if (!settings.customVideoControls.showProgress) return;
-
   progress = Math.max(0, Math.min(1, progress));
   $(`#${PLAYER_WINDOW_ID} .progress-played`).css("width", `${progress * 100}%`);
   $(`#${PLAYER_WINDOW_ID} .progress-handle`).css("left", `${progress * 100}%`);
@@ -301,14 +329,11 @@ const updateProgressBar = (progress) => {
 const updateVolume = (volume) => {
   const settings = getExtensionSettings();
   if (!settings.customVideoControls.showVolume) return;
-
   volume = Math.max(0, Math.min(1, volume));
   settings.videoVolume = volume;
   saveSafeSettings();
-
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video) video.volume = volume;
-
   const icon = $(`#${PLAYER_WINDOW_ID} .volume-btn i`);
   if (volume === 0) {
     icon.removeClass("fa-volume-high fa-volume-low").addClass("fa-volume-mute");
@@ -317,7 +342,6 @@ const updateVolume = (volume) => {
   } else {
     icon.removeClass("fa-volume-low fa-volume-mute").addClass("fa-volume-high");
   }
-
   $(`#${PLAYER_WINDOW_ID} .volume-slider`).val(volume);
 };
 
@@ -329,12 +353,10 @@ const startProgressUpdate = () => {
     !settings.customVideoControls.showTime
   )
     return;
-
   stopProgressUpdate();
   settings.progressUpdateInterval = setInterval(() => {
     const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
     if (!video || video.paused || isNaN(video.duration)) return;
-
     const progress = video.currentTime / video.duration;
     updateProgressBar(progress);
     if (settings.customVideoControls.showTime) {
@@ -357,13 +379,11 @@ const stopProgressUpdate = () => {
 const bindVideoControls = () => {
   const winSelector = `#${PLAYER_WINDOW_ID}`;
   const settings = getExtensionSettings();
-
   // 进度条点击/拖拽
   $(document).off("mousedown", `${winSelector} .progress-bar`);
   $(document).on("mousedown", `${winSelector} .progress-bar`, (e) => {
     const video = $(winSelector).find(".image-player-video")[0];
     if (!video) return;
-
     progressDrag = true;
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
@@ -372,27 +392,22 @@ const bindVideoControls = () => {
     updateProgressBar(progress);
     if (!video.paused) video.pause();
   });
-
   // 音量按钮
   $(document).off("click", `${winSelector} .volume-btn`);
   $(document).on("click", `${winSelector} .volume-btn`, () => {
     const volume = $(winSelector).find(".volume-slider").val();
     updateVolume(volume > 0 ? 0 : settings.videoVolume);
   });
-
   // 循环按钮
   $(document).off("click", `${winSelector} .loop-btn`);
   $(document).on("click", `${winSelector} .loop-btn`, function () {
     settings.videoLoop = !settings.videoLoop;
     saveSafeSettings();
     $(this).toggleClass("active", settings.videoLoop);
-
     const video = $(winSelector).find(".image-player-video")[0];
     if (video) video.loop = settings.videoLoop;
-
     toastr.info(settings.videoLoop ? "视频循环已启用" : "视频循环已禁用");
   });
-
   // 音量条拖拽
   $(document).off("mousedown", `${winSelector} .volume-slider`);
   $(document).on("mousedown", `${winSelector} .volume-slider`, () => {
@@ -404,7 +419,6 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
-
   // 视频控制栏HTML
   const videoControlsHtml = settings.showVideoControls
     ? `
@@ -465,7 +479,6 @@ const createPlayerWindow = async () => {
         </div>
     `
     : "";
-
   // 窗口HTML
   const html = `
         <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${
@@ -559,17 +572,14 @@ const createPlayerWindow = async () => {
             </div>
         </div>
     `;
-
   // 添加到DOM
   $("body").append(html);
   setupWindowEvents();
   positionWindow();
   bindVideoControls();
-
   // 初始化视频音量
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video) video.volume = settings.videoVolume;
-
   console.log(`[${EXTENSION_ID}] 播放器窗口创建完成`);
 };
 
@@ -577,7 +587,6 @@ const createPlayerWindow = async () => {
 const positionWindow = () => {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
-
   // 基础定位
   win
     .css({
@@ -589,15 +598,12 @@ const positionWindow = () => {
     .toggleClass("locked", settings.isLocked)
     .toggle(settings.isWindowVisible)
     .toggleClass("no-border", settings.hideBorder);
-
   // 边框隐藏模式：控制栏悬浮显示
   if (settings.hideBorder && settings.showVideoControls) {
     const container = win.find(".image-container");
     const controls = win.find(".video-controls");
-
     // 初始隐藏控制栏
     controls.css({ bottom: "-40px", opacity: 0 });
-
     // 鼠标悬浮显示
     container.off("mouseenter mouseleave");
     container.on("mouseenter", () => {
@@ -611,7 +617,6 @@ const positionWindow = () => {
       }, 3000);
     });
   }
-
   // 调整视频控制栏布局
   adjustVideoControlsLayout();
 };
@@ -625,7 +630,7 @@ const adjustVideoControlsLayout = () => {
     .css("height", `calc(100% - ${controlsHeight}px)`);
 };
 
-// 窗口事件绑定
+// 窗口事件绑定（重点修复暂停逻辑）
 const setupWindowEvents = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const header = win.find(".image-player-header")[0];
@@ -666,7 +671,6 @@ const setupWindowEvents = () => {
         top: `${dragData.startTop + diffY}px`,
       });
     }
-
     // 调整大小处理
     if (resizeData) {
       const diffX = e.clientX - resizeData.startX;
@@ -676,7 +680,6 @@ const setupWindowEvents = () => {
       win.css({ width: `${newWidth}px`, height: `${newHeight}px` });
       adjustVideoControlsLayout();
     }
-
     // 进度条拖拽
     if (progressDrag && settings.customVideoControls.showProgress) {
       const bar = win.find(".progress-bar")[0];
@@ -684,14 +687,12 @@ const setupWindowEvents = () => {
       const clickX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
       const progress = clickX / rect.width;
       updateProgressBar(progress);
-
       const video = win.find(".image-player-video")[0];
       if (video) {
         const currentTime = (video.duration || 0) * progress;
         win.find(".current-time").text(formatTime(currentTime));
       }
     }
-
     // 音量条拖拽
     if (volumeDrag && settings.customVideoControls.showVolume) {
       const slider = win.find(".volume-slider")[0];
@@ -716,7 +717,6 @@ const setupWindowEvents = () => {
       dragData = null;
       resizeData = null;
     }
-
     // 进度条拖拽结束：恢复播放
     if (progressDrag && settings.customVideoControls.showProgress) {
       const video = win.find(".image-player-video")[0];
@@ -724,7 +724,6 @@ const setupWindowEvents = () => {
         video.play().catch((err) => console.warn("视频播放失败:", err));
       }
     }
-
     progressDrag = false;
     volumeDrag = false;
   });
@@ -738,35 +737,35 @@ const setupWindowEvents = () => {
     toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
   });
 
-  // 播放/暂停按钮
+  // 播放/暂停按钮（重点修复：彻底暂停所有播放行为）
   win.find(".play-pause").on("click", function () {
-    settings.isPlaying = !settings.isPlaying;
+    const oldIsPlaying = settings.isPlaying;
+    settings.isPlaying = !oldIsPlaying;
     saveSafeSettings();
     const icon = $(this).find("i");
     icon.toggleClass("fa-play fa-pause");
-
     const video = win.find(".image-player-video")[0];
     const isVideoVisible = video && video.style.display !== "none";
 
-    if (settings.isPlaying) {
-      // 视频：直接播放
+    // 暂停逻辑：清除定时器+停止进度更新+暂停视频
+    if (!settings.isPlaying) {
+      clearTimeout(switchTimer);
+      stopProgressUpdate();
+      if (isVideoVisible && !video.paused) {
+        video.pause();
+      }
+      win.find(".control-text").text(oldIsPlaying ? "已暂停" : "播放中");
+    }
+    // 播放逻辑：区分图片/视频
+    else {
       if (isVideoVisible) {
         video.play().catch((err) => {
           console.warn("视频自动播放失败（浏览器限制）:", err);
           toastr.warning("请点击视频手动播放");
         });
         startProgressUpdate();
-      }
-      // 图片：启动定时切换
-      else {
+      } else {
         startPlayback();
-      }
-    } else {
-      // 暂停逻辑
-      clearTimeout(switchTimer);
-      stopProgressUpdate();
-      if (isVideoVisible && !video.paused) {
-        video.pause();
       }
     }
   });
@@ -778,16 +777,16 @@ const setupWindowEvents = () => {
     saveSafeSettings();
     const icon = $(this).find("i");
     icon.toggleClass("fa-shuffle fa-list-ol");
-
-    // 重置随机播放记录
+    // 重置随机播放记录（解决切换模式后索引回退）
     if (settings.playMode === "random") {
       settings.randomMediaList = [...mediaList];
       settings.randomPlayedIndices = [];
+      settings.currentRandomIndex = -1;
       toastr.info("切换为随机播放模式");
     } else {
+      currentMediaIndex = 0;
       toastr.info("切换为顺序播放模式");
     }
-
     showMedia("current");
   });
 
@@ -813,15 +812,16 @@ const setupWindowEvents = () => {
     win.hide();
     settings.isWindowVisible = false;
     saveSafeSettings();
-
-    // 暂停视频
+    // 暂停视频+清除定时器
     const video = win.find(".image-player-video")[0];
     if (video) video.pause();
     stopProgressUpdate();
+    clearTimeout(switchTimer);
   });
 
-  // 上一个/下一个媒体
+  // 上一个/下一个媒体（修复切换回退问题）
   win.find(".prev").on("click", () => {
+    if (settings.isMediaLoading) return; // 防止并发切换
     clearTimeout(switchTimer);
     const video = win.find(".image-player-video")[0];
     if (video) {
@@ -832,6 +832,7 @@ const setupWindowEvents = () => {
   });
 
   win.find(".next").on("click", () => {
+    if (settings.isMediaLoading) return;
     clearTimeout(switchTimer);
     const video = win.find(".image-player-video")[0];
     if (video) {
@@ -847,22 +848,19 @@ const setupWindowEvents = () => {
       settings.autoSwitchMode === "detect" ? "timer" : "detect";
     settings.isPlaying = settings.autoSwitchMode !== null;
     saveSafeSettings();
-
     $(this)
       .toggleClass("active", settings.autoSwitchMode === "detect")
       .find("i")
       .toggleClass("fa-robot fa-clock");
-
     win
       .find(".play-pause i")
       .toggleClass("fa-play", !settings.isPlaying)
       .toggleClass("fa-pause", settings.isPlaying);
-
-    // 暂停当前视频
+    // 暂停当前视频+清除定时器
     const video = win.find(".image-player-video")[0];
     if (video) video.pause();
     stopProgressUpdate();
-
+    clearTimeout(switchTimer);
     // 启动播放（若切换为定时模式）
     if (settings.isPlaying && settings.autoSwitchMode === "timer") {
       startPlayback();
@@ -874,15 +872,14 @@ const setupWindowEvents = () => {
     const filterType = $(this).data("type");
     settings.mediaFilter = filterType;
     saveSafeSettings();
-
     // 更新按钮状态
     win.find(".media-filter-btn").removeClass("active");
     $(this).addClass("active");
-
-    // 刷新媒体列表并显示
+    // 刷新列表并重置索引（解决筛选后跳回第一张）
     refreshMediaList().then(() => {
       currentMediaIndex = 0;
       settings.randomPlayedIndices = [];
+      settings.currentRandomIndex = -1;
       showMedia("current");
     });
   });
@@ -897,7 +894,6 @@ const setupWindowEvents = () => {
       }
       win.find(".progress-loaded").css("width", "0%");
     });
-
     // 视频缓冲：更新已加载进度
     video.addEventListener("progress", () => {
       if (
@@ -909,7 +905,6 @@ const setupWindowEvents = () => {
         win.find(".progress-loaded").css("width", `${loadedProgress * 100}%`);
       }
     });
-
     // 视频结束：切换下一个（非循环模式）
     video.addEventListener("ended", () => {
       if (settings.isPlaying && !settings.videoLoop) {
@@ -922,10 +917,11 @@ const setupWindowEvents = () => {
   }
 };
 
-// ==================== 播放控制 ====================
+// ==================== 播放控制（修复暂停无效+切换回退） ====================
 // 启动播放（区分图片/视频）
 const startPlayback = () => {
   const settings = getExtensionSettings();
+  // 关键修复：已暂停时不执行播放逻辑
   if (!settings.isPlaying) return;
 
   clearTimeout(switchTimer);
@@ -936,7 +932,7 @@ const startPlayback = () => {
   // 定时模式：图片定时切换，视频仅在结束后切换
   if (settings.autoSwitchMode === "timer") {
     if (isVideoVisible) {
-      // 视频：播放并监听结束事件
+      // 视频：播放并监听结束事件（不重复播放）
       if (video.paused) {
         video.play().catch((err) => {
           console.warn("视频播放失败:", err);
@@ -945,30 +941,33 @@ const startPlayback = () => {
         startProgressUpdate();
       }
     } else {
-      // 图片：定时切换
+      // 图片：定时切换（仅播放中执行）
       showMedia("next");
       switchTimer = setTimeout(startPlayback, settings.switchInterval);
     }
   }
 };
 
-// 获取随机媒体索引
+// 获取随机媒体索引（修复索引回退）
 const getRandomMediaIndex = () => {
   const settings = getExtensionSettings();
   const list = settings.randomMediaList || [];
-
-  // 所有媒体已播放过：重置记录
+  // 所有媒体已播放过：重置记录（同步当前索引）
   if (settings.randomPlayedIndices.length >= list.length) {
     settings.randomPlayedIndices = [];
+    settings.currentRandomIndex = -1;
   }
-
   // 筛选未播放的索引
   const availableIndices = list
     .map((_, i) => i)
     .filter((i) => !settings.randomPlayedIndices.includes(i));
 
   if (availableIndices.length === 0) return 0;
-  return availableIndices[Math.floor(Math.random() * availableIndices.length)];
+  const randomIndex =
+    availableIndices[Math.floor(Math.random() * availableIndices.length)];
+  // 记录当前随机索引（防止切换回退）
+  settings.currentRandomIndex = randomIndex;
+  return randomIndex;
 };
 
 // 预加载媒体
@@ -980,7 +979,6 @@ const preloadMediaItem = async (url, type) => {
   ) {
     return null;
   }
-
   try {
     return await new Promise((resolve, reject) => {
       if (type === "image") {
@@ -1016,7 +1014,7 @@ const applyTransitionEffect = (imgElement, effect) => {
   }
 };
 
-// 显示媒体（核心逻辑）
+// 显示媒体（核心修复：状态锁+索引管理）
 const showMedia = async (direction) => {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
@@ -1025,13 +1023,20 @@ const showMedia = async (direction) => {
   const loadingElement = win.find(".loading-animation")[0];
   const infoElement = win.find(".image-info")[0];
 
-  // 初始化加载状态
-  win.find(".control-text").text("加载中...");
-  $(imgElement).hide();
-  $(videoElement).hide();
-  $(loadingElement).show();
+  // 关键修复：防止媒体重复加载（解决闪烁）
+  if (settings.isMediaLoading) {
+    console.log(`[${EXTENSION_ID}] 媒体加载中，跳过重复调用`);
+    return;
+  }
+  settings.isMediaLoading = true;
 
   try {
+    // 初始化加载状态
+    win.find(".control-text").text("加载中...");
+    $(imgElement).hide();
+    $(videoElement).hide();
+    $(loadingElement).show();
+
     // 检查服务状态
     const status = await checkServiceStatus();
     if (!status.active) throw new Error("媒体服务未连接");
@@ -1039,11 +1044,12 @@ const showMedia = async (direction) => {
     let mediaUrl, mediaName, mediaType;
     const filterType = settings.mediaFilter;
 
-    // 随机播放逻辑
+    // 随机播放逻辑（修复切换回退）
     if (settings.playMode === "random") {
       if (settings.randomMediaList.length === 0) {
         settings.randomMediaList = await fetchMediaList(filterType);
         settings.randomPlayedIndices = [];
+        settings.currentRandomIndex = -1;
       }
 
       let randomIndex = -1;
@@ -1051,26 +1057,31 @@ const showMedia = async (direction) => {
         randomIndex = getRandomMediaIndex();
         settings.randomPlayedIndices.push(randomIndex);
       } else if (direction === "prev") {
-        // 上一个：回退播放记录
+        // 关键修复：上一个时正确回退索引
         if (settings.randomPlayedIndices.length > 1) {
+          // 移除当前索引
           settings.randomPlayedIndices.pop();
+          // 获取上一个索引
           randomIndex = settings.randomPlayedIndices.pop();
+          // 重新加入（保留历史）
           settings.randomPlayedIndices.push(randomIndex);
+          settings.currentRandomIndex = randomIndex;
         } else {
+          // 只有一个时不回退
           randomIndex = settings.randomPlayedIndices[0] || 0;
         }
       } else if (direction === "current") {
+        // 当前媒体：优先使用已记录的索引
         randomIndex =
-          settings.randomPlayedIndices.length > 0
-            ? settings.randomPlayedIndices[
-                settings.randomPlayedIndices.length - 1
-              ]
+          settings.currentRandomIndex !== -1
+            ? settings.currentRandomIndex
             : getRandomMediaIndex();
       }
 
       // 验证索引有效性
       if (randomIndex < 0 || randomIndex >= settings.randomMediaList.length) {
-        throw new Error("无可用媒体");
+        randomIndex = 0;
+        settings.currentRandomIndex = 0;
       }
 
       const media = settings.randomMediaList[randomIndex];
@@ -1080,19 +1091,26 @@ const showMedia = async (direction) => {
       mediaName = media.name;
       mediaType = media.media_type;
     }
-    // 顺序播放逻辑
+    // 顺序播放逻辑（修复索引计算）
     else {
       if (mediaList.length === 0) {
         mediaList = await fetchMediaList(filterType);
       }
       if (mediaList.length === 0) throw new Error("无可用媒体");
 
-      // 更新索引
+      // 更新索引（防止越界）
       if (direction === "next") {
         currentMediaIndex = (currentMediaIndex + 1) % mediaList.length;
       } else if (direction === "prev") {
         currentMediaIndex =
           (currentMediaIndex - 1 + mediaList.length) % mediaList.length;
+      }
+      // 当前媒体：确保索引有效
+      else if (direction === "current") {
+        currentMediaIndex = Math.max(
+          0,
+          Math.min(currentMediaIndex, mediaList.length - 1)
+        );
       }
 
       const media = mediaList[currentMediaIndex];
@@ -1109,7 +1127,6 @@ const showMedia = async (direction) => {
     // 显示图片
     if (mediaType === "image") {
       applyTransitionEffect(imgElement, settings.transitionEffect);
-
       // 使用预加载图片
       if (preloadedMedia && preloadedMedia.src === mediaUrl) {
         $(imgElement).attr("src", mediaUrl).show();
@@ -1123,7 +1140,6 @@ const showMedia = async (direction) => {
         });
         $(imgElement).attr("src", mediaUrl).show();
       }
-
       $(videoElement).hide();
     }
     // 显示视频
@@ -1229,6 +1245,9 @@ const showMedia = async (direction) => {
       win.find(".control-text").text("加载失败");
       $(loadingElement).hide();
     }
+  } finally {
+    // 释放加载锁
+    settings.isMediaLoading = false;
   }
 };
 
@@ -1236,7 +1255,7 @@ const showMedia = async (direction) => {
 // AI回复检测切换
 const onAIResponse = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return;
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   // 视频循环时禁用切换
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
@@ -1269,7 +1288,7 @@ const onAIResponse = () => {
 // 玩家消息检测切换
 const onPlayerMessage = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return;
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   // 视频循环时禁用切换
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
@@ -1299,7 +1318,7 @@ const onPlayerMessage = () => {
   console.log(`[${EXTENSION_ID}] 玩家消息触发媒体切换`);
 };
 
-// ==================== 服务轮询 ====================
+// ==================== 服务轮询（修复频繁触发切换） ====================
 const startPollingService = () => {
   const settings = getExtensionSettings();
   if (!settings.enabled) {
@@ -1313,14 +1332,9 @@ const startPollingService = () => {
       const prevCount = serviceStatus.totalCount;
       await checkServiceStatus();
 
-      // 媒体数量变化时刷新列表
+      // 媒体数量变化时仅刷新列表，不自动切换（避免闪烁）
       if (serviceStatus.totalCount !== prevCount) {
-        if (settings.playMode === "random") {
-          settings.randomMediaList = await fetchMediaList(settings.mediaFilter);
-          settings.randomPlayedIndices = [];
-        } else {
-          mediaList = await fetchMediaList(settings.mediaFilter);
-        }
+        await refreshMediaList();
         toastr.info(
           `媒体库更新: 总计${serviceStatus.totalCount}（图片${serviceStatus.imageCount} | 视频${serviceStatus.videoCount}）`
         );
@@ -1701,7 +1715,7 @@ const createSettingsPanel = async () => {
   console.log(`[${EXTENSION_ID}] 设置面板创建完成`);
 };
 
-// 设置面板事件绑定
+// 设置面板事件绑定（补全剩余逻辑）
 const setupSettingsEvents = () => {
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
@@ -1779,6 +1793,7 @@ const setupSettingsEvents = () => {
   // 清理随机记录
   panel.find("#clear-random-history").on("click", () => {
     settings.randomPlayedIndices = [];
+    settings.currentRandomIndex = -1; // 重置当前随机索引
     saveSafeSettings();
     toastr.success("随机播放记录已清理");
     showMedia("current");
@@ -1787,7 +1802,13 @@ const setupSettingsEvents = () => {
   // 清理无效媒体
   panel.find("#cleanup-media").on("click", async () => {
     if (!confirm("确定清理无效/超大小限制的媒体文件？（不可逆）")) return;
-    await cleanupInvalidMedia();
+    const result = await cleanupInvalidMedia();
+    // 清理后重置索引，避免引用已删除媒体
+    if (result) {
+      currentMediaIndex = 0;
+      settings.randomPlayedIndices = [];
+      settings.currentRandomIndex = -1;
+    }
   });
 
   // 更新扫描目录
@@ -1797,7 +1818,13 @@ const setupSettingsEvents = () => {
       toastr.warning("请输入有效目录路径");
       return;
     }
-    await updateScanDirectory(newPath);
+    const success = await updateScanDirectory(newPath);
+    // 目录更新后重置索引
+    if (success) {
+      currentMediaIndex = 0;
+      settings.randomPlayedIndices = [];
+      settings.currentRandomIndex = -1;
+    }
   });
 
   // 更新媒体大小限制
@@ -1817,6 +1844,8 @@ const setupSettingsEvents = () => {
     await updateMediaSizeLimit(imageMaxMb, videoMaxMb);
     panel.find("#image-max-size").val(imageMaxMb);
     panel.find("#video-max-size").val(videoMaxMb);
+    // 限制更新后刷新列表，过滤超大小媒体
+    await refreshMediaList();
   });
 
   // 定时播放模式切换
@@ -1860,36 +1889,45 @@ const setupSettingsEvents = () => {
   });
 
   // 播放模式变更
-  panel.find("#player-play-mode").on("change", () => {
-    panel
-      .find("#player-slideshow-mode")
-      .prop("disabled", $(this).val() === "random");
+  panel.find("#player-play-mode").on("change", function () {
+    const newMode = $(this).val();
+    panel.find("#player-slideshow-mode").prop("disabled", newMode === "random");
+
     saveCurrentSettings();
-    if (settings.playMode === "random") {
+
+    // 切换模式后重置索引和播放记录
+    if (newMode === "random") {
       settings.randomMediaList = [...mediaList];
       settings.randomPlayedIndices = [];
+      settings.currentRandomIndex = -1;
+    } else {
+      currentMediaIndex = 0;
     }
+
     showMedia("current");
   });
 
   // 媒体筛选变更
-  panel.find("#player-media-filter").on("change", () => {
+  panel.find("#player-media-filter").on("change", function () {
     settings.mediaFilter = $(this).val();
     saveSafeSettings();
+
+    // 筛选后重置索引，避免引用非筛选类型的媒体
     refreshMediaList().then(() => {
       currentMediaIndex = 0;
       settings.randomPlayedIndices = [];
+      settings.currentRandomIndex = -1;
       showMedia("current");
     });
   });
 
   // 过渡效果变更
-  panel.find("#player-transition-effect").on("change", () => {
+  panel.find("#player-transition-effect").on("change", function () {
     saveCurrentSettings();
     const imgElement = $(`#${PLAYER_WINDOW_ID} .image-player-img`)[0];
     if (imgElement && $(imgElement).is(":visible")) {
       applyTransitionEffect(imgElement, settings.transitionEffect);
-      // 重新加载图片触发过渡效果
+      // 重新加载图片触发过渡效果（避免效果不生效）
       const currentSrc = imgElement.src;
       imgElement.src = "";
       imgElement.src = currentSrc;
@@ -1901,13 +1939,18 @@ const setupSettingsEvents = () => {
     settings.isWindowVisible = true;
     saveSafeSettings();
     $(`#${PLAYER_WINDOW_ID}`).show();
-    showMedia("current");
+    // 显示时检查是否有媒体，无则提示
+    if (mediaList.length === 0) {
+      toastr.info("未检测到媒体，请先配置扫描目录");
+    } else {
+      showMedia("current");
+    }
   });
 
-  // 基础设置项变更绑定
+  // 基础设置项变更绑定（输入框/下拉框）
   panel
     .find(
-      "#player-service-url, #player-interval, #player-ai-cooldown, #player-polling-interval"
+      "#player-service-url, #player-interval, #player-ai-cooldown, #player-polling-interval, #image-max-size, #video-max-size"
     )
     .on("change", saveCurrentSettings);
 
@@ -1922,18 +1965,21 @@ const setupSettingsEvents = () => {
     .on("change", saveCurrentSettings);
 };
 
-// 更新扩展菜单与播放器UI同步
+// 更新扩展菜单与播放器UI同步（补全细节）
 const updateExtensionMenu = () => {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const panel = $(`#${SETTINGS_PANEL_ID}`);
   if (!win.length || !panel.length) return;
 
-  // 1. 播放状态同步
+  // 1. 播放状态同步（菜单+播放器）
   win
     .find(".play-pause i")
     .toggleClass("fa-play", !settings.isPlaying)
     .toggleClass("fa-pause", settings.isPlaying);
+  $(`#ext_menu_${EXTENSION_ID} .play-status`).text(
+    settings.isPlaying ? "播放中" : "已暂停"
+  );
 
   // 2. 播放模式同步（随机/顺序）
   win
@@ -1941,8 +1987,11 @@ const updateExtensionMenu = () => {
     .toggleClass("fa-shuffle", settings.playMode === "random")
     .toggleClass("fa-list-ol", settings.playMode === "sequential");
   panel.find("#player-play-mode").val(settings.playMode);
+  $(`#ext_menu_${EXTENSION_ID} .mode-text`).text(
+    settings.playMode === "random" ? "随机" : "顺序"
+  );
 
-  // 3. 媒体筛选同步
+  // 3. 媒体筛选同步（控制栏+设置面板）
   win.find(".media-filter-btn").removeClass("active");
   win
     .find(`.media-filter-btn[data-type="${settings.mediaFilter}"]`)
@@ -1958,7 +2007,7 @@ const updateExtensionMenu = () => {
     .find("#player-show-video-controls")
     .prop("checked", settings.showVideoControls);
 
-  // 5. 视频循环状态同步
+  // 5. 视频循环状态同步（按钮+视频元素）
   win.find(".loop-btn").toggleClass("active", settings.videoLoop);
   panel.find("#player-video-loop").prop("checked", settings.videoLoop);
   const videoElement = win.find(".image-player-video")[0];
@@ -1999,7 +2048,7 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random");
 };
 
-// 带重试的AI/玩家事件监听注册（兼容老版本加载顺序）
+// 带重试的AI/玩家事件监听注册（补全依赖检查）
 const registerEventListenersWithRetry = () => {
   const maxRetries = 8;
   const retryDelay = 2000;
@@ -2007,27 +2056,31 @@ const registerEventListenersWithRetry = () => {
 
   const tryRegister = () => {
     try {
-      // 依赖检查：确保eventSource和event_types已加载（老版本核心依赖）
+      // 严格依赖检查：确保核心事件对象存在且属性完整
       if (
         !window.eventSource ||
+        typeof window.eventSource.on !== "function" ||
+        typeof window.eventSource.off !== "function" ||
         !window.event_types ||
         !window.event_types.MESSAGE_RECEIVED ||
         !window.event_types.MESSAGE_SENT
       ) {
         throw new Error(
-          `依赖缺失: eventSource=${!!window.eventSource}, event_types=${!!window.event_types}`
+          `依赖缺失: eventSource=${!!window.eventSource}, eventSource.on=${typeof window
+            .eventSource?.on}, event_types=${!!window.event_types}`
         );
       }
 
-      // 先解绑旧事件避免重复触发
+      // 先解绑旧事件，避免重复触发（修复多次注册导致的切换异常）
       window.eventSource.off(window.event_types.MESSAGE_RECEIVED, onAIResponse);
       window.eventSource.off(window.event_types.MESSAGE_SENT, onPlayerMessage);
 
-      // 1. AI回复事件注册
+      // 1. AI回复事件注册（仅播放中+检测模式生效）
       window.eventSource.on(window.event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
+          !settings.isMediaLoading &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isPlaying &&
@@ -2037,11 +2090,12 @@ const registerEventListenersWithRetry = () => {
         }
       });
 
-      // 2. 玩家消息事件注册
+      // 2. 玩家消息事件注册（同上）
       window.eventSource.on(window.event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
+          !settings.isMediaLoading &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isPlaying &&
@@ -2071,7 +2125,7 @@ const registerEventListenersWithRetry = () => {
   setTimeout(tryRegister, 5000);
 };
 
-// 添加扩展菜单按钮
+// 添加扩展菜单按钮（补全实时更新逻辑）
 const addMenuButton = () => {
   const menuBtnId = `ext_menu_${EXTENSION_ID}`;
   if ($(`#${menuBtnId}`).length) return;
@@ -2090,7 +2144,7 @@ const addMenuButton = () => {
     `;
   $("#extensionsMenu").append(btnHtml);
 
-  // 菜单按钮点击跳转设置面板
+  // 菜单按钮点击跳转设置面板（平滑滚动）
   $(`#${menuBtnId}`).on("click", () => {
     $("#extensions-settings-button").trigger("click");
     $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
@@ -2099,7 +2153,7 @@ const addMenuButton = () => {
     });
   });
 
-  // 播放状态与模式实时更新
+  // 播放状态与模式实时更新（1秒一次，避免频繁DOM操作）
   setInterval(() => {
     const settings = getExtensionSettings();
     $(`#${menuBtnId} .play-status`).text(
@@ -2111,7 +2165,7 @@ const addMenuButton = () => {
   }, 1000);
 };
 
-// 扩展核心初始化
+// 扩展核心初始化（补全错误处理与流程）
 const initExtension = async () => {
   const settings = getExtensionSettings();
   if (!settings.enabled) {
@@ -2123,27 +2177,33 @@ const initExtension = async () => {
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化媒体播放器扩展`);
 
-    // 1. 初始化全局设置容器
+    // 1. 初始化全局设置容器（确保不覆盖已有配置）
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
     }
     if (!window.extension_settings[EXTENSION_ID]) {
-      window.extension_settings[EXTENSION_ID] = settings;
+      window.extension_settings[EXTENSION_ID] = {
+        ...settings,
+        isMediaLoading: false, // 初始化加载锁
+        currentRandomIndex: -1, // 初始化随机索引
+      };
       saveSafeSettings();
       console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
     }
 
-    // 2. 基础组件创建
+    // 2. 基础组件创建（顺序：菜单→窗口→设置面板）
     addMenuButton();
     await createPlayerWindow();
     await createSettingsPanel();
 
-    // 3. 实时通信与服务初始化
+    // 3. 实时通信与服务初始化（WebSocket+轮询）
     initWebSocket();
     startPollingService();
+
+    // 4. 事件监听注册（AI/玩家消息）
     registerEventListenersWithRetry();
 
-    // 4. 媒体列表初始化
+    // 5. 媒体列表初始化（加载后检查是否有媒体）
     await refreshMediaList();
     if (mediaList.length > 0) {
       showMedia("current");
@@ -2151,7 +2211,7 @@ const initExtension = async () => {
       toastr.info(`未检测到媒体文件，请在设置中配置扫描目录`);
     }
 
-    // 5. 初始状态校准
+    // 6. 初始状态校准（默认暂停，避免自动播放）
     settings.isPlaying = false;
     $(`#${PLAYER_WINDOW_ID} .play-pause i`)
       .removeClass("fa-pause")
@@ -2163,27 +2223,40 @@ const initExtension = async () => {
   } catch (error) {
     console.error(`[${EXTENSION_ID}] 初始化错误:`, error);
     toastr.error(`扩展初始化失败: ${error.message}，1.5秒后重试`);
+    // 重试时重置关键状态，避免残留错误
+    const resetSettings = getExtensionSettings();
+    resetSettings.isMediaLoading = false;
+    resetSettings.currentRandomIndex = -1;
+    saveSafeSettings();
     setTimeout(initExtension, 1500);
   }
 };
 
-// 页面就绪触发初始化
+// 页面就绪触发初始化（补全兼容逻辑）
 jQuery(() => {
   console.log(`[${EXTENSION_ID}] 脚本开始加载（等待页面就绪）`);
 
   const initWhenReady = () => {
+    // 兼容不同文档就绪状态
     if (
       document.readyState === "complete" ||
       document.readyState === "interactive"
     ) {
       initExtension();
     } else {
-      $(document).on("ready", initExtension);
-      setTimeout(initExtension, 1000);
+      // 绑定DOM就绪事件（避免重复绑定）
+      const readyHandler = () => {
+        initExtension();
+        $(document).off("ready", readyHandler);
+      };
+      $(document).on("ready", readyHandler);
+      // 超时兜底（防止事件未触发）
+      setTimeout(initExtension, 3000);
     }
   };
 
   initWhenReady();
 });
 
+// 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成`);
