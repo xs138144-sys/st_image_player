@@ -1223,6 +1223,7 @@ const showMedia = async (direction) => {
 
 // ==================== AI/玩家消息检测（无修改） ====================
 const onAIResponse = () => {
+  console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发（来自SillyTavern）`); // 新增日志
   const settings = getExtensionSettings();
   if (!settings.enabled || settings.isMediaLoading) return;
 
@@ -2048,41 +2049,35 @@ const registerAIEventListeners = () => {
   const tryRegister = () => {
     try {
       // 老版本核心依赖检查：必须等待 eventSource 和 event_types 全局可用
-      if (!window.eventSource || !window.event_types) {
+      if (!eventSource || !event_types) {
         throw new Error(
-          `依赖未就绪: eventSource=${!!window.eventSource}, event_types=${!!window.event_types}`
+          `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
         );
       }
 
-      // 先解绑旧事件（避免重复触发）
-      window.eventSource.off(window.event_types.MESSAGE_RECEIVED, onAIResponse);
-      window.eventSource.off(window.event_types.MESSAGE_SENT, onPlayerMessage);
+      eventSource.on(event_types.MESSAGE_RECEIVED, onAIResponse);
 
-      // AI回复事件（老版本原生触发逻辑）
-      window.eventSource.on(window.event_types.MESSAGE_RECEIVED, () => {
+      // AI回复事件（适配SillyTavern全局eventSource）
+      eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
-          !settings.isMediaLoading &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
-          settings.isPlaying &&
-          settings.isWindowVisible
+          settings.isWindowVisible // 移除isPlaying等冗余条件
         ) {
           onAIResponse();
         }
       });
 
-      // 玩家消息事件（老版本原生触发逻辑）
-      window.eventSource.on(window.event_types.MESSAGE_SENT, () => {
+      // 玩家消息事件（适配SillyTavern全局eventSource）
+      eventSource.on(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
-          !settings.isMediaLoading &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
-          settings.isPlaying &&
-          settings.isWindowVisible
+          settings.isWindowVisible // 移除isPlaying等冗余条件
         ) {
           onPlayerMessage();
         }
@@ -2111,7 +2106,7 @@ const registerAIEventListeners = () => {
   };
 
   // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
-  setTimeout(tryRegister, 3000);
+  setTimeout(tryRegister, 5000);
 };
 
 // ==================== 扩展菜单按钮（含筛选状态显示） ====================
@@ -2223,7 +2218,9 @@ const initExtension = async () => {
     saveSafeSettings();
 
     // 6. 最后注册AI事件（确保所有依赖加载完成，老版本关键时机）
-    registerAIEventListeners();
+    setTimeout(() => {
+      registerAIEventListeners();
+    }, 2000);
 
     console.log(`[${EXTENSION_ID}] 扩展初始化完成（老版本适配）`);
     toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
