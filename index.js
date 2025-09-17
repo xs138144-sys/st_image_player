@@ -2041,12 +2041,12 @@ const updateExtensionMenu = () => {
 
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
+  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`); // 新增日志
   const maxRetries = 8;
   const retryDelay = 1500;
   let retries = 0;
   const tryRegister = () => {
     try {
-      // 关键修改：动态获取eventSource和event_types，而非静态变量
       const eventSource = window.eventSource;
       const event_types = window.event_types;
       console.log(
