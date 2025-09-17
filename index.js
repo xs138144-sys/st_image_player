@@ -20,7 +20,7 @@ const getExtensionSettings = () => {
   const settings = getSafeGlobal("extension_settings", {});
   if (!settings[EXTENSION_ID]) {
     settings[EXTENSION_ID] = {
-      enabled: true, // 新增：扩展总开关（默认开启）
+      enabled: true,
       serviceUrl: "http://localhost:9000",
       playMode: "random",
       autoSwitch: false,
@@ -42,16 +42,13 @@ const getExtensionSettings = () => {
       playerDetectEnabled: true,
       aiDetectEnabled: true,
       pollingInterval: 30000,
-      // 视频核心配置
       videoLoop: false,
       videoVolume: 0.8,
       mediaFilter: "all",
       showVideoControls: true,
       lastMediaIndex: 0,
       progressUpdateInterval: null,
-      // 新增：边框隐藏配置
       hideBorder: false,
-      // 新增：自定义视频控制栏配置
       customVideoControls: {
         showProgress: true,
         showVolume: true,
@@ -99,7 +96,11 @@ let retryCount = 0;
 let pollingTimer = null;
 let preloadedMedia = null;
 let currentMediaType = "image";
-let ws = null; // WebSocket连接
+let ws = null;
+let dragData = null;
+let resizeData = null;
+let progressDrag = false;
+let volumeDrag = false;
 
 // ==================== API 通信 ====================
 const checkServiceStatus = async () => {
@@ -124,7 +125,6 @@ const checkServiceStatus = async () => {
   }
 };
 
-// 获取筛选后的媒体列表
 const fetchMediaList = async (filterType = "all") => {
   const settings = getExtensionSettings();
   if (!settings.serviceUrl) throw new Error("无服务地址");
@@ -142,15 +142,12 @@ const fetchMediaList = async (filterType = "all") => {
   }
 };
 
-// 更新媒体大小限制
 const updateMediaSizeLimit = async (imageMaxMb, videoMaxMb) => {
   const settings = getExtensionSettings();
   try {
     const response = await fetch(`${settings.serviceUrl}/scan`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         path: settings.serviceDirectory || serviceStatus.directory,
         image_max_mb: imageMaxMb,
@@ -173,15 +170,12 @@ const updateMediaSizeLimit = async (imageMaxMb, videoMaxMb) => {
   }
 };
 
-// 更新扫描目录
 const updateScanDirectory = async (newPath) => {
   const settings = getExtensionSettings();
   try {
     const response = await fetch(`${settings.serviceUrl}/scan`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         path: newPath,
         image_max_mb: settings.mediaConfig?.image_max_size_mb || 5,
@@ -204,15 +198,12 @@ const updateScanDirectory = async (newPath) => {
   }
 };
 
-// 清理无效媒体文件
 const cleanupInvalidMedia = async () => {
   const settings = getExtensionSettings();
   try {
     const response = await fetch(`${settings.serviceUrl}/cleanup`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     });
     if (!response.ok) throw new Error("清理失败");
     const result = await response.json();
@@ -228,30 +219,28 @@ const cleanupInvalidMedia = async () => {
   }
 };
 
-// 刷新媒体列表
 const refreshMediaList = async () => {
   const settings = getExtensionSettings();
   mediaList = await fetchMediaList(settings.mediaFilter);
-  settings.randomMediaList = await fetchMediaList(settings.mediaFilter);
+  settings.randomMediaList = [...mediaList];
   currentMediaIndex = 0;
   settings.lastMediaIndex = 0;
+  settings.randomPlayedIndices = [];
+  clearTimeout(switchTimer);
   return mediaList;
 };
 
 // ==================== WebSocket 实时更新 ====================
 const initWebSocket = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled || !settings.serviceUrl || ws) return; // 总开关关闭则不初始化
+  if (!settings.enabled || !settings.serviceUrl || ws) return;
   try {
     const wsUrl =
       settings.serviceUrl.replace("http://", "ws://") + "/socket.io";
     ws = new WebSocket(wsUrl);
     ws.onopen = () => {
       console.log(`[${EXTENSION_ID}] WebSocket连接成功`);
-      // 新增：WebSocket连接成功后刷新媒体列表
-      refreshMediaList().then(() => {
-        showImage("current"); // 重新显示当前媒体
-      });
+      refreshMediaList().then(() => showImage("current"));
     };
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
@@ -261,7 +250,6 @@ const initWebSocket = () => {
           serviceStatus.imageCount = data.image_count;
           serviceStatus.videoCount = data.video_count;
           await refreshMediaList();
-          // 仅保留关键更新提示（可根据需求删除）
           toastr.info(
             `媒体库已更新（总计: ${data.total_count} | 图片: ${data.image_count} | 视频: ${data.video_count}）`
           );
@@ -279,14 +267,13 @@ const initWebSocket = () => {
     ws.onclose = () => {
       console.log(`[${EXTENSION_ID}] WebSocket连接关闭`);
       ws = null;
-      if (settings.enabled) setTimeout(initWebSocket, 5000); // 总开关开启才重试
+      if (settings.enabled) setTimeout(initWebSocket, 5000);
     };
     ws.onerror = (error) => {
       console.error(`[${EXTENSION_ID}] WebSocket错误`, error);
       ws = null;
-      if (settings.enabled) setTimeout(initWebSocket, 5000); // 总开关开启才重试
+      if (settings.enabled) setTimeout(initWebSocket, 5000);
     };
-    // 心跳检测
     setInterval(() => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
@@ -295,20 +282,75 @@ const initWebSocket = () => {
   } catch (error) {
     console.error(`[${EXTENSION_ID}] WebSocket初始化失败`, error);
     ws = null;
-    if (settings.enabled) setTimeout(initWebSocket, 5000); // 总开关开启才重试
+    if (settings.enabled) setTimeout(initWebSocket, 5000);
   }
+};
+
+// ==================== 视频控制事件委托（新增） ====================
+const bindVideoControlEvents = (winSelector) => {
+  const settings = getExtensionSettings();
+  if (!settings.enabled) return;
+
+  // 进度条点击
+  $(document).off("mousedown", `${winSelector} #video-progress-bar`);
+  $(document).on(
+    "mousedown",
+    `${winSelector} #video-progress-bar`,
+    function (e) {
+      const videoElement = $(winSelector).find(".image-player-video")[0];
+      if (!videoElement) return;
+      progressDrag = true;
+      const barRect = this.getBoundingClientRect();
+      const clickX = Math.max(
+        0,
+        Math.min(e.clientX - barRect.left, barRect.width)
+      );
+      const progress = clickX / barRect.width;
+      videoElement.currentTime = (videoElement.duration || 0) * progress;
+      updateProgressBar(progress);
+      if (!videoElement.paused) videoElement.pause();
+    }
+  );
+
+  // 音量按钮
+  $(document).off("click", `${winSelector} .volume-btn`);
+  $(document).on("click", `${winSelector} .volume-btn`, function () {
+    const volumeSlider = $(winSelector).find(".volume-slider");
+    const currentVolume = parseFloat(volumeSlider.val());
+    const newVolume = currentVolume > 0 ? 0 : settings.videoVolume || 0.8;
+    volumeSlider.val(newVolume);
+    updateVolume(newVolume);
+  });
+
+  // 循环按钮
+  $(document).off("click", `${winSelector} .loop-btn`);
+  $(document).on("click", `${winSelector} .loop-btn`, function () {
+    settings.videoLoop = !settings.videoLoop;
+    saveSafeSettings();
+    $(this).toggleClass("active", settings.videoLoop);
+    const videoElement = $(winSelector).find(".image-player-video")[0];
+    if (videoElement) videoElement.loop = settings.videoLoop;
+    toastr.info(
+      settings.videoLoop ? "视频循环已启用（AI切换暂时无效）" : "视频循环已禁用"
+    );
+  });
+
+  // 音量条拖拽
+  $(document).off("mousedown", `${winSelector} .volume-slider`);
+  $(document).on("mousedown", `${winSelector} .volume-slider`, function () {
+    volumeDrag = true;
+  });
 };
 
 // ==================== 播放器窗口 ====================
 const createImagePlayerWindow = async () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length > 0) return; // 总开关关闭/已存在则不创建
+  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length > 0) return;
 
   const infoHTML = settings.showInfo
     ? `<div class="image-info">加载中...</div>`
     : "";
 
-  // 视频控制栏HTML（支持自定义显示控件）
   const videoControlsHTML = settings.showVideoControls
     ? `
         <div class="video-controls">
@@ -342,7 +384,6 @@ const createImagePlayerWindow = async () => {
                 </div>`
                     : ""
                 }
-                
                 ${
                   settings.customVideoControls.showLoop
                     ? `
@@ -353,7 +394,6 @@ const createImagePlayerWindow = async () => {
                 </button>`
                     : ""
                 }
-                
                 ${
                   settings.customVideoControls.showTime
                     ? `
@@ -390,14 +430,11 @@ const createImagePlayerWindow = async () => {
                 <button class="hide"><i class="fa-solid fa-minus"></i></button>
             </div>
         </div>
-        
         <div class="image-player-body">
             <div class="image-container">
                 <div class="loading-animation">加载媒体中...</div>
-                <!-- 图片标签 -->
                 <img class="image-player-img" 
                      onerror="this.onerror=null;this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg=='" />
-                <!-- 视频标签 -->
                 <video class="image-player-video" 
                        ${settings.videoLoop ? "loop" : ""}
                        preload="metadata"
@@ -406,10 +443,8 @@ const createImagePlayerWindow = async () => {
                 </video>
             </div>
             ${infoHTML}
-            <!-- 视频控制栏 -->
             ${videoControlsHTML}
         </div>
-        
         <div class="image-player-controls">
             <div class="controls-group">
                 <button class="control-btn play-pause"><i class="fa-solid ${
@@ -436,7 +471,6 @@ const createImagePlayerWindow = async () => {
                     }"></i>
                 </button>
             </div>
-            
             <div class="controls-group">
                 <button class="control-btn prev" title="上一个"><i class="fa-solid fa-backward-step"></i></button>
                 <div class="control-text">${
@@ -444,8 +478,6 @@ const createImagePlayerWindow = async () => {
                 }</div>
                 <button class="control-btn next" title="下一个"><i class="fa-solid fa-forward-step"></i></button>
             </div>
-            
-            <!-- 媒体类型筛选按钮 -->
             <div class="controls-group media-filter-group">
                 <button class="control-btn media-filter-btn ${
                   settings.mediaFilter === "all" ? "active" : ""
@@ -463,14 +495,12 @@ const createImagePlayerWindow = async () => {
                     <i class="fa-solid fa-video"></i>
                 </button>
             </div>
-            
             <div class="resize-handle"></div>
         </div>
     </div>`;
   $("body").append(html);
   setupWindowEvents(PLAYER_WINDOW_ID);
   positionWindow(PLAYER_WINDOW_ID);
-  // 初始化视频音量
   const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (videoElement) videoElement.volume = settings.videoVolume;
   console.log(`[${EXTENSION_ID}] 媒体播放器窗口已创建`);
@@ -479,6 +509,7 @@ const createImagePlayerWindow = async () => {
 const positionWindow = (windowId) => {
   const settings = getExtensionSettings();
   const win = $(`#${windowId}`);
+  const winSelector = `#${windowId}`;
   win
     .css({
       left: `${settings.position.x}px`,
@@ -488,50 +519,50 @@ const positionWindow = (windowId) => {
     })
     .toggleClass("locked", settings.isLocked)
     .toggle(settings.isWindowVisible)
-    .toggleClass("no-border", settings.hideBorder); // 应用边框隐藏样式
+    .toggleClass("no-border", settings.hideBorder);
 
-  // 新增：边框隐藏时确保视频控制栏事件正常（兼容hover显示）
+  // 边框隐藏时控制栏显示逻辑
   if (settings.hideBorder && settings.showVideoControls) {
     const videoContainer = win.find(".image-container");
     const videoControls = win.find(".video-controls");
-    // 鼠标离开容器后3秒隐藏控制栏
+    videoContainer.off("mouseenter mouseleave");
+
+    videoContainer.on("mouseenter", () => {
+      videoControls.css({ bottom: 0, opacity: 1 });
+    });
+
     videoContainer.on("mouseleave", () => {
       setTimeout(() => {
-        if (videoControls.is(":visible") && !progressDrag && !volumeDrag) {
-          videoControls.css({ bottom: "-40px", opacity: 0 });
+        if (!progressDrag && !volumeDrag) {
+          videoControls.css({ bottom: "-40px" });
         }
-      }, 3000); // 3秒延迟，避免频繁隐藏
+      }, 3000);
     });
+    bindVideoControlEvents(winSelector);
   }
-
   adjustVideoControlsLayout();
 };
 
-// 调整视频控制栏布局
 const adjustVideoControlsLayout = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
+  const settings = getExtensionSettings();
   const bodyHeight = win.find(".image-player-body").height();
-  const videoControlsHeight = win.find(".video-controls").outerHeight() || 30;
+  const videoControlsHeight = win.find(".video-controls").outerHeight() || 40;
   win
     .find(".image-container")
     .css("height", `calc(100% - ${videoControlsHeight}px)`);
+  win.find(".progress-container").css("width", "100%");
 };
 
 // ==================== 窗口事件 ====================
-let dragData = null;
-let resizeData = null;
-let progressDrag = false;
-let volumeDrag = false;
-
 const setupWindowEvents = (windowId) => {
   const winElement = document.getElementById(windowId);
   const header = winElement.querySelector(".image-player-header");
   const resizeHandle = winElement.querySelector(".resize-handle");
   const winSelector = `#${windowId}`;
   const settings = getExtensionSettings();
-  const videoElement = $(winSelector).find(".image-player-video")[0];
 
-  // 窗口拖拽（边框隐藏时不允许拖拽）
+  // 窗口拖拽
   header.addEventListener("mousedown", (e) => {
     if (settings.isLocked || settings.hideBorder) return;
     dragData = {
@@ -543,7 +574,7 @@ const setupWindowEvents = (windowId) => {
     };
   });
 
-  // 窗口调整大小（边框隐藏时不允许调整）
+  // 窗口调整大小
   resizeHandle.addEventListener("mousedown", (e) => {
     if (settings.isLocked || settings.hideBorder) return;
     e.preventDefault();
@@ -556,7 +587,7 @@ const setupWindowEvents = (windowId) => {
     };
   });
 
-  // 全局事件（拖拽/调整/进度条/音量条）
+  // 全局鼠标事件
   document.addEventListener("mousemove", (e) => {
     // 窗口拖拽
     if (dragData) {
@@ -565,6 +596,7 @@ const setupWindowEvents = (windowId) => {
       dragData.element.style.left = `${dragData.startLeft + diffX}px`;
       dragData.element.style.top = `${dragData.startTop + diffY}px`;
     }
+
     // 窗口调整大小
     if (resizeData) {
       const diffX = e.clientX - resizeData.startX;
@@ -575,12 +607,9 @@ const setupWindowEvents = (windowId) => {
       resizeData.element.style.height = `${newHeight}px`;
       adjustVideoControlsLayout();
     }
+
     // 进度条拖拽
-    if (
-      progressDrag &&
-      videoElement &&
-      settings.customVideoControls.showProgress
-    ) {
+    if (progressDrag && settings.customVideoControls.showProgress) {
       const progressBar = $(winSelector).find("#video-progress-bar");
       const barRect = progressBar[0].getBoundingClientRect();
       const clickX = Math.max(
@@ -589,10 +618,12 @@ const setupWindowEvents = (windowId) => {
       );
       const progress = clickX / barRect.width;
       updateProgressBar(progress);
-      const totalTime = videoElement.duration || 0;
+      const videoElement = $(winSelector).find(".image-player-video")[0];
+      const totalTime = videoElement?.duration || 0;
       const currentTime = totalTime * progress;
       $(winSelector).find(".current-time").text(formatTime(currentTime));
     }
+
     // 音量条拖拽
     if (volumeDrag && settings.customVideoControls.showVolume) {
       const volumeSlider = $(winSelector).find(".volume-slider");
@@ -608,9 +639,8 @@ const setupWindowEvents = (windowId) => {
   });
 
   document.addEventListener("mouseup", () => {
-    // 窗口拖拽/调整保存
+    // 保存窗口位置/大小
     if (dragData || resizeData) {
-      const settings = getExtensionSettings();
       const element = dragData?.element || resizeData?.element;
       settings.position = {
         x: element.offsetLeft,
@@ -622,22 +652,25 @@ const setupWindowEvents = (windowId) => {
       dragData = null;
       resizeData = null;
     }
+
     // 进度条拖拽结束
-    if (
-      progressDrag &&
-      videoElement &&
-      !isNaN(videoElement.duration) &&
-      settings.customVideoControls.showProgress
-    ) {
-      const progress = videoElement.currentTime / videoElement.duration || 0;
-      updateProgressBar(progress);
-      if (settings.isPlaying && videoElement.paused) {
-        videoElement.play().catch((err) => console.warn("视频播放失败:", err));
+    if (progressDrag && settings.customVideoControls.showProgress) {
+      const videoElement = $(winSelector).find(".image-player-video")[0];
+      if (videoElement && !isNaN(videoElement.duration)) {
+        const progress = videoElement.currentTime / videoElement.duration || 0;
+        updateProgressBar(progress);
+        if (settings.isPlaying && videoElement.paused) {
+          videoElement
+            .play()
+            .catch((err) => console.warn("视频播放失败:", err));
+        }
       }
     }
+
     progressDrag = false;
     volumeDrag = false;
-    // 进度条/音量条拖拽结束后，延迟1秒再允许隐藏控制栏
+
+    // 边框隐藏时延迟隐藏控制栏
     if (settings.hideBorder) {
       setTimeout(() => {
         const videoControls = $(winSelector).find(".video-controls");
@@ -649,28 +682,26 @@ const setupWindowEvents = (windowId) => {
     }
   });
 
-  // 窗口锁定（事件委托，支持动态元素）
+  // 事件委托：窗口锁定
+  $(document).off("click", `${winSelector} .lock`);
   $(document).on("click", `${winSelector} .lock`, function () {
-    const settings = getExtensionSettings();
-    // 总开关关闭时不执行
     if (!settings.enabled) return;
     settings.isLocked = !settings.isLocked;
     saveSafeSettings();
-    // 更新图标和窗口样式
     $(this).find("i").toggleClass("fa-lock fa-lock-open");
     $(this).closest(".image-player-window").toggleClass("locked");
     toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
   });
 
-  // 播放/暂停按钮（适配视频）
-  $(`${winSelector} .play-pause`).on("click", function () {
-    const settings = getExtensionSettings();
+  // 事件委托：播放/暂停
+  $(document).off("click", `${winSelector} .play-pause`);
+  $(document).on("click", `${winSelector} .play-pause`, function () {
+    if (!settings.enabled) return;
     const videoElement = $(winSelector).find(".image-player-video")[0];
     const isCurrentVideo = videoElement && $(videoElement).is(":visible");
     const icon = $(this).find("i");
 
     if (isCurrentVideo) {
-      // 视频播放/暂停
       if (videoElement.paused) {
         videoElement
           .play()
@@ -688,9 +719,9 @@ const setupWindowEvents = (windowId) => {
         settings.isPlaying = false;
         icon.removeClass("fa-pause").addClass("fa-play");
         stopProgressUpdate();
+        clearTimeout(switchTimer);
       }
     } else {
-      // 图片播放/暂停
       const wasPlaying = settings.isPlaying;
       settings.isPlaying = !wasPlaying;
       icon.toggleClass("fa-play fa-pause");
@@ -699,20 +730,27 @@ const setupWindowEvents = (windowId) => {
       } else {
         clearTimeout(switchTimer);
         stopProgressUpdate();
+        const imgElement = $(winSelector).find(".image-player-img")[0];
+        if (imgElement)
+          imgElement.classList.remove(
+            "fade-transition",
+            "slide-transition",
+            "zoom-transition"
+          );
       }
     }
     saveSafeSettings();
   });
 
-  // 模式切换（移除冗余提示）
-  $(`${winSelector} .mode-switch`).on("click", function () {
-    const settings = getExtensionSettings();
+  // 事件委托：模式切换
+  $(document).off("click", `${winSelector} .mode-switch`);
+  $(document).on("click", `${winSelector} .mode-switch`, function () {
+    if (!settings.enabled) return;
     settings.playMode =
       settings.playMode === "random" ? "sequential" : "random";
     saveSafeSettings();
     const icon = $(this).find("i");
     icon.toggleClass("fa-shuffle fa-list-ol");
-    // 重置随机列表
     if (settings.playMode === "random") {
       settings.randomMediaList = [...mediaList];
       settings.randomPlayedIndices = [];
@@ -721,46 +759,47 @@ const setupWindowEvents = (windowId) => {
     showImage("current");
   });
 
-  // 显示/隐藏媒体信息（事件委托，支持动态元素）
+  // 事件委托：显示/隐藏媒体信息
+  $(document).off("click", `${winSelector} .toggle-info`);
   $(document).on("click", `${winSelector} .toggle-info`, function () {
-    const settings = getExtensionSettings();
-    // 总开关关闭时不执行
     if (!settings.enabled) return;
     settings.showInfo = !settings.showInfo;
     saveSafeSettings();
-    // 更新按钮状态和信息栏显示
     $(this).toggleClass("active", settings.showInfo);
-    // 可靠获取当前窗口的信息栏（避免选择器冲突）
     $(this)
       .closest(".image-player-body")
       .find(".image-info")
       .toggle(settings.showInfo);
   });
 
-  // 显示/隐藏视频控制（移除冗余提示）
-  $(`${winSelector} .toggle-video-controls`).on("click", function () {
-    const settings = getExtensionSettings();
+  // 事件委托：显示/隐藏视频控制
+  $(document).off("click", `${winSelector} .toggle-video-controls`);
+  $(document).on("click", `${winSelector} .toggle-video-controls`, function () {
+    if (!settings.enabled) return;
     settings.showVideoControls = !settings.showVideoControls;
     saveSafeSettings();
     $(this).toggleClass("active", settings.showVideoControls);
     $(`${winSelector} .video-controls`).toggle(settings.showVideoControls);
     adjustVideoControlsLayout();
+    bindVideoControlEvents(winSelector);
   });
 
-  // 隐藏窗口
-  $(`${winSelector} .hide`).on("click", function () {
+  // 事件委托：隐藏窗口
+  $(document).off("click", `${winSelector} .hide`);
+  $(document).on("click", `${winSelector} .hide`, function () {
     $(winElement).hide();
-    const settings = getExtensionSettings();
     settings.isWindowVisible = false;
     saveSafeSettings();
-    // 隐藏时暂停视频
     const videoElement = $(winSelector).find(".image-player-video")[0];
     if (videoElement) videoElement.pause();
     stopProgressUpdate();
   });
 
-  // 上一个/下一个
-  $(`${winSelector} .prev`).on("click", () => {
+  // 事件委托：上一个
+  $(document).off("click", `${winSelector} .prev`);
+  $(document).on("click", `${winSelector} .prev`, () => {
+    if (!settings.enabled) return;
+    clearTimeout(switchTimer);
     const videoElement = $(winSelector).find(".image-player-video")[0];
     if (videoElement) {
       videoElement.pause();
@@ -768,7 +807,12 @@ const setupWindowEvents = (windowId) => {
     }
     showImage("prev");
   });
-  $(`${winSelector} .next`).on("click", () => {
+
+  // 事件委托：下一个
+  $(document).off("click", `${winSelector} .next`);
+  $(document).on("click", `${winSelector} .next`, () => {
+    if (!settings.enabled) return;
+    clearTimeout(switchTimer);
     const videoElement = $(winSelector).find(".image-player-video")[0];
     if (videoElement) {
       videoElement.pause();
@@ -777,13 +821,13 @@ const setupWindowEvents = (windowId) => {
     showImage("next");
   });
 
-  // 切换模式按钮
-  $(`${winSelector} .switch-mode-toggle`).on("click", function () {
-    const settings = getExtensionSettings();
+  // 事件委托：切换模式
+  $(document).off("click", `${winSelector} .switch-mode-toggle`);
+  $(document).on("click", `${winSelector} .switch-mode-toggle`, function () {
+    if (!settings.enabled) return;
     settings.autoSwitchMode =
       settings.autoSwitchMode === "detect" ? "timer" : "detect";
     settings.isPlaying = settings.autoSwitchMode !== null;
-    // 切换模式时暂停当前视频
     const videoElement = $(winSelector).find(".image-player-video")[0];
     if (videoElement) videoElement.pause();
     stopProgressUpdate();
@@ -792,22 +836,20 @@ const setupWindowEvents = (windowId) => {
       .toggleClass("active", settings.autoSwitchMode === "detect")
       .find("i")
       .toggleClass("fa-robot fa-clock");
-    // 更新播放按钮状态
     $(`${winSelector} .play-pause i`)
       .toggleClass("fa-play", !settings.isPlaying)
       .toggleClass("fa-pause", settings.isPlaying);
   });
 
-  // 媒体类型筛选按钮事件（移除冗余提示）
-  $(`${winSelector} .media-filter-btn`).on("click", function () {
+  // 事件委托：媒体筛选
+  $(document).off("click", `${winSelector} .media-filter-btn`);
+  $(document).on("click", `${winSelector} .media-filter-btn`, function () {
+    if (!settings.enabled) return;
     const filterType = $(this).data("type");
-    const settings = getExtensionSettings();
     settings.mediaFilter = filterType;
     saveSafeSettings();
-    // 更新按钮状态
     $(`${winSelector} .media-filter-btn`).removeClass("active");
     $(this).addClass("active");
-    // 刷新媒体列表
     refreshMediaList().then(() => {
       currentMediaIndex = 0;
       settings.randomPlayedIndices = [];
@@ -816,61 +858,10 @@ const setupWindowEvents = (windowId) => {
     });
   });
 
-  // 视频进度条点击事件（自定义控制栏判断）
-  if (settings.customVideoControls.showProgress) {
-    $(`${winSelector} #video-progress-bar`).on("mousedown", function (e) {
-      if (!videoElement || (videoElement.paused && !settings.isPlaying)) return;
-      progressDrag = true;
-      const barRect = this.getBoundingClientRect();
-      const clickX = Math.max(
-        0,
-        Math.min(e.clientX - barRect.left, barRect.width)
-      );
-      const progress = clickX / barRect.width;
-      videoElement.currentTime = (videoElement.duration || 0) * progress;
-      updateProgressBar(progress);
-      if (!videoElement.paused) videoElement.pause();
-    });
-  }
-
-  // 音量按钮事件（自定义控制栏判断）
-  if (settings.customVideoControls.showVolume) {
-    $(`${winSelector} .volume-btn`).on("click", function () {
-      const volumeSlider = $(winSelector).find(".volume-slider");
-      const currentVolume = parseFloat(volumeSlider.val());
-      const newVolume = currentVolume > 0 ? 0 : settings.videoVolume || 0.8;
-      volumeSlider.val(newVolume);
-      updateVolume(newVolume);
-    });
-
-    // 音量条拖拽开始
-    $(`${winSelector} .volume-slider`).on("mousedown", function () {
-      volumeDrag = true;
-    });
-  }
-
-  // 循环播放按钮事件（自定义控制栏判断 + 提示优化）
-  if (settings.customVideoControls.showLoop) {
-    $(`${winSelector} .loop-btn`).on("click", function () {
-      const settings = getExtensionSettings();
-      settings.videoLoop = !settings.videoLoop;
-      saveSafeSettings();
-      $(this).toggleClass("active", settings.videoLoop);
-      if (videoElement) videoElement.loop = settings.videoLoop;
-      // 保留关键提示（循环对AI切换的影响）
-      if (settings.videoLoop) {
-        toastr.info(`视频循环播放已启用（AI检测/玩家消息切换将暂时无效）`);
-      } else {
-        toastr.info(`视频循环播放已禁用（AI检测/玩家消息切换恢复正常）`);
-      }
-    });
-  }
-
   // 视频事件监听
+  const videoElement = $(winSelector).find(".image-player-video")[0];
   if (videoElement) {
-    // 视频播放结束（自动下一个）
     videoElement.onended = () => {
-      const settings = getExtensionSettings();
       if (settings.isPlaying && !settings.videoLoop) {
         showImage("next");
       } else {
@@ -878,7 +869,7 @@ const setupWindowEvents = (windowId) => {
         $(winSelector).find(".current-time").text("00:00");
       }
     };
-    // 视频加载进度更新（自定义控制栏判断）
+
     if (settings.customVideoControls.showProgress) {
       videoElement.onprogress = () => {
         if (videoElement.buffered.length > 0) {
@@ -891,7 +882,7 @@ const setupWindowEvents = (windowId) => {
         }
       };
     }
-    // 视频元数据加载完成（自定义控制栏判断）
+
     if (settings.customVideoControls.showTime) {
       videoElement.onloadedmetadata = () => {
         $(winSelector)
@@ -901,10 +892,12 @@ const setupWindowEvents = (windowId) => {
       };
     }
   }
+
+  // 绑定视频控制事件
+  bindVideoControlEvents(winSelector);
 };
 
 // ==================== 播放控制 ====================
-// 格式化时间（秒转分:秒）
 const formatTime = (seconds) => {
   if (isNaN(seconds)) return "00:00";
   const mins = Math.floor(seconds / 60);
@@ -914,22 +907,18 @@ const formatTime = (seconds) => {
     .padStart(2, "0")}`;
 };
 
-// 更新进度条
 const updateProgressBar = (progress) => {
-  const winSelector = `#${PLAYER_WINDOW_ID}`;
   const settings = getExtensionSettings();
-  if (!settings.customVideoControls.showProgress) return; // 自定义控制栏关闭则不更新
-
+  if (!settings.customVideoControls.showProgress) return;
   progress = Math.max(0, Math.min(1, progress));
-  $(winSelector)
+  $(`#${PLAYER_WINDOW_ID}`)
     .find(".progress-played")
     .css("width", `${progress * 100}%`);
-  $(winSelector)
+  $(`#${PLAYER_WINDOW_ID}`)
     .find(".progress-handle")
     .css("left", `${progress * 100}%`);
 };
 
-// 启动进度条更新定时器
 const startProgressUpdate = () => {
   const settings = getExtensionSettings();
   if (
@@ -937,19 +926,15 @@ const startProgressUpdate = () => {
     !settings.customVideoControls.showTime
   )
     return;
-
   stopProgressUpdate();
   settings.progressUpdateInterval = setInterval(() => {
     const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
     if (!videoElement || videoElement.paused || isNaN(videoElement.duration))
       return;
-
-    // 新增：视频播放时临时显示控制栏（方便用户看进度）
     if (settings.hideBorder && settings.showVideoControls) {
       const videoControls = $(`#${PLAYER_WINDOW_ID} .video-controls`);
       videoControls.css({ bottom: 0, opacity: 1 });
     }
-
     const progress = videoElement.currentTime / videoElement.duration;
     updateProgressBar(progress);
     if (settings.customVideoControls.showTime) {
@@ -960,7 +945,6 @@ const startProgressUpdate = () => {
   }, 500);
 };
 
-// 停止进度条更新
 const stopProgressUpdate = () => {
   const settings = getExtensionSettings();
   if (settings.progressUpdateInterval) {
@@ -969,18 +953,15 @@ const stopProgressUpdate = () => {
   }
 };
 
-// 更新音量
 const updateVolume = (volume) => {
   const settings = getExtensionSettings();
-  if (!settings.customVideoControls.showVolume) return; // 自定义控制栏关闭则不更新
-
+  if (!settings.customVideoControls.showVolume) return;
   volume = Math.max(0, Math.min(1, volume));
   settings.videoVolume = volume;
   saveSafeSettings();
   const winSelector = `#${PLAYER_WINDOW_ID}`;
   const videoElement = $(winSelector).find(".image-player-video")[0];
   if (videoElement) videoElement.volume = volume;
-  // 更新音量图标
   const volumeIcon = $(winSelector).find(".volume-btn i");
   if (volume === 0) {
     volumeIcon
@@ -1000,14 +981,13 @@ const updateVolume = (volume) => {
 
 const startPlayback = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled || !settings.isPlaying) return; // 总开关关闭则不执行
-
+  if (!settings.enabled || !settings.isPlaying) return;
   clearTimeout(switchTimer);
   const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   const isCurrentVideo = videoElement && $(videoElement).is(":visible");
+
   if (settings.autoSwitchMode === "timer") {
     if (isCurrentVideo) {
-      // 视频：播放完成后切换（非循环状态）
       const playEndHandler = () => {
         if (!settings.videoLoop) {
           videoElement.removeEventListener("ended", playEndHandler);
@@ -1020,24 +1000,23 @@ const startPlayback = () => {
         startProgressUpdate();
       }
     } else {
-      // 图片：定时切换
       showImage("next");
       switchTimer = setTimeout(startPlayback, settings.switchInterval);
     }
   }
 };
 
-// 获取随机媒体索引
 const getRandomMediaIndex = () => {
   const settings = getExtensionSettings();
   const filteredList = settings.randomMediaList || [];
+  if (filteredList.length === 0) return 0;
   if (settings.randomPlayedIndices.length >= filteredList.length) {
     settings.randomPlayedIndices = [];
   }
   const availableIndices = filteredList
     .map((_, index) => index)
     .filter((index) => !settings.randomPlayedIndices.includes(index));
-  if (availableIndices.length === 0) return -1;
+  if (availableIndices.length === 0) return 0;
   const randomIndex = Math.floor(Math.random() * availableIndices.length);
   return availableIndices[randomIndex];
 };
@@ -1046,7 +1025,6 @@ const preloadMediaItem = async (mediaUrl, mediaType) => {
   const settings = getExtensionSettings();
   if (!settings.enabled) return null;
   if (mediaType === "video" && !settings.preloadVideos) return null;
-
   const maxRetries = 3;
   let retries = 0;
   while (retries < maxRetries) {
@@ -1085,7 +1063,6 @@ const preloadMediaItem = async (mediaUrl, mediaType) => {
   return null;
 };
 
-// 应用过渡效果（视频不应用）
 const applyTransitionEffect = (element, effectType, mediaType) => {
   if (mediaType === "video") return;
   element.classList.remove(
@@ -1098,18 +1075,15 @@ const applyTransitionEffect = (element, effectType, mediaType) => {
   }
 };
 
-// 显示媒体
 const showImage = async (direction) => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return; // 总开关关闭则不执行
-
+  if (!settings.enabled) return;
   const winId = `#${PLAYER_WINDOW_ID}`;
   const imgElement = $(winId).find(".image-player-img")[0];
   const videoElement = $(winId).find(".image-player-video")[0];
   const loadingElement = $(winId).find(".loading-animation")[0];
-  // 停止进度更新
+
   stopProgressUpdate();
-  // 隐藏所有媒体元素，显示加载中
   $(imgElement).hide();
   $(videoElement).hide();
   $(loadingElement).show();
@@ -1122,7 +1096,6 @@ const showImage = async (direction) => {
     let mediaUrl, mediaName, mediaType;
     const filterType = settings.mediaFilter;
 
-    // 获取当前媒体数据
     if (settings.playMode === "random") {
       if (settings.randomMediaList.length === 0) {
         settings.randomMediaList = await fetchMediaList(filterType);
@@ -1131,11 +1104,7 @@ const showImage = async (direction) => {
       let randomIndex = -1;
       if (direction === "next") {
         randomIndex = getRandomMediaIndex();
-        if (randomIndex === -1) {
-          settings.randomPlayedIndices = [];
-          randomIndex = getRandomMediaIndex();
-        }
-        if (randomIndex !== -1) {
+        if (randomIndex !== -1 && randomIndex !== undefined) {
           settings.randomPlayedIndices.push(randomIndex);
         }
       } else if (direction === "prev") {
@@ -1154,14 +1123,15 @@ const showImage = async (direction) => {
             ];
         } else {
           randomIndex = getRandomMediaIndex();
-          if (randomIndex !== -1) {
+          if (randomIndex !== -1 && randomIndex !== undefined) {
             settings.randomPlayedIndices.push(randomIndex);
           }
         }
       }
       if (
         randomIndex === -1 ||
-        randomIndex >= settings.randomMediaList.length
+        randomIndex >= settings.randomMediaList.length ||
+        randomIndex === undefined
       ) {
         throw new Error("无可用媒体文件");
       }
@@ -1202,12 +1172,11 @@ const showImage = async (direction) => {
       mediaType = mediaItem.media_type;
     }
 
-    // 记录当前媒体类型
     currentMediaType = mediaType;
-    // 根据媒体类型渲染
+    $(loadingElement).hide(); // 提前隐藏加载动画，避免闪烁
+
     if (mediaType === "image") {
       applyTransitionEffect(imgElement, settings.transitionEffect, mediaType);
-      // 使用预加载的图片
       if (preloadedMedia && preloadedMedia.src === mediaUrl) {
         $(imgElement).attr("src", mediaUrl).show();
       } else {
@@ -1221,11 +1190,9 @@ const showImage = async (direction) => {
       }
       $(videoElement).hide();
     } else if (mediaType === "video") {
-      // 重置视频状态
       videoElement.currentTime = 0;
       videoElement.loop = settings.videoLoop;
       $(videoElement).attr("src", mediaUrl);
-      // 加载视频元数据
       await new Promise((resolve, reject) => {
         const loadHandler = () => {
           videoElement.removeEventListener("loadedmetadata", loadHandler);
@@ -1240,13 +1207,10 @@ const showImage = async (direction) => {
       });
       $(videoElement).show();
       $(imgElement).hide();
-      // 自动播放（根据播放状态）
       if (settings.isPlaying) {
         videoElement
           .play()
-          .then(() => {
-            startProgressUpdate();
-          })
+          .then(() => startProgressUpdate())
           .catch((err) => {
             console.warn("视频自动播放失败（浏览器限制）:", err);
             $(winId).find(".control-text").text("点击视频播放");
@@ -1254,16 +1218,12 @@ const showImage = async (direction) => {
       }
     }
 
-    // 隐藏加载，更新信息
-    $(loadingElement).hide();
     if (settings.showInfo) {
       $(winId).find(".image-info").text(`${mediaName}（${mediaType}）`).show();
     } else {
       $(winId).find(".image-info").hide();
     }
 
-    // 更新控制栏文本
-    let statusText;
     const totalCount =
       settings.playMode === "random"
         ? settings.randomMediaList.length || 0
@@ -1272,15 +1232,12 @@ const showImage = async (direction) => {
       settings.playMode === "random"
         ? settings.randomPlayedIndices.length || 0
         : currentMediaIndex + 1;
-    statusText = `${
+    const statusText = `${
       settings.playMode === "random" ? "随机模式" : "顺序模式"
     }: ${currentCount}/${totalCount}（${mediaType}）`;
     $(winId).find(".control-text").text(statusText);
 
-    // 重置重试计数
     retryCount = 0;
-
-    // 预加载下一个媒体
     if (
       (mediaType === "image" && settings.preloadImages) ||
       (mediaType === "video" && settings.preloadVideos)
@@ -1326,7 +1283,6 @@ const showImage = async (direction) => {
           : "视频"
       }文件`;
     }
-    // 重试机制
     if (retryCount < 3 && settings.enabled) {
       retryCount++;
       toastr.warning(`${errorMessage}，重试中 (${retryCount}/3)...`);
@@ -1339,12 +1295,10 @@ const showImage = async (direction) => {
   }
 };
 
-// ==================== AI回复检测（核心修复：视频循环时无效） ====================
+// ==================== AI回复/玩家消息检测 ====================
 const onAIResponse = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return; // 总开关关闭则不执行
-
-  // 视频循环时，AI检测切换无效
+  if (!settings.enabled) return;
   const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   const isLoopingVideo =
     videoElement && $(videoElement).is(":visible") && settings.videoLoop;
@@ -1352,8 +1306,6 @@ const onAIResponse = () => {
     console.log(`[${EXTENSION_ID}] 视频正在循环播放，AI检测切换已禁用`);
     return;
   }
-
-  // 原有判断逻辑
   if (settings.autoSwitchMode !== "detect") return;
   if (!settings.isWindowVisible) return;
   if (!settings.aiDetectEnabled) return;
@@ -1368,12 +1320,9 @@ const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] AI回复检测: 切换到下一张媒体`);
 };
 
-// ==================== 玩家消息检测（核心修复：视频循环时无效） ====================
 const onPlayerMessage = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return; // 总开关关闭则不执行
-
-  // 视频循环时，玩家消息检测切换无效
+  if (!settings.enabled) return;
   const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   const isLoopingVideo =
     videoElement && $(videoElement).is(":visible") && settings.videoLoop;
@@ -1381,8 +1330,6 @@ const onPlayerMessage = () => {
     console.log(`[${EXTENSION_ID}] 视频正在循环播放，玩家消息检测切换已禁用`);
     return;
   }
-
-  // 原有判断逻辑
   if (settings.autoSwitchMode !== "detect") return;
   if (!settings.isWindowVisible) return;
   if (!settings.playerDetectEnabled) return;
@@ -1401,18 +1348,15 @@ const onPlayerMessage = () => {
 const startPollingService = () => {
   const settings = getExtensionSettings();
   if (!settings.enabled) {
-    // 总开关关闭则停止轮询
     if (pollingTimer) clearTimeout(pollingTimer);
     return;
   }
-
   if (pollingTimer) clearTimeout(pollingTimer);
   const poll = async () => {
     try {
       const prevCount = serviceStatus.totalCount;
       await checkServiceStatus();
       if (serviceStatus.totalCount !== prevCount) {
-        // 媒体数量变化，刷新列表
         if (settings.playMode === "random") {
           settings.randomMediaList = await fetchMediaList(settings.mediaFilter);
           settings.randomPlayedIndices = [];
@@ -1428,14 +1372,13 @@ const startPollingService = () => {
       console.error(`[${EXTENSION_ID}] 轮询服务失败`, error);
     } finally {
       if (settings.enabled)
-        pollingTimer = setTimeout(poll, settings.pollingInterval); // 总开关开启才继续轮询
+        pollingTimer = setTimeout(poll, settings.pollingInterval);
     }
   };
   poll();
 };
 
 // ==================== 设置面板 ====================
-// 保存当前设置（全局可调用）
 const saveCurrentSettings = () => {
   const settings = getExtensionSettings();
   const prevEnabled = settings.enabled;
@@ -1443,9 +1386,8 @@ const saveCurrentSettings = () => {
   if (settings.enabled !== prevEnabled) {
     toastr.info(settings.enabled ? "媒体播放器已启用" : "媒体播放器已禁用");
   }
-  if (!settings.enabled) return; // 总开关关闭则不保存
+  if (!settings.enabled) return;
 
-  // 更新所有设置项
   settings.serviceUrl = $("#player-service-url").val().trim();
   settings.serviceDirectory =
     $("#player-scan-directory").val().trim() || settings.serviceDirectory;
@@ -1465,37 +1407,26 @@ const saveCurrentSettings = () => {
     parseInt($("#player-ai-cooldown").val()) || 3000;
   settings.aiDetectEnabled = $("#player-ai-detect").prop("checked");
   settings.playerDetectEnabled = $("#player-player-detect").prop("checked");
-  // 新增：总开关状态
-  settings.enabled = $("#extension-enabled").prop("checked");
-  // 新增：边框隐藏状态
   settings.hideBorder = $("#player-hide-border").prop("checked");
-  // 新增：自定义视频控制栏配置
   settings.customVideoControls = {
     showProgress: $("#custom-show-progress").prop("checked"),
     showVolume: $("#custom-show-volume").prop("checked"),
     showLoop: $("#custom-show-loop").prop("checked"),
     showTime: $("#custom-show-time").prop("checked"),
   };
-  // 媒体大小限制配置
+
   if (!settings.mediaConfig) settings.mediaConfig = {};
   settings.mediaConfig.image_max_size_mb =
     parseInt($("#image-max-size").val()) || 5;
   settings.mediaConfig.video_max_size_mb =
     parseInt($("#video-max-size").val()) || 100;
 
-  // 保存并应用
   saveSafeSettings();
-
-  // 启用/禁用依赖项（顺序模式下才允许图片循环）
   $("#player-slideshow-mode").prop("disabled", settings.playMode === "random");
-
-  // 应用边框隐藏样式
   $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
 
-  // 重新渲染视频控制栏（若已显示）
   if (settings.showVideoControls) {
-    const videoControlsHTML = settings.showVideoControls
-      ? `
+    const videoControlsHTML = `
           <div class="video-controls">
               ${
                 settings.customVideoControls.showProgress
@@ -1527,7 +1458,6 @@ const saveCurrentSettings = () => {
                   </div>`
                       : ""
                   }
-                  
                   ${
                     settings.customVideoControls.showLoop
                       ? `
@@ -1538,7 +1468,6 @@ const saveCurrentSettings = () => {
                   </button>`
                       : ""
                   }
-                  
                   ${
                     settings.customVideoControls.showTime
                       ? `
@@ -1549,26 +1478,20 @@ const saveCurrentSettings = () => {
                   }
               </div>
           </div>
-          `
-      : "";
+          `;
     $(`#${PLAYER_WINDOW_ID} .video-controls`).replaceWith(
       $(videoControlsHTML).get(0)
     );
-    setupWindowEvents(PLAYER_WINDOW_ID); // 重新绑定事件
+    setupWindowEvents(PLAYER_WINDOW_ID);
+    bindVideoControlEvents(`#${PLAYER_WINDOW_ID}`);
   }
 
-  // 更新轮询服务
   startPollingService();
-
-  // 更新播放器UI
   updateExtensionMenu();
-
-  // 重启播放（定时模式下）
   if (settings.isPlaying && settings.autoSwitchMode === "timer") {
     startPlayback();
   }
 
-  // 总开关关闭时的清理
   if (!settings.enabled) {
     $(`#${PLAYER_WINDOW_ID}`).hide();
     clearTimeout(switchTimer);
@@ -1577,7 +1500,6 @@ const saveCurrentSettings = () => {
   }
 };
 
-// 更新服务状态显示
 const updateStatusDisplay = () => {
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const observerStatus = serviceStatus.observerActive ? "已启用" : "已禁用";
@@ -1593,8 +1515,7 @@ const updateStatusDisplay = () => {
 
 const createSettingsPanel = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled || $(`#${SETTINGS_PANEL_ID}`).length > 0) return; // 总开关关闭/已存在则不创建
-
+  if (!settings.enabled || $(`#${SETTINGS_PANEL_ID}`).length > 0) return;
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const observerStatus = serviceStatus.observerActive ? "已启用" : "已禁用";
   const mediaStats = `总计: ${serviceStatus.totalCount} | 图片: ${serviceStatus.imageCount} | 视频: ${serviceStatus.videoCount}`;
@@ -1609,7 +1530,6 @@ const createSettingsPanel = () => {
             </div>
             <div class="inline-drawer-content">
                 <div class="image-player-settings">
-                    <!-- 新增：扩展总开关 -->
                     <div class="settings-row">
                         <label class="checkbox_label" style="min-width: auto;">
                             <input type="checkbox" id="extension-enabled" ${
@@ -1618,7 +1538,6 @@ const createSettingsPanel = () => {
                             <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
                         </label>
                     </div>
-
                     <div class="settings-row">
                         <label class="service-status">
                             <i class="fa-solid ${
@@ -1634,7 +1553,6 @@ const createSettingsPanel = () => {
                             (监控: ${observerStatus} | ${mediaStats})
                         </label>
                     </div>
-                    
                     <div class="settings-row">
                         <label>
                             <i class="fa-solid fa-link"></i>服务地址
@@ -1643,7 +1561,6 @@ const createSettingsPanel = () => {
                           settings.serviceUrl
                         }" placeholder="http://localhost:9000" />
                     </div>
-                    
                     <div class="settings-row">
                         <label>
                             <i class="fa-solid fa-folder"></i>媒体目录
@@ -1653,8 +1570,6 @@ const createSettingsPanel = () => {
                         }" placeholder="输入完整路径" />
                         <button id="update-directory" class="menu-button">更新目录</button>
                     </div>
-                    
-                    <!-- 媒体大小限制设置 -->
                     <div class="settings-group">
                         <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
                             <i class="fa-solid fa-maximize"></i> 媒体大小限制
@@ -1667,7 +1582,6 @@ const createSettingsPanel = () => {
                               settings.mediaConfig?.image_max_size_mb || 5
                             }" min="1" max="50" step="1" />
                             <span>MB</span>
-                            
                             <label>
                                 <i class="fa-solid fa-video"></i>视频最大尺寸
                             </label>
@@ -1675,12 +1589,9 @@ const createSettingsPanel = () => {
                               settings.mediaConfig?.video_max_size_mb || 100
                             }" min="10" max="500" step="10" />
                             <span>MB</span>
-                            
                             <button id="update-size-limit" class="menu-button">应用限制</button>
                         </div>
                     </div>
-
-                    <!-- 新增：边框隐藏设置 -->
                     <div class="settings-row">
                         <label class="checkbox_label">
                             <input type="checkbox" id="player-hide-border" ${
@@ -1689,8 +1600,6 @@ const createSettingsPanel = () => {
                             <i class="fa-solid fa-border-none"></i>隐藏播放器边框（仅显示内容）
                         </label>
                     </div>
-
-                    <!-- 新增：视频控制栏自定义 -->
                     <div class="settings-group">
                         <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
                             <i class="fa-solid fa-sliders"></i> 视频控制栏自定义
@@ -1730,7 +1639,6 @@ const createSettingsPanel = () => {
                             </label>
                         </div>
                     </div>
-                    
                     <div class="function-toggle-group">
                         <div class="function-toggle ${
                           settings.autoSwitchMode === "timer" ? "active" : ""
@@ -1745,8 +1653,6 @@ const createSettingsPanel = () => {
                             <span>检测播放</span>
                         </div>
                     </div>
-                    
-                    <!-- 检测播放子选项 -->
                     <div class="settings-group" ${
                       settings.autoSwitchMode !== "detect"
                         ? 'style="display:none;"'
@@ -1759,7 +1665,6 @@ const createSettingsPanel = () => {
                                 } />
                                 <i class="fa-solid fa-comment-dots"></i>AI回复时切换
                             </label>
-                            
                             <label class="checkbox_label">
                                 <input type="checkbox" id="player-player-detect" ${
                                   settings.playerDetectEnabled ? "checked" : ""
@@ -1768,8 +1673,8 @@ const createSettingsPanel = () => {
                             </label>
                         </div>
                     </div>
-                                        <div class="settings-row">
-                        <label>
+                    <div class="settings-row">
+                                            <label>
                             <i class="fa-solid fa-clone"></i>播放模式
                         </label>
                         <select id="player-play-mode">
@@ -1782,7 +1687,6 @@ const createSettingsPanel = () => {
                                 : ""
                             }>顺序播放</option>
                         </select>
-                        
                         <label>
                             <i class="fa-solid fa-filter"></i>媒体筛选
                         </label>
@@ -1798,7 +1702,6 @@ const createSettingsPanel = () => {
                             }>仅视频</option>
                         </select>
                     </div>
-                    
                     <div class="settings-row">
                         <label class="checkbox_label">
                             <input type="checkbox" id="player-slideshow-mode" ${
@@ -1808,14 +1711,12 @@ const createSettingsPanel = () => {
   }/>
                             <i class="fa-solid fa-repeat"></i>循环播放（图片）
                         </label>
-                        
                         <label class="checkbox_label">
                             <input type="checkbox" id="player-video-loop" ${
                               settings.videoLoop ? "checked" : ""
                             }/>
                             <i class="fa-solid fa-repeat"></i>视频循环播放
                         </label>
-                        
                         <label class="checkbox_label">
                             <input type="checkbox" id="player-show-info" ${
                               settings.showInfo ? "checked" : ""
@@ -1823,7 +1724,6 @@ const createSettingsPanel = () => {
                             <i class="fa-solid fa-circle-info"></i>显示媒体信息
                         </label>
                     </div>
-                    
                     <div class="settings-row">
                         <label class="checkbox_label">
                             <input type="checkbox" id="player-preload-images" ${
@@ -1831,14 +1731,12 @@ const createSettingsPanel = () => {
                             } />
                             <i class="fa-solid fa-bolt"></i>预加载图片
                         </label>
-                        
                         <label class="checkbox_label">
                             <input type="checkbox" id="player-preload-videos" ${
                               settings.preloadVideos ? "checked" : ""
                             } />
                             <i class="fa-solid fa-bolt"></i>预加载视频（耗流量）
                         </label>
-                        
                         <label class="checkbox_label">
                             <input type="checkbox" id="player-show-video-controls" ${
                               settings.showVideoControls ? "checked" : ""
@@ -1846,7 +1744,6 @@ const createSettingsPanel = () => {
                             <i class="fa-solid fa-video"></i>显示视频控制栏
                         </label>
                     </div>
-                    
                     <div class="settings-row">
                         <label>
                             <i class="fa-solid fa-clock"></i>定时切换间隔
@@ -1856,7 +1753,6 @@ const createSettingsPanel = () => {
                         }" min="1000" max="60000" step="500" />
                         <span>毫秒</span>
                     </div>
-                    
                     <div class="settings-row">
                         <label>
                             <i class="fa-solid fa-sync"></i>服务轮询间隔
@@ -1866,7 +1762,6 @@ const createSettingsPanel = () => {
                         }" min="5000" max="300000" step="5000" />
                         <span>毫秒</span>
                     </div>
-                    
                     <div class="settings-row">
                         <label>
                             <i class="fa-solid fa-paint-brush"></i>图片过渡效果
@@ -1894,12 +1789,10 @@ const createSettingsPanel = () => {
                             }>缩放</option>
                         </select>
                     </div>
-                    
                     <div class="settings-group">
                         <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
                             <i class="fa-solid fa-robot"></i> 检测设置
                         </h4>
-                        
                         <div class="settings-row">
                             <label>
                                 <i class="fa-solid fa-hourglass-half"></i>切换冷却时间
@@ -1910,7 +1803,6 @@ const createSettingsPanel = () => {
                             <span>毫秒</span>
                         </div>
                     </div>
-                    
                     <div class="settings-action-row">
                         <button id="show-player" class="menu-button">
                             <i class="fa-solid fa-eye"></i>显示播放器
@@ -1934,23 +1826,23 @@ const createSettingsPanel = () => {
   console.log(`[${EXTENSION_ID}] 设置面板已创建`);
 };
 
-// 更新扩展菜单按钮状态（全量同步，修复状态不同步问题）
+// 更新扩展菜单按钮状态
 const updateExtensionMenu = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return; // 总开关关闭则不更新
+  if (!settings.enabled) return;
 
-  // 1. 播放/暂停按钮状态同步
+  // 播放/暂停按钮状态
   $(`#${PLAYER_WINDOW_ID} .play-pause i`)
     .toggleClass("fa-play", !settings.isPlaying)
     .toggleClass("fa-pause", settings.isPlaying);
 
-  // 2. 播放模式状态同步（播放器+设置面板）
+  // 播放模式状态
   $(`#${PLAYER_WINDOW_ID} .mode-switch i`)
     .toggleClass("fa-shuffle", settings.playMode === "random")
     .toggleClass("fa-list-ol", settings.playMode === "sequential");
   $("#player-play-mode").val(settings.playMode);
 
-  // 3. 切换模式按钮状态同步（播放器+设置面板）
+  // 切换模式按钮状态
   $(`#${PLAYER_WINDOW_ID} .switch-mode-toggle`)
     .toggleClass("active", settings.autoSwitchMode === "detect")
     .find("i")
@@ -1966,14 +1858,14 @@ const updateExtensionMenu = () => {
   );
   $("#detect-sub-options").toggle(settings.autoSwitchMode === "detect");
 
-  // 4. 媒体筛选状态同步（播放器+设置面板）
+  // 媒体筛选状态
   $(`#${PLAYER_WINDOW_ID} .media-filter-btn`).removeClass("active");
   $(
     `#${PLAYER_WINDOW_ID} .media-filter-btn[data-type="${settings.mediaFilter}"]`
   ).addClass("active");
   $("#player-media-filter").val(settings.mediaFilter);
 
-  // 5. 图片信息显示状态同步（播放器+设置面板）
+  // 图片信息显示状态
   $(`#${PLAYER_WINDOW_ID} .toggle-info`).toggleClass(
     "active",
     settings.showInfo
@@ -1981,7 +1873,7 @@ const updateExtensionMenu = () => {
   $(`#${PLAYER_WINDOW_ID} .image-info`).toggle(settings.showInfo);
   $("#player-show-info").prop("checked", settings.showInfo);
 
-  // 6. 视频控制栏状态同步（播放器+设置面板）
+  // 视频控制栏状态
   $(`#${PLAYER_WINDOW_ID} .toggle-video-controls`).toggleClass(
     "active",
     settings.showVideoControls
@@ -1989,17 +1881,15 @@ const updateExtensionMenu = () => {
   $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(settings.showVideoControls);
   $("#player-show-video-controls").prop("checked", settings.showVideoControls);
 
-  // 7. 视频循环状态同步（播放器+设置面板）
+  // 视频循环状态
   $(`#${PLAYER_WINDOW_ID} .loop-btn`).toggleClass("active", settings.videoLoop);
   $("#player-video-loop").prop("checked", settings.videoLoop);
-  // 新增：同步播放器循环按钮的active类（修正变量未定义问题）
-  $(`#${PLAYER_WINDOW_ID} .loop-btn`).toggleClass("active", settings.videoLoop);
 
-  // 8. 边框隐藏状态同步（播放器+设置面板）
+  // 边框隐藏状态
   $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
   $("#player-hide-border").prop("checked", settings.hideBorder);
 
-  // 9. 自定义视频控制栏状态同步（设置面板）
+  // 自定义视频控制栏状态
   $("#custom-show-progress").prop(
     "checked",
     settings.customVideoControls.showProgress
@@ -2011,47 +1901,45 @@ const updateExtensionMenu = () => {
   $("#custom-show-loop").prop("checked", settings.customVideoControls.showLoop);
   $("#custom-show-time").prop("checked", settings.customVideoControls.showTime);
 
-  // 10. 图片过渡效果同步（修复无效果问题）
+  // 图片过渡效果
   $("#player-transition-effect").val(settings.transitionEffect);
   const imgElement = $(`#${PLAYER_WINDOW_ID} .image-player-img`)[0];
   if (imgElement && $(imgElement).is(":visible")) {
     applyTransitionEffect(imgElement, settings.transitionEffect, "image");
-    // 重新加载当前图片以立即应用效果
     const currentSrc = imgElement.src;
     imgElement.src = "";
     imgElement.src = currentSrc;
   }
 
-  // 11. 图片循环状态同步（设置面板）
+  // 图片循环状态
   $("#player-slideshow-mode")
     .prop("checked", settings.slideshowMode)
     .prop("disabled", settings.playMode === "random");
 
-  // 12. 预加载状态同步（设置面板）
+  // 预加载状态
   $("#player-preload-images").prop("checked", settings.preloadImages);
   $("#player-preload-videos").prop("checked", settings.preloadVideos);
 
-  // 13. 检测开关状态同步（设置面板）
+  // 检测开关状态
   $("#player-ai-detect").prop("checked", settings.aiDetectEnabled);
   $("#player-player-detect").prop("checked", settings.playerDetectEnabled);
 
-  // 14. 媒体大小限制同步（设置面板）
+  // 媒体大小限制
   $("#image-max-size").val(settings.mediaConfig?.image_max_size_mb || 5);
   $("#video-max-size").val(settings.mediaConfig?.video_max_size_mb || 100);
 };
 
-// 设置面板事件绑定（全量覆盖，确保所有功能生效）
+// 设置面板事件绑定
 const setupSettingsEvents = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled) return; // 总开关关闭则不绑定事件
+  if (!settings.enabled) return;
 
-  // 1. 刷新服务状态
+  // 刷新服务状态
   $("#player-refresh").on("click", async () => {
     try {
       serviceStatus = await checkServiceStatus();
       toastr.info("服务状态已刷新");
       updateStatusDisplay();
-      // 刷新媒体列表并重新显示当前媒体
       await refreshMediaList();
       showImage("current");
     } catch (error) {
@@ -2060,7 +1948,7 @@ const setupSettingsEvents = () => {
     }
   });
 
-  // 2. 清理随机播放记录
+  // 清理随机播放记录
   $("#clear-random-history").on("click", function () {
     settings.randomPlayedIndices = [];
     saveSafeSettings();
@@ -2068,7 +1956,7 @@ const setupSettingsEvents = () => {
     showImage("current");
   });
 
-  // 3. 清理无效媒体
+  // 清理无效媒体
   $("#cleanup-media").on("click", async function () {
     const confirmClean = confirm(
       "确定要清理无效/超大小限制的媒体文件吗？（不可逆）"
@@ -2080,7 +1968,7 @@ const setupSettingsEvents = () => {
     }
   });
 
-  // 4. 更新扫描目录
+  // 更新扫描目录
   $("#update-directory").on("click", async function () {
     const newPath = $("#player-scan-directory").val().trim();
     if (!newPath) {
@@ -2093,12 +1981,10 @@ const setupSettingsEvents = () => {
     }
   });
 
-  // 5. 更新媒体大小限制（含参数校验+列表刷新）
+  // 更新媒体大小限制
   $("#update-size-limit").on("click", async function () {
     const imageMaxMb = parseInt($("#image-max-size").val()) || 5;
     const videoMaxMb = parseInt($("#video-max-size").val()) || 100;
-
-    // 参数合法性校验
     if (imageMaxMb < 1 || imageMaxMb > 50) {
       toastr.warning("图片大小限制需在 1-50 MB 之间");
       return;
@@ -2107,12 +1993,9 @@ const setupSettingsEvents = () => {
       toastr.warning("视频大小限制需在 10-500 MB 之间");
       return;
     }
-
-    // 调用接口更新限制
     const result = await updateMediaSizeLimit(imageMaxMb, videoMaxMb);
     if (result) {
       try {
-        // 同步本地配置+刷新媒体列表+更新UI
         settings.mediaConfig = result.media_config || {
           image_max_size_mb: imageMaxMb,
           video_max_size_mb: videoMaxMb,
@@ -2121,7 +2004,6 @@ const setupSettingsEvents = () => {
         await refreshMediaList();
         updateStatusDisplay();
         showImage("current");
-        // 同步设置面板输入框值
         $("#image-max-size").val(settings.mediaConfig.image_max_size_mb);
         $("#video-max-size").val(settings.mediaConfig.video_max_size_mb);
       } catch (error) {
@@ -2133,10 +2015,9 @@ const setupSettingsEvents = () => {
     }
   });
 
-  // 6. 定时播放模式切换
+  // 定时播放模式切换
   $("#toggle-timer-mode").on("click", function () {
     const wasActive = settings.autoSwitchMode === "timer";
-    // 切换状态：取消激活则停止，激活则启动
     if (wasActive) {
       settings.autoSwitchMode = null;
       settings.isPlaying = false;
@@ -2145,23 +2026,20 @@ const setupSettingsEvents = () => {
     } else {
       settings.autoSwitchMode = "timer";
       settings.isPlaying = true;
-      // 暂停当前视频
       const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
       if (videoElement) videoElement.pause();
       startPlayback();
     }
     saveSafeSettings();
-    // 更新UI
     $(this).toggleClass("active", !wasActive);
     $("#toggle-detect-mode").toggleClass("active", false);
     $("#detect-sub-options").hide();
     updateExtensionMenu();
   });
 
-  // 7. 检测播放模式切换
+  // 检测播放模式切换
   $("#toggle-detect-mode").on("click", function () {
     const wasActive = settings.autoSwitchMode === "detect";
-    // 切换状态：取消激活则停止，激活则启动
     if (wasActive) {
       settings.autoSwitchMode = null;
       settings.isPlaying = false;
@@ -2169,24 +2047,21 @@ const setupSettingsEvents = () => {
     } else {
       settings.autoSwitchMode = "detect";
       settings.isPlaying = true;
-      // 暂停当前视频
       const videoElement = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
       if (videoElement) videoElement.pause();
     }
     saveSafeSettings();
-    // 更新UI
     $(this).toggleClass("active", !wasActive);
     $("#toggle-timer-mode").toggleClass("active", false);
     $("#detect-sub-options").toggle(!wasActive);
     updateExtensionMenu();
   });
 
-  // 8. 播放模式变更（同步禁用图片循环）
+  // 播放模式变更
   $("#player-play-mode").on("change", function () {
     const playMode = $(this).val();
     $("#player-slideshow-mode").prop("disabled", playMode === "random");
     saveCurrentSettings();
-    // 重置随机列表
     if (playMode === "random") {
       settings.randomMediaList = [...mediaList];
       settings.randomPlayedIndices = [];
@@ -2194,12 +2069,11 @@ const setupSettingsEvents = () => {
     showImage("current");
   });
 
-  // 9. 媒体筛选变更（即时刷新列表）
+  // 媒体筛选变更
   $("#player-media-filter").on("change", function () {
     const filterType = $(this).val();
     settings.mediaFilter = filterType;
     saveSafeSettings();
-    // 刷新列表+重置索引
     refreshMediaList().then(() => {
       currentMediaIndex = 0;
       settings.randomPlayedIndices = [];
@@ -2208,53 +2082,47 @@ const setupSettingsEvents = () => {
     });
   });
 
-  // 10. 过渡效果变更（即时应用）
+  // 过渡效果变更
   $("#player-transition-effect").on("change", function () {
     saveCurrentSettings();
-    // 立即应用到当前图片
     const imgElement = $(`#${PLAYER_WINDOW_ID} .image-player-img`)[0];
     if (imgElement && $(imgElement).is(":visible")) {
       applyTransitionEffect(imgElement, settings.transitionEffect, "image");
-      // 重新加载图片触发效果
       const currentSrc = imgElement.src;
       imgElement.src = "";
       imgElement.src = currentSrc;
     }
   });
 
-  // 11. 显示播放器（隐藏后重新显示时刷新内容）
+  // 显示播放器
   $("#show-player").on("click", function () {
     settings.isWindowVisible = true;
     saveSafeSettings();
     $(`#${PLAYER_WINDOW_ID}`).show();
-    // 刷新当前媒体，避免内容过期
     showImage("current");
   });
 
-  // 12. 其他设置项变更（即时保存+同步）
+  // 其他设置项变更
   $(
     "#player-service-url, #player-interval, #player-ai-cooldown, #player-polling-interval, #image-max-size, #video-max-size"
   ).on("change", saveCurrentSettings);
-
   $(
     "#player-slideshow-mode, #player-video-loop, #player-show-info, #player-preload-images, #player-preload-videos, #player-show-video-controls, #player-ai-detect, #player-player-detect, #extension-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, #custom-show-loop, #custom-show-time"
   ).on("change", saveCurrentSettings);
 };
 
-// ==================== 带重试的事件监听注册（确保AI/玩家消息检测生效） ====================
+// 事件监听注册（带重试）
 function registerEventListenersWithRetry() {
   const maxRetries = 5;
   const delay = 1000;
   let retries = 0;
   const tryRegister = () => {
     try {
-      // 关键依赖检查
       if (!eventSource || !event_types) {
         throw new Error("事件源未就绪");
       }
-
-      // 1. 注册AI回复事件（MESSAGE_RECEIVED）
-      eventSource.off(event_types.MESSAGE_RECEIVED, onAIResponse); // 先解绑避免重复
+      // AI回复事件
+      eventSource.off(event_types.MESSAGE_RECEIVED, onAIResponse);
       eventSource.on(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
@@ -2268,9 +2136,8 @@ function registerEventListenersWithRetry() {
           onAIResponse();
         }
       });
-
-      // 2. 注册玩家消息事件（MESSAGE_SENT）
-      eventSource.off(event_types.MESSAGE_SENT, onPlayerMessage); // 先解绑避免重复
+      // 玩家消息事件
+      eventSource.off(event_types.MESSAGE_SENT, onPlayerMessage);
       eventSource.on(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
@@ -2284,7 +2151,6 @@ function registerEventListenersWithRetry() {
           onPlayerMessage();
         }
       });
-
       console.log(`[${EXTENSION_ID}] 成功注册事件监听器（AI回复+玩家消息）`);
     } catch (e) {
       retries++;
@@ -2302,17 +2168,14 @@ function registerEventListenersWithRetry() {
       }
     }
   };
-
-  // 延迟初始尝试（确保环境稳定）
   console.log(`[${EXTENSION_ID}] 计划2000ms后注册事件监听`);
   setTimeout(tryRegister, 2000);
 }
 
-// ==================== 扩展菜单按钮（仅在总开关开启时显示） ====================
+// 扩展菜单按钮
 function addMenuButton() {
   const menuButtonId = `#ext_menu_${EXTENSION_ID}`;
   if ($(menuButtonId).length > 0) return;
-
   console.log(`[${EXTENSION_ID}] 添加扩展菜单按钮`);
   const buttonHtml = `
         <div id="ext_menu_${EXTENSION_ID}" class="list-group-item flex-container flexGap5">
@@ -2320,8 +2183,6 @@ function addMenuButton() {
             <span>${EXTENSION_NAME}</span>
         </div>`;
   $("#extensionsMenu").append(buttonHtml);
-
-  // 点击事件：打开设置面板并滚动定位
   $(`#ext_menu_${EXTENSION_ID}`).on("click", function () {
     const settings = getExtensionSettings();
     if (!settings.enabled) {
@@ -2329,7 +2190,6 @@ function addMenuButton() {
       return;
     }
     $("#extensions-settings-button").trigger("click");
-    // 平滑滚动到当前扩展设置
     $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
       behavior: "smooth",
       block: "center",
@@ -2337,17 +2197,15 @@ function addMenuButton() {
   });
 }
 
-// ==================== 扩展初始化（总开关控制+失败重试） ====================
+// 扩展初始化
 async function initExtension() {
   const settings = getExtensionSettings();
   if (!settings.enabled) {
     console.log(`[${EXTENSION_ID}] 扩展已禁用，跳过初始化`);
     return;
   }
-
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化媒体播放器扩展`);
-    // 1. 初始化全局扩展设置（确保安全创建）
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
     }
@@ -2356,49 +2214,38 @@ async function initExtension() {
       saveSafeSettings();
       console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
     }
-
-    // 2. 添加扩展菜单按钮
     addMenuButton();
-
-    // 3. 创建播放器窗口和设置面板
     await createImagePlayerWindow();
     createSettingsPanel();
-
-    // 4. 初始化WebSocket实时连接
     initWebSocket();
-
-    // 5. 启动服务轮询
     startPollingService();
-
-    // 6. 注册事件监听（AI回复+玩家消息）
     registerEventListenersWithRetry();
-
-    // 7. 初始加载媒体列表并显示第一个媒体
     await refreshMediaList();
     if (mediaList.length > 0) {
       showImage("current");
     } else {
       toastr.info(`当前无可用媒体文件，请在设置中配置扫描目录`);
     }
-
+    // 初始化后同步状态和事件
+    updateExtensionMenu();
+    const winSelector = `#${PLAYER_WINDOW_ID}`;
+    bindVideoControlEvents(winSelector);
+    positionWindow(PLAYER_WINDOW_ID);
     console.log(`[${EXTENSION_ID}] 扩展初始化完成`);
     toastr.success(`${EXTENSION_NAME}扩展加载成功（支持图片+视频播放）`);
   } catch (e) {
     console.error(`[${EXTENSION_ID}] 初始化错误:`, e);
-    // 失败后重试机制
     const retryDelay = 1500;
     console.warn(`[${EXTENSION_ID}] ${retryDelay}ms后重新尝试初始化...`);
     window.setTimeout(initExtension, retryDelay);
   }
 }
 
-// ==================== 页面就绪触发初始化（兼容不同加载状态） ====================
+// 页面就绪触发
 jQuery(async () => {
   console.log(`[${EXTENSION_ID}] 脚本开始加载（等待页面就绪）`);
-  // 确保页面完全加载后初始化
   const initWhenReady = () => {
     const settings = getExtensionSettings();
-    // 若总开关关闭，延迟3秒后再次检查（允许用户在页面加载后开启）
     if (!settings.enabled) {
       console.log(`[${EXTENSION_ID}] 扩展当前禁用，3秒后重新检查`);
       setTimeout(initWhenReady, 3000);
@@ -2406,7 +2253,6 @@ jQuery(async () => {
     }
     initExtension();
   };
-
   if (
     document.readyState === "complete" ||
     document.readyState === "interactive"
@@ -2414,9 +2260,7 @@ jQuery(async () => {
     initWhenReady();
   } else {
     $(document).on("ready", initWhenReady);
-    // 超时兜底（防止事件未触发）
     window.setTimeout(initWhenReady, 1000);
   }
 });
-
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成`);
