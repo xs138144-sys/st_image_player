@@ -6,7 +6,7 @@
   "js": "index.js",
   "css": "style.css",
   "author": "DeepSeek和豆包和反死",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "homePage": "https://github.com/xs138144-sys/st_image_player.git",
   "description": "带窗口控制、AI检测、视频播放的全媒体播放器扩展(支持图片/GIF/WebM/MP4等)",
   "module": true
