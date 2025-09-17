@@ -270,22 +270,6 @@ def scan_endpoint():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-def scan_directory(path):
-    global SCAN_DIRECTORY
-    SCAN_DIRECTORY = os.path.normpath(path)
-    
-    handler = ImageDBHandler()
-    handler.update_db()
-    setup_watchdog()
-    
-    return jsonify({
-        "status": "success",
-        "path": SCAN_DIRECTORY,
-        "total_count": len(IMAGE_DB),
-        "image_count": len([x for x in IMAGE_DB if x['media_type']=='image']),
-        "video_count": len([x for x in IMAGE_DB if x['media_type']=='video'])
-    })
-
 
 @app.route("/images", methods=["GET"])
 def get_images():

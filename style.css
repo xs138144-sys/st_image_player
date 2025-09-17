@@ -609,3 +609,27 @@
     background: rgba(114, 137, 218, 0.5);
     box-shadow: none;
 }
+
+/* 无边框模式样式 */
+.image-player-window.no-border {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+.image-player-window.no-border .image-player-header,
+.image-player-window.no-border .image-player-controls,
+.image-player-window.no-border .resize-handle {
+    display: none;
+    /* 隐藏标题栏、控制栏、调整手柄 */
+}
+
+.image-player-window.no-border .image-player-body {
+    padding: 0;
+}
+
+.image-player-window.no-border .image-info {
+    background: rgba(0, 0, 0, 0.5);
+    /* 半透明信息栏（可选保留） */
+}
