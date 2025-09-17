@@ -432,3 +432,180 @@
     font-size: 10px;
     color: #d0d0d0;
 }
+
+/* ==================== 视频控制栏样式（新增） ==================== */
+.video-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 4px 8px;
+    background: rgba(43, 45, 49, 0.9);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    z-index: 15;
+    /* 高于图片信息，低于窗口控制 */
+}
+
+/* 进度条容器 */
+.progress-container {
+    width: 100%;
+    height: 6px;
+    margin-bottom: 4px;
+    cursor: pointer;
+}
+
+/* 进度条基础样式 */
+.progress-bar {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 已加载进度 */
+.progress-loaded {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* 已播放进度 */
+.progress-played {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: #7289da;
+    border-radius: 3px;
+    transition: width 0.1s linear;
+}
+
+/* 进度条拖拽手柄 */
+.progress-handle {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+/*  hover时显示手柄 */
+.progress-bar:hover .progress-handle {
+    opacity: 1;
+}
+
+/* 视频控制按钮组 */
+.video-control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+}
+
+/* 视频控制按钮 */
+.video-control-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #b0b0b0;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.video-control-btn:hover {
+    background: rgba(114, 137, 218, 0.3);
+    color: #7289da;
+}
+
+.video-control-btn.active {
+    color: #7289da;
+    background: rgba(114, 137, 218, 0.2);
+}
+
+/* 音量滑块容器 */
+.volume-slider-container {
+    width: 80px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+/* 音量滑块 */
+.volume-slider {
+    width: 100%;
+    height: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    outline: none;
+}
+
+/* 滑块轨道（Chrome/Safari） */
+.volume-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+/* 滑块拇指（Chrome/Safari） */
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #7289da;
+    cursor: pointer;
+    margin-top: -3px;
+    /* 居中对齐 */
+}
+
+/* 时间显示 */
+.time-display {
+    color: #b0b0b0;
+    font-size: 10px;
+    min-width: 80px;
+    text-align: right;
+    margin-left: auto;
+    /* 右对齐 */
+}
+
+/* 媒体筛选按钮组样式（补充） */
+.media-filter-group {
+    display: flex;
+    gap: 2px;
+}
+
+.media-filter-btn {
+    width: 26px;
+    height: 26px;
+    background: rgba(43, 45, 49, 0.7);
+}
+
+.media-filter-btn.active {
+    background: rgba(114, 137, 218, 0.5);
+    box-shadow: none;
+}
