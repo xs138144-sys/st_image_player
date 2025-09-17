@@ -710,236 +710,272 @@ const setupWindowEvents = () => {
     progressDrag = false;
     volumeDrag = false;
   });
-
-  // 锁定按钮
-  win.find(".lock").on("click", function () {
-    settings.isLocked = !settings.isLocked;
-    saveSafeSettings();
-    $(this).find("i").toggleClass("fa-lock fa-lock-open");
-    win.toggleClass("locked");
-    toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
-  });
-
-  // 播放/暂停按钮（修复定时器不重置）
-  win.find(".play-pause").on("click", function () {
-    const oldIsPlaying = settings.isPlaying;
-    settings.isPlaying = !oldIsPlaying;
-    saveSafeSettings();
-    const icon = $(this).find("i");
-    icon.toggleClass("fa-play fa-pause");
-    const video = win.find(".image-player-video")[0];
-    const isVideoVisible = video && video.style.display !== "none";
-
-    if (!settings.isPlaying) {
-      clearTimeout(switchTimer);
-      stopProgressUpdate();
-      if (isVideoVisible && !video.paused) {
-        video.pause();
-      }
-      win.find(".control-text").text(oldIsPlaying ? "已暂停" : "播放中");
-    } else {
-      if (isVideoVisible) {
-        video.play().catch((err) => {
-          console.warn("视频自动播放失败（浏览器限制）:", err);
-          toastr.warning("请点击视频手动播放");
-        });
-        startProgressUpdate();
-      } else {
-        // 确保启动时重置定时器（修复播放停住）
-        clearTimeout(switchTimer);
-        startPlayback();
-      }
-    }
-  });
-
-  // 播放模式切换
-  win.find(".mode-switch").on("click", function () {
-    settings.playMode =
-      settings.playMode === "random" ? "sequential" : "random";
-    saveSafeSettings();
-    const icon = $(this).find("i");
-    icon.toggleClass("fa-shuffle fa-list-ol");
-
-    if (settings.playMode === "random") {
-      settings.randomMediaList = [...mediaList];
-      settings.randomPlayedIndices = [];
-      settings.currentRandomIndex = -1;
-      toastr.info("切换为随机播放模式");
-    } else {
-      currentMediaIndex = 0;
-      toastr.info("切换为顺序播放模式");
-    }
-
-    showMedia("current");
-    updateExtensionMenu();
-  });
-
-  // 媒体信息显示切换
-  win.find(".toggle-info").on("click", function () {
-    settings.showInfo = !settings.showInfo;
-    saveSafeSettings();
-    $(this).toggleClass("active", settings.showInfo);
-    win.find(".image-info").toggle(settings.showInfo);
-    updateExtensionMenu();
-  });
-
-  // 视频控制栏显示切换
-  win.find(".toggle-video-controls").on("click", function () {
-    settings.showVideoControls = !settings.showVideoControls;
-    saveSafeSettings();
-    $(this).toggleClass("active", settings.showVideoControls);
-    win.find(".video-controls").toggle(settings.showVideoControls);
-    adjustVideoControlsLayout();
-    $(`#${SETTINGS_PANEL_ID} #player-show-video-controls`).prop(
-      "checked",
-      settings.showVideoControls
-    );
-    updateExtensionMenu();
-  });
-
-  // 隐藏窗口
-  win.find(".hide").on("click", function () {
-    win.hide();
-    settings.isWindowVisible = false;
-    saveSafeSettings();
-    const video = win.find(".image-player-video")[0];
-    if (video) video.pause();
-    stopProgressUpdate();
-    clearTimeout(switchTimer);
-  });
-
-  // 上一个/下一个
-  win.find(".prev").on("click", () => {
-    if (settings.isMediaLoading) return;
-    clearTimeout(switchTimer);
-    const video = win.find(".image-player-video")[0];
-    if (video) {
-      video.pause();
-      stopProgressUpdate();
-    }
-    showMedia("prev");
-  });
-
-  win.find(".next").on("click", () => {
-    if (settings.isMediaLoading) return;
-    clearTimeout(switchTimer);
-    const video = win.find(".image-player-video")[0];
-    if (video) {
-      video.pause();
-      stopProgressUpdate();
-    }
-    showMedia("next");
-  });
-
-  // 切换模式（AI检测/定时）
-  win.find(".switch-mode-toggle").on("click", function () {
-    settings.autoSwitchMode =
-      settings.autoSwitchMode === "detect" ? "timer" : "detect";
-    settings.isPlaying = settings.autoSwitchMode !== null;
-    saveSafeSettings();
-    $(this)
-      .toggleClass("active", settings.autoSwitchMode === "detect")
-      .find("i")
-      .toggleClass("fa-robot fa-clock");
-    win
-      .find(".play-pause i")
-      .toggleClass("fa-play", !settings.isPlaying)
-      .toggleClass("fa-pause", settings.isPlaying);
-
-    const video = win.find(".image-player-video")[0];
-    if (video) video.pause();
-    stopProgressUpdate();
-    clearTimeout(switchTimer);
-
-    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
-      startPlayback();
-    }
-    updateExtensionMenu();
-  });
-
-  // 播放器媒体筛选（仅筛选按钮触发，修复同步）
-  win.find(".media-filter-btn").on("click", function (e) {
-    e.stopPropagation(); // 阻止事件冒泡
-    const filterType = $(this).data("type");
-    const settings = getExtensionSettings();
-    // 标记触发源，避免循环同步
-    settings.filterTriggerSource = "player";
-    settings.mediaFilter = filterType;
-    saveSafeSettings();
-
-    win.find(".media-filter-btn").removeClass("active");
-    $(this).addClass("active");
-
-    refreshMediaList().then(() => {
-      currentMediaIndex = 0;
-      settings.randomPlayedIndices = [];
-      settings.currentRandomIndex = -1;
-      showMedia("current");
-      // 同步到菜单和设置面板
-      updateExtensionMenu();
-      // 重置触发源
-      settings.filterTriggerSource = null;
-    });
-  });
-
-  // 视频事件监听
-  const video = win.find(".image-player-video")[0];
-  if (video) {
-    video.addEventListener("loadedmetadata", () => {
-      if (settings.customVideoControls.showTime) {
-        win.find(".total-time").text(formatTime(video.duration));
-      }
-      win.find(".progress-loaded").css("width", "0%");
-    });
-
-    video.addEventListener("progress", () => {
-      if (
-        video.buffered.length > 0 &&
-        settings.customVideoControls.showProgress
-      ) {
-        const loadedProgress =
-          video.buffered.end(video.buffered.length - 1) / video.duration;
-        win.find(".progress-loaded").css("width", `${loadedProgress * 100}%`);
-      }
-    });
-
-    video.addEventListener("ended", () => {
-      if (settings.isPlaying && !settings.videoLoop) {
-        showMedia("next");
-      } else if (settings.customVideoControls.showProgress) {
-        updateProgressBar(0);
-        win.find(".current-time").text("00:00");
-      }
-    });
-  }
 };
 
+// 锁定按钮
+win.find(".lock").on("click", function () {
+  settings.isLocked = !settings.isLocked;
+  saveSafeSettings();
+  $(this).find("i").toggleClass("fa-lock fa-lock-open");
+  win.toggleClass("locked");
+  toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
+});
+
+// 播放/暂停按钮（修复定时器不重置）
+win.find(".play-pause").on("click", function () {
+  const oldIsPlaying = settings.isPlaying;
+  settings.isPlaying = !oldIsPlaying;
+  saveSafeSettings();
+  const icon = $(this).find("i");
+  icon.toggleClass("fa-play fa-pause");
+  const video = win.find(".image-player-video")[0];
+  const isVideoVisible = video && video.style.display !== "none";
+
+  if (!settings.isPlaying) {
+    clearTimeout(switchTimer);
+    stopProgressUpdate();
+    if (isVideoVisible && !video.paused) {
+      video.pause();
+    }
+    win.find(".control-text").text(oldIsPlaying ? "已暂停" : "播放中");
+  } else {
+    if (isVideoVisible) {
+      video.play().catch((err) => {
+        console.warn("视频自动播放失败（浏览器限制）:", err);
+        toastr.warning("请点击视频手动播放");
+      });
+      startProgressUpdate();
+    } else {
+      // 确保启动时重置定时器（修复播放停住）
+      clearTimeout(switchTimer);
+      startPlayback();
+    }
+  }
+});
+
+// 播放模式切换
+win.find(".mode-switch").on("click", function () {
+  settings.playMode = settings.playMode === "random" ? "sequential" : "random";
+  saveSafeSettings();
+  const icon = $(this).find("i");
+  icon.toggleClass("fa-shuffle fa-list-ol");
+
+  if (settings.playMode === "random") {
+    settings.randomMediaList = [...mediaList];
+    settings.randomPlayedIndices = [];
+    settings.currentRandomIndex = -1;
+    toastr.info("切换为随机播放模式");
+  } else {
+    currentMediaIndex = 0;
+    toastr.info("切换为顺序播放模式");
+  }
+
+  showMedia("current");
+  updateExtensionMenu();
+});
+
+// 媒体信息显示切换
+win.find(".toggle-info").on("click", function () {
+  settings.showInfo = !settings.showInfo;
+  saveSafeSettings();
+  $(this).toggleClass("active", settings.showInfo);
+  win.find(".image-info").toggle(settings.showInfo);
+  updateExtensionMenu();
+});
+
+// 视频控制栏显示切换
+win.find(".toggle-video-controls").on("click", function () {
+  settings.showVideoControls = !settings.showVideoControls;
+  saveSafeSettings();
+  $(this).toggleClass("active", settings.showVideoControls);
+  win.find(".video-controls").toggle(settings.showVideoControls);
+  adjustVideoControlsLayout();
+  $(`#${SETTINGS_PANEL_ID} #player-show-video-controls`).prop(
+    "checked",
+    settings.showVideoControls
+  );
+  updateExtensionMenu();
+});
+
+// 隐藏窗口
+win.find(".hide").on("click", function () {
+  win.hide();
+  settings.isWindowVisible = false;
+  saveSafeSettings();
+  const video = win.find(".image-player-video")[0];
+  if (video) video.pause();
+  stopProgressUpdate();
+  clearTimeout(switchTimer);
+});
+
+// 上一个/下一个
+win.find(".prev").on("click", () => {
+  if (settings.isMediaLoading) return;
+  clearTimeout(switchTimer);
+  const video = win.find(".image-player-video")[0];
+  if (video) {
+    video.pause();
+    stopProgressUpdate();
+  }
+  showMedia("prev");
+});
+
+win.find(".next").on("click", () => {
+  if (settings.isMediaLoading) return;
+  clearTimeout(switchTimer);
+  const video = win.find(".image-player-video")[0];
+  if (video) {
+    video.pause();
+    stopProgressUpdate();
+  }
+  showMedia("next");
+});
+
+// 切换模式（AI检测/定时）
+win.find(".switch-mode-toggle").on("click", function () {
+  settings.autoSwitchMode =
+    settings.autoSwitchMode === "detect" ? "timer" : "detect";
+  settings.isPlaying = settings.autoSwitchMode !== null;
+  saveSafeSettings();
+  $(this)
+    .toggleClass("active", settings.autoSwitchMode === "detect")
+    .find("i")
+    .toggleClass("fa-robot fa-clock");
+  win
+    .find(".play-pause i")
+    .toggleClass("fa-play", !settings.isPlaying)
+    .toggleClass("fa-pause", settings.isPlaying);
+
+  const video = win.find(".image-player-video")[0];
+  if (video) video.pause();
+  stopProgressUpdate();
+  clearTimeout(switchTimer);
+
+  if (settings.isPlaying && settings.autoSwitchMode === "timer") {
+    startPlayback();
+  }
+  updateExtensionMenu();
+});
+
+// 播放器媒体筛选（仅筛选按钮触发，修复同步）
+win.find(".media-filter-btn").on("click", function (e) {
+  e.stopPropagation(); // 阻止事件冒泡
+  const filterType = $(this).data("type");
+  const settings = getExtensionSettings();
+  // 标记触发源，避免循环同步
+  settings.filterTriggerSource = "player";
+  settings.mediaFilter = filterType;
+  saveSafeSettings();
+
+  win.find(".media-filter-btn").removeClass("active");
+  $(this).addClass("active");
+
+  refreshMediaList().then(() => {
+    currentMediaIndex = 0;
+    settings.randomPlayedIndices = [];
+    settings.currentRandomIndex = -1;
+    showMedia("current");
+    // 同步到菜单和设置面板
+    updateExtensionMenu();
+    // 重置触发源
+    settings.filterTriggerSource = null;
+  });
+});
+
+const video = win.find(".image-player-video")[0];
+if (video) {
+  video.addEventListener("loadedmetadata", () => {
+    if (settings.customVideoControls.showTime) {
+      win.find(".total-time").text(formatTime(video.duration));
+    }
+    win.find(".progress-loaded").css("width", "0%");
+  });
+
+  video.addEventListener("progress", () => {
+    if (
+      video.buffered.length > 0 &&
+      settings.customVideoControls.showProgress
+    ) {
+      const loadedProgress =
+        video.buffered.end(video.buffered.length - 1) / video.duration;
+      win.find(".progress-loaded").css("width", `${loadedProgress * 100}%`);
+    }
+  });
+
+  // 修复核心：视频结束事件（区分 AI 模式和定时模式）
+  video.addEventListener("ended", () => {
+    if (settings.customVideoControls.showProgress) {
+      updateProgressBar(0);
+      win.find(".current-time").text("00:00");
+    }
+
+    // 仅在「定时模式」且「播放中」且「未开循环」时，才自动切换
+    if (
+      settings.isPlaying &&
+      !settings.videoLoop &&
+      settings.autoSwitchMode === "timer"
+    ) {
+      showMedia("next");
+    }
+    // AI检测模式：即使未开循环，也强制视频回到开头（等待AI切换）
+    else if (settings.isPlaying && settings.autoSwitchMode === "detect") {
+      video.currentTime = 0; // 回到视频开头
+      video
+        .play()
+        .catch((err) => console.warn("AI模式下视频重新播放失败:", err));
+    }
+  });
+}
+
 // ==================== 播放控制（修复图片播放停住） ====================
+// 替换 index.js 中的 startPlayback 函数（约第 1290-1320 行）
 const startPlayback = () => {
   const settings = getExtensionSettings();
   // 严格判断播放状态和模式（修复定时器不触发）
-  if (!settings.isPlaying || settings.autoSwitchMode !== "timer") return;
+  if (
+    !settings.enabled ||
+    !settings.isPlaying ||
+    settings.autoSwitchMode !== "timer"
+  )
+    return;
 
-  clearTimeout(switchTimer);
+  clearTimeout(switchTimer); // 先清除旧定时器，避免叠加
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const video = win.find(".image-player-video")[0];
   const isVideoVisible = video && video.style.display !== "none";
 
   if (isVideoVisible) {
+    // 视频播放逻辑（不变）
     if (video.paused) {
       video.play().catch((err) => {
-        console.warn("视频播放失败:", err);
+        console.warn("视频自动播放失败（浏览器限制）:", err);
         toastr.warning("请点击视频手动播放");
       });
       startProgressUpdate();
     }
+    // 视频播放时也需重置定时器（避免切换模式后定时器残留）
+    switchTimer = setTimeout(startPlayback, settings.switchInterval);
   } else {
-    // 图片播放：确保每次切换后重置定时器（修复停住）
-    showMedia("next").then(() => {
-      if (settings.isPlaying && settings.autoSwitchMode === "timer") {
-        switchTimer = setTimeout(startPlayback, settings.switchInterval);
-      }
-    });
+    // 图片播放逻辑：用 finally 兜底，确保定时器必重置
+    showMedia("next")
+      .then(() => {
+        console.log(`[${EXTENSION_ID}] 图片定时切换成功，重置定时器`);
+      })
+      .catch((err) => {
+        console.warn(`[${EXTENSION_ID}] 图片切换失败，仍继续定时`, err);
+        // 失败时重试一次当前媒体，避免空白
+        if (settings.isPlaying) showMedia("current");
+      })
+      .finally(() => {
+        // 无论成功/失败，都重置定时器（核心修复）
+        if (
+          settings.enabled &&
+          settings.isPlaying &&
+          settings.autoSwitchMode === "timer"
+        ) {
+          switchTimer = setTimeout(startPlayback, settings.switchInterval);
+        }
+      });
   }
 };
 
@@ -1026,6 +1062,9 @@ const showMedia = async (direction) => {
   settings.isMediaLoading = true;
 
   try {
+    if (switchTimer) clearTimeout(switchTimer);
+    win.find(".control-text").text("加载中...");
+
     win.find(".control-text").text("加载中...");
     $(imgElement).hide();
     $(videoElement).hide();
