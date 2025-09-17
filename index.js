@@ -1,15 +1,15 @@
-// 媒体播放器扩展（SillyTavern适配版，基于老版本v1.3.0核心逻辑）
-import { saveSettingsDebounced } from "../../../../script.js";
-
-// 全局依赖直接使用window对象（老版本兼容，避免导入时机问题）
-const event_types = window.event_types;
-
+import {
+  saveSettingsDebounced,
+  eventSource as importedEventSource,
+  event_types as importedEventTypes,
+} from "../../../../script.js";
+// 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
-
-// 安全工具函数（完全沿用老版本逻辑）
+const eventSource = importedEventSource || window.eventSource;
+const event_types = importedEventTypes || window.event_types;
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -24,7 +24,6 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
-// 扩展设置（补充筛选同步标记，修复索引管理）
 const getExtensionSettings = () => {
   const settings = getSafeGlobal("extension_settings", {});
   if (!settings[EXTENSION_ID]) {
@@ -49,6 +48,8 @@ const getExtensionSettings = () => {
       playerDetectEnabled: true,
       aiDetectEnabled: true,
       pollingInterval: 30000,
+      // 新增：补充 slideshowMode 默认值
+      slideshowMode: false,
       // 视频配置
       videoLoop: false,
       videoVolume: 0.8,
@@ -1193,6 +1194,10 @@ const showMedia = async (direction) => {
 
     if (nextUrl && nextType) {
       preloadedMedia = await preloadMediaItem(nextUrl, nextType);
+      if (!preloadedMedia) {
+        console.warn(`[${EXTENSION_ID}] 预加载媒体失败: ${nextUrl}`);
+        // 可选：不重置 preloadedMedia，保留上一次有效预加载
+      }
     }
 
     return Promise.resolve();
@@ -2041,27 +2046,39 @@ const updateExtensionMenu = () => {
 
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
-  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`); // 新增日志
+  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
   const maxRetries = 8;
   const retryDelay = 1500;
   let retries = 0;
   const tryRegister = () => {
     try {
-      const eventSource = window.eventSource;
-      const event_types = window.event_types;
       console.log(
         `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
       );
-
-      // 原有依赖检查逻辑（使用动态获取的变量）
-      if (!eventSource || !event_types) {
+      if (
+        !eventSource ||
+        !event_types ||
+        !event_types.MESSAGE_RECEIVED ||
+        !event_types.MESSAGE_SENT
+      ) {
         throw new Error(
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
         );
       }
-
-      // AI回复事件（使用动态获取的eventSource）
-      eventSource.on(event_types.MESSAGE_RECEIVED, () => {
+      // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
+      const bindEvent = (eventName, callback) => {
+        if (typeof eventSource.addEventListener === "function") {
+          eventSource.addEventListener(eventName, callback);
+        } else if (typeof eventSource.on === "function") {
+          eventSource.on(eventName, callback);
+        } else {
+          throw new Error(
+            `eventSource 不支持事件绑定（无 addEventListener/on 方法）`
+          );
+        }
+      };
+      // AI回复事件（使用兼容的绑定方法）
+      bindEvent(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
@@ -2072,9 +2089,8 @@ const registerAIEventListeners = () => {
           onAIResponse();
         }
       });
-
       // 玩家消息事件（同上）
-      eventSource.on(event_types.MESSAGE_SENT, () => {
+      bindEvent(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
@@ -2085,7 +2101,6 @@ const registerAIEventListeners = () => {
           onPlayerMessage();
         }
       });
-
       // 标记注册成功，避免重复尝试
       const settings = getExtensionSettings();
       settings.aiEventRegistered = true;
@@ -2108,9 +2123,8 @@ const registerAIEventListeners = () => {
       }
     }
   };
-
   // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
-  setTimeout(tryRegister, 5000);
+  setTimeout(tryRegister, 3000);
 };
 
 // ==================== 扩展菜单按钮（含筛选状态显示） ====================
@@ -2176,10 +2190,8 @@ const initExtension = async () => {
     setTimeout(initExtension, 3000);
     return;
   }
-
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
-
     // 1. 初始化全局设置容器（兼容老版本存储）
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
@@ -2199,16 +2211,13 @@ const initExtension = async () => {
       saveSafeSettings();
       console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
     }
-
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
     addMenuButton();
     await createPlayerWindow();
     await createSettingsPanel();
-
     // 3. 初始化服务通信（WebSocket+轮询）
     initWebSocket();
     startPollingService();
-
     // 4. 加载媒体列表（确保播放有数据）
     await refreshMediaList();
     if (mediaList.length > 0) {
@@ -2216,18 +2225,32 @@ const initExtension = async () => {
     } else {
       toastr.info(`未检测到媒体文件，请在设置中配置扫描目录`);
     }
-
     // 5. 初始状态校准（默认暂停，避免自动播放）
     settings.isPlaying = false;
     $(`#${PLAYER_WINDOW_ID} .play-pause i`)
       .removeClass("fa-pause")
       .addClass("fa-play");
     saveSafeSettings();
-
-    // 6. 最后注册AI事件（确保所有依赖加载完成，老版本关键时机）
-    setTimeout(() => {
+    // 6. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试
+    const triggerAIRegister = () => {
+      const currentSettings = getExtensionSettings();
+      if (currentSettings.aiEventRegistered) {
+        console.log(`[${EXTENSION_ID}] AI事件已注册，无需重复触发`);
+        return;
+      }
+      console.log(`[${EXTENSION_ID}] 触发AI事件注册（首次尝试）`);
       registerAIEventListeners();
-    }, 2000);
+      // 兜底：3秒后检查是否注册成功，未成功则重试一次
+      setTimeout(() => {
+        const checkSettings = getExtensionSettings();
+        if (!checkSettings.aiEventRegistered) {
+          console.warn(`[${EXTENSION_ID}] AI注册未成功,启动二次重试`);
+          registerAIEventListeners();
+        }
+      }, 3000);
+    };
+    // 延迟3秒触发（给eventSource最终初始化留足时间）
+    setTimeout(triggerAIRegister, 3000);
 
     console.log(`[${EXTENSION_ID}] 扩展初始化完成（老版本适配）`);
     toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
@@ -2245,33 +2268,50 @@ const initExtension = async () => {
 
 // ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待SillyTavern核心就绪)`);
-
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+eventSource就绪)`);
   const initWhenReady = () => {
-    // 等待核心DOM（extensionsMenu 和 extensions_settings）加载完成
-    if (
+    // 新增：检查eventSource是否已就绪（即使导入，也确保实例初始化完成）
+    const isEventSourceReady =
+      typeof eventSource !== "undefined" && eventSource !== null;
+    const isDOMReady =
       document.getElementById("extensionsMenu") &&
-      document.getElementById("extensions_settings")
-    ) {
+      document.getElementById("extensions_settings");
+
+    if (isDOMReady && isEventSourceReady) {
       initExtension();
     } else {
-      // 每500ms检查一次，最多等待10秒（避免无限等待）
+      // 未就绪则每500ms重试一次，最多等待15秒
       const checkTimer = setInterval(() => {
-        if (
+        const nowDOMReady =
           document.getElementById("extensionsMenu") &&
-          document.getElementById("extensions_settings")
-        ) {
+          document.getElementById("extensions_settings");
+        const nowEventReady =
+          typeof eventSource !== "undefined" && eventSource !== null;
+        if (nowDOMReady && nowEventReady) {
           clearInterval(checkTimer);
           initExtension();
+          console.log(`[${EXTENSION_ID}] DOM+eventSource均就绪,启动初始化`);
         }
       }, 500);
-      // 超时保护
-      setTimeout(() => clearInterval(checkTimer), 10000);
+      // 超时保护：15秒后强制尝试（避免无限等待）
+      setTimeout(() => {
+        clearInterval(checkTimer);
+        const finalDOMReady =
+          document.getElementById("extensionsMenu") &&
+          document.getElementById("extensions_settings");
+        if (finalDOMReady) {
+          console.warn(
+            `[${EXTENSION_ID}] 15秒超时,eventSource未完全就绪,但DOM已存在,强制启动初始化`
+          );
+          initExtension();
+        } else {
+          console.error(`[${EXTENSION_ID}] 15秒超时,DOM仍未就绪,初始化失败`);
+          toastr.error("扩展初始化失败,核心DOM未加载");
+        }
+      }, 15000);
     }
   };
-
   initWhenReady();
 });
-
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);

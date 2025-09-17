@@ -68,6 +68,11 @@ class MediaDBHandler(FileSystemEventHandler):
             logging.warning(f"目录不存在: {SCAN_DIRECTORY}")
             return
         
+            # 新增：检查目录读权限
+        if not os.access(SCAN_DIRECTORY, os.R_OK):
+            logging.error(f"无目录读权限: {SCAN_DIRECTORY}")
+            return  # 或抛出自定义异常，在 API 层提示用户
+
         logging.info(f"开始扫描目录: {SCAN_DIRECTORY}")
         all_extensions = MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]
         
@@ -132,7 +137,7 @@ class MediaDBHandler(FileSystemEventHandler):
         if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
             MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
             LARGE_FILE_THRESHOLD = 200 * 1024 * 1024  # 200MB阈值
-        # 若为大文件，延长等待时间
+            # 若为大文件，延长等待时间
             if os.path.exists(event.src_path) and os.path.getsize(event.src_path) > LARGE_FILE_THRESHOLD:
                 time.sleep(5)  # 大文件等待5秒
             else:
@@ -211,9 +216,13 @@ def load_config():
                     MEDIA_CONFIG["video"]["max_size"] = int(config["media_config"]["video_max_size_mb"] * 1024 * 1024)
             return True
         else:
-            # 生成默认配置
+            # 优化：跨平台默认目录
+            if os.name == 'nt':
+                default_dir = "F:\\Download"
+            else:
+                default_dir = os.path.expanduser("~/Downloads")
             default_config = {
-                "scan_directory": "F:\\Download",
+                "scan_directory": default_dir,
                 "total_count": 0, "image_count": 0, "video_count": 0,
                 "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "media_config": {"image_max_size_mb": 5, "video_max_size_mb": 100}
