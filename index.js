@@ -82,12 +82,34 @@ const getExtensionSettings = () => {
 
 const saveSafeSettings = () => {
   const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
+  // 关键1：先同步全局设置，确保内存中的值正确
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  if (!globalSettings[EXTENSION_ID]) globalSettings[EXTENSION_ID] = {};
+  Object.assign(globalSettings[EXTENSION_ID], getExtensionSettings());
+  window.extension_settings = globalSettings;
+
+  // 关键2：强制触发保存，若防抖函数存在则立即执行，不存在则直接写入localStorage
   if (saveFn && typeof saveFn === "function") {
-    saveFn();
+    // 取消防抖延迟，强制实时保存（解决SillyTavern防抖导致的延迟问题）
+    if (saveFn.flush) saveFn.flush(); // 部分防抖实现支持flush强制执行
+    else saveFn(); // 兼容无flush的情况
     console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+      `[${EXTENSION_ID}] 强制保存设置: enabled=${globalSettings[EXTENSION_ID].enabled}`
     );
+  } else {
+    // 降级方案：直接写入localStorage，避免核心函数失效导致保存失败
+    try {
+      const allSettings = JSON.parse(
+        localStorage.getItem("extension_settings") || "{}"
+      );
+      allSettings[EXTENSION_ID] = globalSettings[EXTENSION_ID];
+      localStorage.setItem("extension_settings", JSON.stringify(allSettings));
+      console.log(
+        `[${EXTENSION_ID}] 降级保存设置到localStorage: enabled=${allSettings[EXTENSION_ID].enabled}`
+      );
+    } catch (e) {
+      console.error(`[${EXTENSION_ID}] 保存失败，使用内存暂存`, e);
+    }
   }
 };
 
@@ -2352,15 +2374,24 @@ const addMenuButton = () => {
 
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
-  const settings = getExtensionSettings();
-  // 新增：二次校验存储状态，若实际为禁用，直接终止初始化（回滚启动）
-  const globalSettings = getSafeGlobal("extension_settings", {});
-  const realEnabled = globalSettings[EXTENSION_ID]?.enabled ?? settings.enabled;
+  // 关键：直接从localStorage读取最终状态，优先级最高
+  let realEnabled = true;
+  try {
+    const localSettings = JSON.parse(
+      localStorage.getItem("extension_settings") || "{}"
+    );
+    // 明确判断enabled是否存在，不存在则视为全新安装（默认true）
+    realEnabled = localSettings[EXTENSION_ID]?.enabled ?? true;
+  } catch (e) {
+    console.error(`[${EXTENSION_ID}] 读取localStorage失败，默认启用`, e);
+  }
+
+  // 禁用时，强制清理所有资源并终止
   if (!realEnabled) {
     console.log(
-      `[${EXTENSION_ID}] 扩展当前禁用(存储值: enabled=${realEnabled}),终止初始化`
+      `[${EXTENSION_ID}] 最终状态: 禁用(enabled=${realEnabled})，终止初始化`
     );
-    // 清理可能已启动的资源（防止部分初始化残留）
+    // 强制清理所有可能的残留资源
     if (pollingTimer) clearTimeout(pollingTimer);
     if (ws) {
       ws.close();
@@ -2369,8 +2400,9 @@ const initExtension = async () => {
     }
     if (switchTimer) clearTimeout(switchTimer);
     stopProgressUpdate();
-    $(`#${PLAYER_WINDOW_ID}`).remove(); // 删除可能已创建的窗口
-    $(`#${SETTINGS_PANEL_ID}`).remove(); // 删除可能已创建的面板
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+    $(`#${SETTINGS_PANEL_ID}`).remove();
+    $(`#ext_menu_${EXTENSION_ID}`).remove(); // 同时删除扩展菜单，避免残留
     return;
   }
   try {
@@ -2456,56 +2488,85 @@ const initExtension = async () => {
   }
 };
 
-// ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
+// ==================== 页面就绪触发（强制加载存储+重试校验） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(强制校验存储)`);
   const initWhenReady = () => {
-    // 新增：加强全局设置校验，确保读取到真实的 enabled 状态（非默认值）
+    // 关键1：主动加载localStorage，覆盖可能未同步的globalSettings
+    const loadLocalStorageSettings = () => {
+      try {
+        const localSettings = JSON.parse(
+          localStorage.getItem("extension_settings") || "{}"
+        );
+        const globalSettings = getSafeGlobal("extension_settings", {});
+        // 用localStorage的值覆盖全局设置，确保读取最新保存的状态
+        if (localSettings[EXTENSION_ID]) {
+          globalSettings[EXTENSION_ID] = localSettings[EXTENSION_ID];
+          window.extension_settings = globalSettings;
+          console.log(
+            `[${EXTENSION_ID}] 从localStorage加载设置: enabled=${globalSettings[EXTENSION_ID].enabled}`
+          );
+        }
+        return globalSettings;
+      } catch (e) {
+        console.error(`[${EXTENSION_ID}] 读取localStorage失败，使用默认`, e);
+        return getSafeGlobal("extension_settings", {});
+      }
+    };
+
+    // 关键2：带重试的存储校验（最多重试5次，每次间隔300ms，确保存储加载完成）
+    let retryLoadCount = 0;
+    const maxRetryLoad = 5;
     const checkGlobalSettings = () => {
-      const globalSettings = getSafeGlobal("extension_settings", {});
-      // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
+      const globalSettings = loadLocalStorageSettings(); // 每次检查前强制加载localStorage
       const isDOMReady =
         document.getElementById("extensionsMenu") &&
         document.getElementById("extensions_settings");
-      // 条件2：全局设置已加载 + enabled 字段有效（排除默认值干扰）
+      // 严格校验：必须存在扩展配置，且包含enabled字段（排除默认值干扰）
       const isSettingsValid =
         !!globalSettings[EXTENSION_ID] &&
-        "enabled" in globalSettings[EXTENSION_ID]; // 关键：确认 enabled 字段存在
-      // 条件3：超时强制校验（5秒后无论是否就绪，都基于真实存储初始化）
+        "enabled" in globalSettings[EXTENSION_ID];
       const isTimeout = Date.now() - startTime > 5000;
 
-      if (isDOMReady && (isSettingsValid || isTimeout)) {
+      // 满足条件或超时，终止重试并初始化
+      if (
+        isDOMReady &&
+        (isSettingsValid || isTimeout || retryLoadCount >= maxRetryLoad)
+      ) {
         clearInterval(checkTimer);
         const settings = getExtensionSettings();
-        console.log(
-          `[${EXTENSION_ID}] 初始化前总开关状态: enabled=${
-            settings.enabled
-          }（存储加载${isSettingsValid ? "成功" : "超时，使用当前存储值"}）`
+        // 最终校验：用localStorage的值作为真实状态
+        const localSettings = JSON.parse(
+          localStorage.getItem("extension_settings") || "{}"
         );
-        // 核心：即使超时，也基于最终读取的存储值初始化（而非默认值）
+        const realEnabled =
+          localSettings[EXTENSION_ID]?.enabled ?? settings.enabled;
+        console.log(
+          `[${EXTENSION_ID}] 初始化前最终状态: enabled=${realEnabled}（校验${
+            isSettingsValid
+              ? "成功"
+              : retryLoadCount >= maxRetryLoad
+              ? "重试超限"
+              : "超时"
+          }）`
+        );
+        // 覆盖设置为真实状态，避免内存值与存储不一致
+        settings.enabled = realEnabled;
         initExtension();
-        console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
         return;
       }
 
-      // 超时保护：5秒后强制初始化（基于最终存储值）
-      if (isTimeout) {
-        clearInterval(checkTimer);
-        const finalDOMReady =
-          document.getElementById("extensionsMenu") &&
-          document.getElementById("extensions_settings");
-        if (finalDOMReady) {
-          console.warn(`[${EXTENSION_ID}] 5秒超时,基于最终存储值强制初始化`);
-          initExtension();
-        } else {
-          console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
-          toastr.error("扩展初始化失败,核心DOM未加载");
-        }
+      // 未就绪则重试加载存储
+      if (retryLoadCount < maxRetryLoad) {
+        retryLoadCount++;
+        console.log(
+          `[${EXTENSION_ID}] 存储未就绪，重试加载（${retryLoadCount}/${maxRetryLoad}）`
+        );
       }
     };
 
     const startTime = Date.now();
-    const checkTimer = setInterval(checkGlobalSettings, 200); // 缩短检查间隔，更快响应存储加载
+    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms重试一次
   };
 
   initWhenReady();
