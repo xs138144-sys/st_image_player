@@ -25,17 +25,25 @@ const getSafeToastr = () => {
 const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
-  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
-  const globalSettings = getSafeGlobal("extension_settings", {});
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
-  if (globalSettings[EXTENSION_ID]) {
-    return globalSettings[EXTENSION_ID];
+  let localSettings = {};
+  try {
+    // 优先读取 localStorage 最新值（关键优化）
+    const stored = localStorage.getItem("extension_settings") || "{}";
+    localSettings = JSON.parse(stored);
+  } catch (e) {
+    console.error(`[${EXTENSION_ID}] 读取localStorage失败，尝试全局设置`, e);
   }
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  // 合并逻辑：localStorage 优先，其次全局设置，最后默认值
+  const savedSettings = {
+    ...(globalSettings[EXTENSION_ID] || {}),
+    ...(localSettings[EXTENSION_ID] || {}),
+  };
 
-  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  // 步骤4：若无任何保存配置，才用默认值（避免覆盖已保存设置）
   const defaultSettings = {
-    enabled: true, // 全新安装时默认启用，已有配置时不会走到这一步
-    serviceUrl: "http://localhost:9000",
+    enabled: true,
+    serviceUrl: "http://localhost:9000", // 默认值仅在无保存时使用
     playMode: "random",
     autoSwitchMode: "timer",
     switchInterval: 5000,
@@ -75,40 +83,40 @@ const getExtensionSettings = () => {
     filterTriggerSource: null,
   };
 
-  // 将默认设置写入全局，供后续保存使用
-  globalSettings[EXTENSION_ID] = defaultSettings;
-  return defaultSettings;
-};
+  // 合并：保存的配置覆盖默认值
+  const finalSettings = { ...defaultSettings, ...savedSettings };
 
+  // 同步到全局设置，供后续保存
+  if (!globalSettings[EXTENSION_ID]) globalSettings[EXTENSION_ID] = {};
+  Object.assign(globalSettings[EXTENSION_ID], finalSettings);
+  window.extension_settings = globalSettings;
+  return finalSettings; // 加分号
+};
 const saveSafeSettings = () => {
   const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  // 关键1：先同步全局设置，确保内存中的值正确
   const globalSettings = getSafeGlobal("extension_settings", {});
   if (!globalSettings[EXTENSION_ID]) globalSettings[EXTENSION_ID] = {};
-  Object.assign(globalSettings[EXTENSION_ID], getExtensionSettings());
+  // 同步当前设置到全局
+  const currentSettings = getExtensionSettings();
+  Object.assign(globalSettings[EXTENSION_ID], currentSettings);
   window.extension_settings = globalSettings;
+  // 关键修复：finalSettings 就是 currentSettings（之前遗漏定义）
+  const finalSettings = currentSettings;
 
-  // 关键2：强制触发保存，若防抖函数存在则立即执行，不存在则直接写入localStorage
-  if (saveFn && typeof saveFn === "function") {
-    // 取消防抖延迟，强制实时保存（解决SillyTavern防抖导致的延迟问题）
-    if (saveFn.flush) saveFn.flush(); // 部分防抖实现支持flush强制执行
-    else saveFn(); // 兼容无flush的情况
-    console.log(
-      `[${EXTENSION_ID}] 强制保存设置: enabled=${globalSettings[EXTENSION_ID].enabled}`
+  // 优先强制写入localStorage
+  try {
+    const allStored = JSON.parse(
+      localStorage.getItem("extension_settings") || "{}"
     );
-  } else {
-    // 降级方案：直接写入localStorage，避免核心函数失效导致保存失败
-    try {
-      const allSettings = JSON.parse(
-        localStorage.getItem("extension_settings") || "{}"
-      );
-      allSettings[EXTENSION_ID] = globalSettings[EXTENSION_ID];
-      localStorage.setItem("extension_settings", JSON.stringify(allSettings));
-      console.log(
-        `[${EXTENSION_ID}] 降级保存设置到localStorage: enabled=${allSettings[EXTENSION_ID].enabled}`
-      );
-    } catch (e) {
-      console.error(`[${EXTENSION_ID}] 保存失败，使用内存暂存`, e);
+    allStored[EXTENSION_ID] = finalSettings;
+    localStorage.setItem("extension_settings", JSON.stringify(allStored));
+    console.log(`[${EXTENSION_ID}] 保存到localStorage成功`);
+  } catch (e) {
+    console.error(`[${EXTENSION_ID}] localStorage保存失败，降级用核心函数`, e);
+    // 降级用SillyTavern的保存函数
+    if (saveFn && typeof saveFn === "function") {
+      if (saveFn.flush) saveFn.flush();
+      else saveFn();
     }
   }
 };
@@ -986,7 +994,7 @@ const setupWindowEvents = () => {
 // 替换 index.js 中的 startPlayback 函数（约第 1290-1320 行）
 const startPlayback = () => {
   const settings = getExtensionSettings();
-  // 严格前置判断：排除无效状态，避免定时器残留
+  // 严格前置判断：排除无效状态，避免定时器残留（补全空格）
   if (
     !settings.enabled ||
     !settings.isPlaying ||
@@ -1844,25 +1852,22 @@ const createSettingsPanel = async () => {
   );
 };
 
+// ==================== 设置面板事件绑定（修复闭合错误） ====================
 const setupSettingsEvents = () => {
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
 
+  // 局部辅助函数：保存设置（确保闭合完整）
   const saveCurrentSettings = () => {
-    // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
+    // 1. 同步总开关状态
     settings.enabled = panel.find("#extension-enabled").prop("checked");
-
-    // 【修复】获取服务地址：先判断 val() 是否存在，默认空字符串再 trim()
+    // 2. 同步服务地址（处理空值）
     const serviceUrlVal = panel.find("#player-service-url").val() || "";
     settings.serviceUrl = serviceUrlVal.trim();
-
-    // 【修复】获取媒体目录：同理处理 undefined 情况
+    // 3. 同步媒体目录
     const serviceDirVal = panel.find("#player-scan-directory").val() || "";
     settings.serviceDirectory = serviceDirVal.trim();
-
-    // 2. 同步其他基础设置（后续代码不变，无需修改）
-    settings.playMode = panel.find("#player-play-mode").val();
-    settings.mediaFilter = panel.find("#player-media-filter").val();
+    // 4. 同步其他基础设置
     settings.playMode = panel.find("#player-play-mode").val();
     settings.mediaFilter = panel.find("#player-media-filter").val();
     settings.slideshowMode = panel
@@ -1901,42 +1906,37 @@ const setupSettingsEvents = () => {
       showTime: panel.find("#custom-show-time").prop("checked"),
     };
 
-    // 3. 持久化保存设置
+    // 5. 持久化保存
     saveSafeSettings();
 
-    // 4. 总开关联动：禁用时清理所有资源（核心修复）
+    // 6. 总开关联动逻辑（确保 if/else 都闭合）
     if (!settings.enabled) {
-      // 停止服务轮询
+      // 禁用：清理资源
       if (pollingTimer) clearTimeout(pollingTimer);
-      // 关闭WebSocket连接
       if (ws) {
         ws.close();
         ws = null;
         if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
       }
-      // 停止播放定时器
       if (switchTimer) clearTimeout(switchTimer);
-      // 停止视频进度更新
       stopProgressUpdate();
-      // 隐藏播放器窗口
       $(`#${PLAYER_WINDOW_ID}`).hide();
       settings.isWindowVisible = false;
       settings.isPlaying = false;
     } else {
-      // 启用时重启核心功能
+      // 启用：重启服务
       startPollingService();
       initWebSocket();
-      // 显示播放器窗口（若之前隐藏）
       if (settings.isWindowVisible) $(`#${PLAYER_WINDOW_ID}`).show();
     }
 
-    // 5. 同步UI状态
+    // 7. 同步UI状态
     $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
     panel
       .find("#player-slideshow-mode")
       .prop("disabled", settings.playMode === "random");
     updateExtensionMenu();
-  };
+  }; // 关键：闭合 saveCurrentSettings 函数
 
   // 刷新服务
   panel.find("#player-refresh").on("click", async () => {
@@ -2073,17 +2073,15 @@ const setupSettingsEvents = () => {
     showMedia("current");
   });
 
-  // 媒体筛选变更（根据触发源避免循环同步）
+  // 媒体筛选变更（统一4空格缩进）
   panel.find("#player-media-filter").on("change", function () {
     const newFilter = $(this).val();
     const settings = getExtensionSettings();
     const win = $(`#${PLAYER_WINDOW_ID}`);
     const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
-
     // 直接更新筛选状态，不限制触发源（关键修复）
     settings.mediaFilter = newFilter;
     saveSafeSettings();
-
     // 刷新媒体列表并同步到播放器和菜单
     refreshMediaList().then(() => {
       currentMediaIndex = 0;
@@ -2137,27 +2135,37 @@ const setupSettingsEvents = () => {
     )
     .on("change", saveCurrentSettings);
 
-  // 复选框类设置项变更绑定（同步所有状态）
+  // 13. 复选框类设置项变更绑定（重点修复：确保每一层都闭合）
   panel
     .find(
-      "#player-slideshow-mode, #player-video-loop, #player-show-info, #player-preload-images, " +
-        "#player-preload-videos, #player-show-video-controls, #player-ai-detect, #player-player-detect, " +
-        "#extension-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, " +
-        "#custom-show-loop, #custom-show-time"
+      "#player-slideshow-mode, #player-video-loop, #player-show-info, #player-preload-images, #player-preload-videos, #player-show-video-controls, #player-ai-detect, #player-player-detect, #extension-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, #custom-show-loop, #custom-show-time"
     )
     .on("change", function () {
-      saveCurrentSettings();
+      saveCurrentSettings(); // 调用局部函数
 
-      // 视频循环状态同步到播放器
+      // 仅“启用开关”触发的逻辑（确保 if 闭合）
+      if ($(this).attr("id") === "extension-enabled") {
+        const isEnabled = $(this).prop("checked");
+        if (isEnabled) {
+          initExtension();
+          toastr.success("媒体播放器已启用，正在加载组件...");
+        } else {
+          toastr.info("媒体播放器已禁用，已清理资源");
+        }
+      } // 关键：闭合 if ($(this).attr("id") === "extension-enabled")
+
+      // 仅“视频循环”触发的逻辑（确保 if 闭合）
       if ($(this).attr("id") === "player-video-loop") {
         const isChecked = $(this).prop("checked");
         settings.videoLoop = isChecked;
         $(`#${PLAYER_WINDOW_ID} .loop-btn`).toggleClass("active", isChecked);
         const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-        if (video) video.loop = isChecked;
-      }
+        if (video) {
+          video.loop = isChecked;
+        }
+      } // 关键：闭合 if ($(this).attr("id") === "player-video-loop")
 
-      // 视频控制栏显示状态同步
+      // 仅“视频控制栏显示”触发的逻辑（确保 if 闭合）
       if ($(this).attr("id") === "player-show-video-controls") {
         const isChecked = $(this).prop("checked");
         settings.showVideoControls = isChecked;
@@ -2167,12 +2175,13 @@ const setupSettingsEvents = () => {
         );
         $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(isChecked);
         adjustVideoControlsLayout();
-      }
-    });
-}; // 闭合 setupSettingsEvents 函数
+      } // 关键：闭合 if ($(this).attr("id") === "player-show-video-controls")
+    }); // 关键：闭合 on("change") 的回调函数 + 事件绑定
+}; // 关键：闭合 setupSettingsEvents 函数本身
 
 // ==================== 状态同步核心函数（修复菜单与播放器同步） ====================
 const updateExtensionMenu = () => {
+  // 第一行声明settings，确保后续可引用
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const panel = $(`#${SETTINGS_PANEL_ID}`);
@@ -2233,14 +2242,12 @@ const updateExtensionMenu = () => {
   // 6. 边框隐藏同步（播放器样式+面板复选框）
   win.toggleClass("no-border", settings.hideBorder);
   panel.find("#player-hide-border").prop("checked", settings.hideBorder);
+
   // 新增：同步“媒体信息”状态（菜单+播放器+面板）
   const showInfo = settings.showInfo;
-  // 同步播放器开关
   win.find(".toggle-info").toggleClass("active", showInfo);
   win.find(".image-info").toggle(showInfo);
-  // 同步面板复选框
   panel.find("#player-show-info").prop("checked", showInfo);
-  // 同步菜单显示
   menuBtn
     .find(".media-info")
     .text(showInfo ? win.find(".image-info").text() : "隐藏信息");
@@ -2251,12 +2258,14 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
+
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
   const maxRetries = 8;
   const retryDelay = 1500;
   let retries = 0;
+
   const tryRegister = () => {
     try {
       console.log(
@@ -2272,7 +2281,8 @@ const registerAIEventListeners = () => {
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
         );
       }
-      // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
+
+      // 兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
         if (typeof eventSource.addEventListener === "function") {
           eventSource.addEventListener(eventName, callback);
@@ -2284,7 +2294,8 @@ const registerAIEventListeners = () => {
           );
         }
       };
-      // AI回复事件（使用兼容的绑定方法）
+
+      // AI回复事件绑定
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
@@ -2296,7 +2307,8 @@ const registerAIEventListeners = () => {
           onAIResponse();
         }
       });
-      // 玩家消息事件（同上）
+
+      // 玩家消息事件绑定
       bindEvent(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
@@ -2308,7 +2320,8 @@ const registerAIEventListeners = () => {
           onPlayerMessage();
         }
       });
-      // 标记注册成功，避免重复尝试
+
+      // 标记注册成功
       const settings = getExtensionSettings();
       settings.aiEventRegistered = true;
       saveSafeSettings();
@@ -2330,26 +2343,57 @@ const registerAIEventListeners = () => {
       }
     }
   };
+
   // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
   setTimeout(tryRegister, 3000);
 };
 
-// ==================== 扩展菜单按钮（含筛选状态显示，禁用时保留入口） ====================
+// ==================== AI注册触发函数（修复调用顺序） ====================
+const triggerAIRegister = () => {
+  const currentSettings = getExtensionSettings();
+  if (currentSettings.aiEventRegistered) {
+    console.log(`[${EXTENSION_ID}] AI事件已注册，无需重复触发`);
+    return;
+  }
+
+  // 第一次注册
+  console.log(`[${EXTENSION_ID}] 第一次尝试注册AI事件`);
+  registerAIEventListeners();
+
+  // 10秒内重试3次
+  const retryTimes = 3;
+  let retryCount = 0;
+  const retryTimer = setInterval(() => {
+    retryCount++;
+    if (retryCount > retryTimes) {
+      clearInterval(retryTimer);
+      return;
+    }
+    const checkSettings = getExtensionSettings();
+    if (!checkSettings.aiEventRegistered) {
+      console.log(`[${EXTENSION_ID}] AI注册重试(${retryCount}/${retryTimes})`);
+      registerAIEventListeners();
+    } else {
+      clearInterval(retryTimer);
+    }
+  }, 3000);
+};
+
+// ==================== 扩展菜单按钮（全局作用域） ====================
 const addMenuButton = () => {
   const menuBtnId = `ext_menu_${EXTENSION_ID}`;
-  if ($(`#${menuBtnId}`).length) return; // 避免重复创建
+  if ($(`#${menuBtnId}`).length) return;
 
   const settings = getExtensionSettings();
-  const isDisabled = !settings.enabled; // 判断是否禁用
+  const isDisabled = !settings.enabled;
 
-  // 菜单HTML：禁用时显示“已禁用”，保留点击入口
+  // 菜单HTML
   const btnHtml = `
     <div id="${menuBtnId}" class="list-group-item flex-container flexGap5 ${
     isDisabled ? "text-muted" : ""
   }">
       <div class="fa-solid fa-film"></div>
       <span>${EXTENSION_NAME} ${isDisabled ? "(已禁用)" : ""}</span>
-      <!-- 禁用时显示提示，启用时显示媒体信息 -->
       <span class="media-info" style="margin-left:8px; font-size:10px; color:#a0a0a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
         ${
           isDisabled
@@ -2359,7 +2403,6 @@ const addMenuButton = () => {
             : "隐藏信息"
         }
       </span>
-      <!-- 禁用时隐藏其他状态，仅显示核心提示 -->
       ${
         !isDisabled
           ? `
@@ -2381,18 +2424,14 @@ const addMenuButton = () => {
       }
     </div>
   `;
-
   $("#extensionsMenu").append(btnHtml);
 
-  // 菜单点击逻辑：无论启用/禁用，都跳转到设置面板（禁用时面板仅显示总开关）
+  // 菜单点击逻辑
   $(`#${menuBtnId}`).on("click", () => {
-    // 触发扩展设置面板展开（SillyTavern 原生逻辑）
     $("#extensions-settings-button").trigger("click");
-    // 滚动到当前扩展的设置面板（即使禁用，面板也已创建）
     const panel = $(`#${SETTINGS_PANEL_ID}`);
     if (panel.length) {
       panel.scrollIntoView({ behavior: "smooth", block: "center" });
-      // 禁用时给总开关加高亮提示
       if (isDisabled) {
         panel.find("#extension-enabled").parent().css({
           background: "rgba(255, 235, 59, 0.2)",
@@ -2406,25 +2445,23 @@ const addMenuButton = () => {
     }
   });
 
-  // 菜单状态同步（禁用时仅更新“已禁用”提示，不处理其他状态）
+  // 菜单状态同步
   setInterval(() => {
     const currentSettings = getExtensionSettings();
     const menuBtn = $(`#${menuBtnId}`);
     const isNowDisabled = !currentSettings.enabled;
 
-    // 更新菜单基础状态
     menuBtn.find(".media-info").text(
       isNowDisabled
         ? "点击启用扩展"
         : currentSettings.showInfo
         ? (() => {
-            const win = $(`#${PLAYER_WINDOW_ID}`); // 声明win变量
+            const win = $(`#${PLAYER_WINDOW_ID}`);
             return win.find(".image-info").text() || "加载中...";
           })()
         : "隐藏信息"
     );
 
-    // 启用时更新完整状态，禁用时隐藏
     const statusElements = menuBtn.find(
       ".play-status, .mode-text, .filter-text"
     );
@@ -2451,9 +2488,9 @@ const addMenuButton = () => {
   }, 1000);
 };
 
-// ==================== 扩展核心初始化（确保AI注册时机正确） ====================
+// ==================== 扩展核心初始化（全局作用域） ====================
 const initExtension = async () => {
-  // 关键：直接从localStorage读取最终状态，优先级最高
+  // 读取localStorage真实状态
   let realEnabled = true;
   try {
     const localSettings = JSON.parse(
@@ -2465,16 +2502,13 @@ const initExtension = async () => {
   }
 
   const settings = getExtensionSettings();
-  settings.enabled = realEnabled; // 同步真实状态到内存
+  settings.enabled = realEnabled;
   const isDisabled = !realEnabled;
 
-  // 禁用时：保留菜单和精简面板，仅清理核心功能资源，不删除操作入口
+  // 禁用逻辑
   if (isDisabled) {
-    console.log(
-      `[${EXTENSION_ID}] 最终状态: 禁用(enabled=${realEnabled})，保留启用入口`
-    );
-
-    // 1. 清理核心功能资源（不启动服务/播放器）
+    console.log(`[${EXTENSION_ID}] 最终状态: 禁用(enabled=${realEnabled})`);
+    // 清理资源
     if (pollingTimer) clearTimeout(pollingTimer);
     if (ws) {
       ws.close();
@@ -2483,91 +2517,44 @@ const initExtension = async () => {
     }
     if (switchTimer) clearTimeout(switchTimer);
     stopProgressUpdate();
-
-    // 2. 隐藏播放器窗口（不删除，避免后续启用时重建）
     $(`#${PLAYER_WINDOW_ID}`).hide();
-
-    // 3. 创建菜单和精简面板（确保用户有启用入口）
+    // 创建菜单和面板
     addMenuButton();
     await createSettingsPanel();
-
-    return; // 终止后续初始化（不启动服务、不加载媒体）
+    return;
   }
 
-  // （以下为原启用时的初始化逻辑，无需修改）
+  // 启用逻辑
   try {
-    console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
-    // 1. 初始化全局设置容器
-    if (typeof window.extension_settings === "undefined") {
-      window.extension_settings = {};
+    console.log(`[${EXTENSION_ID}] 启用扩展，实时初始化组件`);
+    // 同步全局设置
+    const globalSettings = getSafeGlobal("extension_settings", {});
+    if (!globalSettings[EXTENSION_ID]) {
+      globalSettings[EXTENSION_ID] = JSON.parse(JSON.stringify(settings));
+      window.extension_settings = globalSettings;
     }
-    if (!window.extension_settings[EXTENSION_ID]) {
-      window.extension_settings[EXTENSION_ID] = JSON.parse(
-        JSON.stringify(settings)
-      );
-      window.extension_settings[EXTENSION_ID].isMediaLoading = false;
-      window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
-      window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
-      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
-      window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
-      saveSafeSettings();
-      console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
-    }
-
-    // 2. 创建菜单、窗口、面板（正常启用逻辑）
+    // 创建组件
     addMenuButton();
     await Promise.all([createPlayerWindow(), createSettingsPanel()]);
-
-    // 3. 启动服务通信、加载媒体等（原逻辑不变）
+    // 启动服务
     initWebSocket();
     startPollingService();
-    await refreshMediaList(); // 仅保留一次调用
-    if (mediaList.length > 0) {
-      showMedia("current");
-    } else {
-      toastr.info(`未检测到媒体文件，请在设置中配置扫描目录`);
-    }
-    // 5. 初始状态校准（默认暂停，避免自动播放）
+    await refreshMediaList();
+    // 注册AI事件
+    triggerAIRegister();
+    // 加载媒体
+    if (mediaList.length > 0) showMedia("current");
+    else toastr.info(`未检测到媒体文件，请在设置中配置扫描目录`);
+    // 初始状态校准
     settings.isPlaying = false;
     $(`#${PLAYER_WINDOW_ID} .play-pause i`)
       .removeClass("fa-pause")
       .addClass("fa-play");
     saveSafeSettings();
-
-    setTimeout(() => {
-      triggerAIRegister();
-      refreshMediaList().then(() => {
-        if (mediaList.length > 0) showMedia("current");
-        else toastr.info(`未检测到媒体文件，请在设置中配置扫描目录`);
-      });
-    }, 1000);
-    // 6. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试
-    const triggerAIRegister = () => {
-      const currentSettings = getExtensionSettings();
-      if (currentSettings.aiEventRegistered) {
-        console.log(`[${EXTENSION_ID}] AI事件已注册,无需重复触发`);
-        return;
-      }
-      console.log(`[${EXTENSION_ID}] 触发AI事件注册(首次尝试）`);
-      registerAIEventListeners();
-      // 兜底：3秒后检查是否注册成功，未成功则重试一次
-      setTimeout(() => {
-        const checkSettings = getExtensionSettings();
-        if (!checkSettings.aiEventRegistered) {
-          console.warn(`[${EXTENSION_ID}] AI注册未成功,启动二次重试`);
-          registerAIEventListeners();
-        }
-      }, 3000);
-    };
-    // 延迟3秒触发（给eventSource最终初始化留足时间）
-    setTimeout(triggerAIRegister, 3000);
-
-    console.log(`[${EXTENSION_ID}] 扩展初始化完成（老版本适配）`);
-    toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
+    toastr.success(`${EXTENSION_NAME}已启用（无需刷新）`);
   } catch (error) {
     console.error(`[${EXTENSION_ID}] 初始化错误:`, error);
     toastr.error(`初始化失败: ${error.message},1.5秒后重试`);
-    // 重试时重置关键状态
     const resetSettings = getExtensionSettings();
     resetSettings.isMediaLoading = false;
     resetSettings.currentRandomIndex = -1;
@@ -2579,15 +2566,15 @@ const initExtension = async () => {
 // ==================== 页面就绪触发（强制加载存储+重试校验） ====================
 jQuery(() => {
   console.log(`[${EXTENSION_ID}] 脚本开始加载(强制校验存储)`);
+
   const initWhenReady = () => {
-    // 关键1：主动加载localStorage，覆盖可能未同步的globalSettings
+    // 加载localStorage设置
     const loadLocalStorageSettings = () => {
       try {
         const localSettings = JSON.parse(
           localStorage.getItem("extension_settings") || "{}"
         );
         const globalSettings = getSafeGlobal("extension_settings", {});
-        // 用localStorage的值覆盖全局设置，确保读取最新保存的状态
         if (localSettings[EXTENSION_ID]) {
           globalSettings[EXTENSION_ID] = localSettings[EXTENSION_ID];
           window.extension_settings = globalSettings;
@@ -2602,49 +2589,37 @@ jQuery(() => {
       }
     };
 
-    // 关键2：带重试的存储校验（最多重试5次，每次间隔300ms，确保存储加载完成）
+    // 存储校验重试逻辑
     let retryLoadCount = 0;
     const maxRetryLoad = 5;
     const checkGlobalSettings = () => {
-      const globalSettings = loadLocalStorageSettings(); // 每次检查前强制加载localStorage
+      const globalSettings = loadLocalStorageSettings();
       const isDOMReady =
         document.getElementById("extensionsMenu") &&
         document.getElementById("extensions_settings");
-      // 严格校验：必须存在扩展配置，且包含enabled字段（排除默认值干扰）
       const isSettingsValid =
         !!globalSettings[EXTENSION_ID] &&
         "enabled" in globalSettings[EXTENSION_ID];
       const isTimeout = Date.now() - startTime > 5000;
 
-      // 满足条件或超时，终止重试并初始化
+      // 满足条件则初始化
       if (
         isDOMReady &&
         (isSettingsValid || isTimeout || retryLoadCount >= maxRetryLoad)
       ) {
         clearInterval(checkTimer);
         const settings = getExtensionSettings();
-        // 最终校验：用localStorage的值作为真实状态
         const localSettings = JSON.parse(
           localStorage.getItem("extension_settings") || "{}"
         );
         const realEnabled =
           localSettings[EXTENSION_ID]?.enabled ?? settings.enabled;
-        console.log(
-          `[${EXTENSION_ID}] 初始化前最终状态: enabled=${realEnabled}（校验${
-            isSettingsValid
-              ? "成功"
-              : retryLoadCount >= maxRetryLoad
-              ? "重试超限"
-              : "超时"
-          })`
-        );
-        // 覆盖设置为真实状态，避免内存值与存储不一致
         settings.enabled = realEnabled;
-        initExtension();
+        initExtension(); // 调用全局的 initExtension
         return;
       }
 
-      // 未就绪则重试加载存储
+      // 未就绪则重试
       if (retryLoadCount < maxRetryLoad) {
         retryLoadCount++;
         console.log(
@@ -2654,7 +2629,7 @@ jQuery(() => {
     };
 
     const startTime = Date.now();
-    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms重试一次
+    const checkTimer = setInterval(checkGlobalSettings, 300);
   };
 
   initWhenReady();
