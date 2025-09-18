@@ -21,6 +21,16 @@ sys.getfilesystemencoding = lambda: 'utf-8'
 app = Flask(__name__)
 CORS(app)
 
+# 在Flask应用初始化后添加
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "*")
+        response.headers.add("Access-Control-Allow-Methods", "*")
+        return response
+
 # 配置日志
 logging.basicConfig(
     level=logging.DEBUG,
@@ -60,7 +70,6 @@ MIME_MAP = {
 
 
 class MediaDBHandler(FileSystemEventHandler):
-    # 修复：类内方法统一缩进4个空格
     def update_db(self):
         global MEDIA_DB, SCAN_DIRECTORY
         MEDIA_DB = []
@@ -435,12 +444,13 @@ def service_status():
 
 
 # WebSocket: 实时更新
+# 修改handle_websocket函数
 @app.route("/socket.io")
 def handle_websocket():
     if request.environ.get("wsgi.websocket"):
         ws = request.environ["wsgi.websocket"]
         active_websockets.append(ws)
-        logging.info(f"WebSocket连接: 当前{len(active_websockets)}个")
+        logging.info(f"WebSocket连接建立: 当前{len(active_websockets)}个活跃连接")
         
         try:
             # 初始化消息
@@ -452,24 +462,31 @@ def handle_websocket():
             })
             ws.send(init_msg)
             
-            # 心跳与筛选处理
+            # 保持连接活跃
             while True:
                 message = ws.receive()
                 if not message:
                     break
-                msg = json.loads(message)
-                if msg.get("type") == "ping":
-                    ws.send(json.dumps({"type": "pong", "timestamp": time.time()}))
-                elif msg.get("type") == "filter_media":
-                    media_type = msg.get("media_type", "all")
-                    filtered = len([x for x in MEDIA_DB if x["media_type"] == media_type]) if media_type != "all" else len(MEDIA_DB)
-                    ws.send(json.dumps({"type": "filtered_media", "count": filtered}))
+                    
+                try:
+                    msg = json.loads(message)
+                    if msg.get("type") == "ping":
+                        ws.send(json.dumps({"type": "pong", "timestamp": time.time()}))
+                    elif msg.get("type") == "filter_media":
+                        media_type = msg.get("media_type", "all")
+                        filtered = len([x for x in MEDIA_DB if x["media_type"] == media_type]) if media_type != "all" else len(MEDIA_DB)
+                        ws.send(json.dumps({"type": "filtered_media", "count": filtered}))
+                except json.JSONDecodeError:
+                    logging.warning("收到无效的WebSocket消息")
+                    
         except Exception as e:
             logging.error(f"WebSocket错误: {str(e)}")
         finally:
             if ws in active_websockets:
                 active_websockets.remove(ws)
-            logging.info(f"WebSocket关闭: 剩余{len(active_websockets)}个")
+            logging.info(f"WebSocket连接关闭: 剩余{len(active_websockets)}个活跃连接")
+    
+    # 对于非WebSocket请求，返回空响应
     return ""
 
 
