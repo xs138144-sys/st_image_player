@@ -34,7 +34,8 @@ const getExtensionSettings = () => {
 
   // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
   const defaultSettings = {
-    enabled: true, // 全新安装时默认启用，已有配置时不会走到这一步
+    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+    enabled: true, // 播放器启用状态
     serviceUrl: "http://localhost:9000",
     playMode: "random",
     autoSwitchMode: "timer",
@@ -112,6 +113,82 @@ let progressDrag = false;
 let volumeDrag = false;
 let wsReconnectDelay = 10000;
 let wsReconnectTimer = null;
+
+const createMinimalSettingsPanel = () => {
+  if ($(`#${SETTINGS_PANEL_ID}-minimal`).length) return;
+
+  const html = `
+    <div id="${SETTINGS_PANEL_ID}-minimal">
+      <div class="extension_settings inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+          <b><i class="fa-solid fa-cog"></i> ${EXTENSION_NAME}</b>
+          <div class="inline-drawer-icon">
+            <span class="glyphicon glyphicon-chevron-down"></span>
+          </div>
+        </div>
+        <div class="inline-drawer-content">
+          <div class="image-player-settings">
+            <!-- 总开关 -->
+            <div class="settings-row">
+              <label class="checkbox_label" style="min-width:auto;">
+                <input type="checkbox" id="master-enabled-minimal" />
+                <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  $("#extensions_settings").append(html);
+
+  // 设置事件
+  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
+    "change",
+    function () {
+      const settings = getExtensionSettings();
+      settings.masterEnabled = $(this).prop("checked");
+      saveSafeSettings();
+
+      if (settings.masterEnabled) {
+        // 启用扩展
+        $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
+        initExtension();
+        toastr.success("媒体播放器扩展已启用");
+      }
+    }
+  );
+};
+
+const disableExtension = () => {
+  // 停止所有定时器
+  if (pollingTimer) clearTimeout(pollingTimer);
+  if (switchTimer) clearTimeout(switchTimer);
+  if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+  stopProgressUpdate();
+
+  // 关闭WebSocket
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+
+  // 隐藏播放器窗口和设置面板
+  $(`#${PLAYER_WINDOW_ID}`).remove();
+  $(`#${SETTINGS_PANEL_ID}`).remove();
+
+  // 移除菜单按钮
+  $(`#ext_menu_${EXTENSION_ID}`).remove();
+
+  // 重置状态
+  mediaList = [];
+  currentMediaIndex = 0;
+  serviceStatus = { active: false };
+
+  // 创建最小化设置面板以便重新启用
+  createMinimalSettingsPanel();
+};
 
 // ==================== API 通信（无修改，确保稳定） ====================
 const checkServiceStatus = async () => {
@@ -1440,7 +1517,7 @@ const updateStatusDisplay = () => {
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.enabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
+  if (!settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
 
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
@@ -1448,25 +1525,25 @@ const createSettingsPanel = async () => {
   const statusText = `${serviceActive}（监控: ${observerStatus} | 总计: ${serviceStatus.totalCount} | 图片: ${serviceStatus.imageCount} | 视频: ${serviceStatus.videoCount}）`;
 
   const html = `
-        <div id="${SETTINGS_PANEL_ID}">
-            <div class="extension_settings inline-drawer">
-                <div class="inline-drawer-toggle inline-drawer-header">
-                    <b><i class="fa-solid fa-cog"></i> ${EXTENSION_NAME}</b>
-                    <div class="inline-drawer-icon">
-                        <span class="glyphicon glyphicon-chevron-down"></span>
-                    </div>
-                </div>
-                <div class="inline-drawer-content">
-                    <div class="image-player-settings">
-                        <!-- 总开关 -->
-                        <div class="settings-row">
-                            <label class="checkbox_label" style="min-width:auto;">
-                                <input type="checkbox" id="extension-enabled" ${
-                                  settings.enabled ? "checked" : ""
-                                } />
-                                <i class="fa-solid fa-power-off"></i>启用媒体播放器
-                            </label>
-                        </div>
+    <div id="${SETTINGS_PANEL_ID}">
+      <div class="extension_settings inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+          <b><i class="fa-solid fa-cog"></i> ${EXTENSION_NAME}</b>
+          <div class="inline-drawer-icon">
+            <span class="glyphicon glyphicon-chevron-down"></span>
+          </div>
+        </div>
+        <div class="inline-drawer-content">
+          <div class="image-player-settings">
+            <!-- 总开关 -->
+            <div class="settings-row">
+              <label class="checkbox_label" style="min-width:auto;">
+                <input type="checkbox" id="master-enabled" ${
+                  settings.masterEnabled ? "checked" : ""
+                } />
+                <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
+              </label>
+            </div>
                         
                         <!-- 服务状态 -->
                         <div class="settings-row">
@@ -1795,6 +1872,22 @@ const createSettingsPanel = async () => {
 const setupSettingsEvents = () => {
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
+
+  // 监听总开关变化
+  panel.find("#master-enabled").on("change", function () {
+    settings.masterEnabled = $(this).prop("checked");
+    saveSafeSettings();
+
+    if (settings.masterEnabled) {
+      // 启用扩展
+      initExtension();
+      toastr.success("媒体播放器扩展已启用");
+    } else {
+      // 禁用扩展
+      disableExtension();
+      toastr.info("媒体播放器扩展已禁用");
+    }
+  });
 
   const saveCurrentSettings = () => {
     // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
@@ -2283,6 +2376,9 @@ const addMenuButton = () => {
   if ($(`#${menuBtnId}`).length) return;
   const settings = getExtensionSettings();
 
+  // 总开关禁用：不添加菜单按钮
+  if (!settings.masterEnabled) return;
+
   // 新增“媒体信息”显示项（显示当前播放的文件名+类型）
   const btnHtml = `
     <div id="${menuBtnId}" class="list-group-item flex-container flexGap5">
@@ -2353,10 +2449,12 @@ const addMenuButton = () => {
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
   const settings = getExtensionSettings();
-  // 总开关禁用：终止初始化并定时重试检查（核心修复）
-  if (!settings.enabled) {
-    console.log(`[${EXTENSION_ID}] 扩展当前禁用,3秒后重新检查`);
-    setTimeout(initExtension, 3000);
+
+  // 总开关禁用：终止初始化
+  if (!settings.masterEnabled) {
+    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，不进行初始化`);
+    // 即使总开关关闭，也显示一个最小化的设置面板以便重新启用
+    createMinimalSettingsPanel();
     return;
   }
   try {
@@ -2454,9 +2552,16 @@ jQuery(() => {
         clearInterval(checkTimer);
         const settings = getExtensionSettings();
         console.log(
-          `[${EXTENSION_ID}] 初始化前总开关状态: enabled=${settings.enabled}`
+          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
         );
-        initExtension();
+
+        // 根据总开关状态决定是否初始化扩展
+        if (settings.masterEnabled) {
+          initExtension();
+        } else {
+          createMinimalSettingsPanel();
+        }
+
         console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
         return;
       }
