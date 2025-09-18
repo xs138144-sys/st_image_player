@@ -202,6 +202,16 @@ const createMinimalSettingsPanel = () => {
       settings.masterEnabled = $(this).prop("checked");
       saveSafeSettings();
 
+      // 重新注册AI事件
+      panel.find("#reregister-ai-events").on("click", () => {
+        const settings = getExtensionSettings();
+        settings.aiEventRegistered = false;
+        saveSafeSettings();
+
+        registerAIEventListeners();
+        toastr.info("正在尝试重新注册AI事件...");
+      });
+
       if (
         window.extension_settings[EXTENSION_ID] &&
         !window.extension_settings[EXTENSION_ID].hasOwnProperty("masterEnabled")
@@ -1671,6 +1681,10 @@ const createSettingsPanel = async () => {
                             </label>
                         </div>
                         
+                         <button id="reregister-ai-events" class="menu-button">
+                             <i class="fa-solid fa-rotate"></i>重新注册AI事件
+                         </button>
+
                         <!-- 边框隐藏 -->
                         <div class="settings-row">
                             <label class="checkbox_label">
@@ -2374,39 +2388,98 @@ const updateExtensionMenu = () => {
 };
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
-  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
-  const maxRetries = 8;
-  const retryDelay = 1500;
-  let retries = 0;
-  const tryRegister = () => {
+  console.log(`[${EXTENSION_ID}] 开始注册AI事件监听器`);
+  const maxRetries = 12; // 增加重试次数
+  const initialDelay = 2000; // 初始延迟增加
+  const retryDelay = 2000; // 增加重试间隔
+
+  // 更健壮的依赖检查函数
+  const checkDependencies = () => {
+    // 检查全局事件系统
+    const hasEventSource = !!(window.eventSource || window.EventSource);
+    const hasEventTypes = !!(
+      window.event_types ||
+      (window.eventSource && window.eventSource.event_types)
+    );
+
+    console.log(
+      `[${EXTENSION_ID}] 依赖检查 - eventSource: ${hasEventSource}, event_types: ${hasEventTypes}`
+    );
+
+    return hasEventSource && hasEventTypes;
+  };
+
+  // 更兼容的事件绑定方法
+  const bindEvent = (eventName, callback) => {
     try {
-      console.log(
-        `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
-      );
-      if (
-        !eventSource ||
-        !event_types ||
-        !event_types.MESSAGE_RECEIVED ||
-        !event_types.MESSAGE_SENT
-      ) {
-        throw new Error(
-          `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
+      // 方法1: 使用addEventListener (现代方式)
+      if (typeof window.eventSource.addEventListener === "function") {
+        window.eventSource.addEventListener(eventName, callback);
+        console.log(
+          `[${EXTENSION_ID}] 使用addEventListener绑定事件: ${eventName}`
         );
+        return true;
       }
-      // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
-      const bindEvent = (eventName, callback) => {
-        if (typeof eventSource.addEventListener === "function") {
-          eventSource.addEventListener(eventName, callback);
-        } else if (typeof eventSource.on === "function") {
-          eventSource.on(eventName, callback);
-        } else {
-          throw new Error(
-            `eventSource 不支持事件绑定（无 addEventListener/on 方法）`
-          );
-        }
-      };
-      // AI回复事件（使用兼容的绑定方法）
-      bindEvent(event_types.MESSAGE_RECEIVED, () => {
+      // 方法2: 使用on方法 (旧方式)
+      else if (typeof window.eventSource.on === "function") {
+        window.eventSource.on(eventName, callback);
+        console.log(`[${EXTENSION_ID}] 使用on方法绑定事件: ${eventName}`);
+        return true;
+      }
+      // 方法3: 直接绑定到event_types (最兼容的方式)
+      else if (window.event_types && window.event_types[eventName]) {
+        const eventTypeValue = window.event_types[eventName];
+        window.eventSource.addEventListener(eventTypeValue, callback);
+        console.log(
+          `[${EXTENSION_ID}] 通过event_types绑定事件: ${eventName} -> ${eventTypeValue}`
+        );
+        return true;
+      }
+      // 方法4: 尝试直接使用字符串事件名
+      else {
+        window.eventSource.addEventListener(eventName, callback);
+        console.log(`[${EXTENSION_ID}] 尝试直接绑定事件: ${eventName}`);
+        return true;
+      }
+    } catch (e) {
+      console.error(`[${EXTENSION_ID}] 事件绑定失败: ${eventName}`, e);
+      return false;
+    }
+  };
+
+  const tryRegister = (retryCount = 0) => {
+    console.log(`[${EXTENSION_ID}] 尝试注册AI事件 (第${retryCount + 1}次)`);
+
+    // 检查依赖是否就绪
+    if (!checkDependencies()) {
+      if (retryCount < maxRetries) {
+        console.warn(`[${EXTENSION_ID}] 依赖未就绪，${retryDelay}ms后重试`);
+        setTimeout(() => tryRegister(retryCount + 1), retryDelay);
+        return;
+      } else {
+        console.error(`[${EXTENSION_ID}] 达到最大重试次数，AI事件注册失败`);
+        return;
+      }
+    }
+
+    try {
+      // 获取事件类型（兼容多种可能的事件名）
+      const messageReceivedEvent =
+        window.event_types?.MESSAGE_RECEIVED ||
+        window.event_types?.AI_MESSAGE_RECEIVED ||
+        "messageReceived";
+
+      const messageSentEvent =
+        window.event_types?.MESSAGE_SENT ||
+        window.event_types?.PLAYER_MESSAGE_SENT ||
+        "messageSent";
+
+      console.log(
+        `[${EXTENSION_ID}] 检测到事件类型: RECEIVED=${messageReceivedEvent}, SENT=${messageSentEvent}`
+      );
+
+      // 绑定AI回复事件
+      const aiBound = bindEvent(messageReceivedEvent, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
@@ -2414,11 +2487,13 @@ const registerAIEventListeners = () => {
           settings.aiDetectEnabled &&
           settings.isWindowVisible
         ) {
+          console.log(`[${EXTENSION_ID}] AI回复事件触发`);
           onAIResponse();
         }
       });
-      // 玩家消息事件（同上）
-      bindEvent(event_types.MESSAGE_SENT, () => {
+
+      // 绑定玩家消息事件
+      const playerBound = bindEvent(messageSentEvent, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
@@ -2426,33 +2501,37 @@ const registerAIEventListeners = () => {
           settings.playerDetectEnabled &&
           settings.isWindowVisible
         ) {
+          console.log(`[${EXTENSION_ID}] 玩家消息事件触发`);
           onPlayerMessage();
         }
       });
-      // 标记注册成功，避免重复尝试
-      const settings = getExtensionSettings();
-      settings.aiEventRegistered = true;
-      saveSafeSettings();
-      console.log(
-        `[${EXTENSION_ID}] AI/玩家事件监听注册成功（老版本原生方式）`
-      );
-      toastr.success("AI检测/玩家消息切换功能就绪");
-    } catch (error) {
-      console.error(`[st_image_player] AI事件注册失败原因:${error.message}`);
-      retries++;
-      if (retries < maxRetries) {
-        console.warn(
-          `[${EXTENSION_ID}] AI事件注册失败(${retries}/${maxRetries}），原因：${error.message}，${retryDelay}ms后重试`
-        );
-        setTimeout(tryRegister, retryDelay);
+
+      if (aiBound && playerBound) {
+        // 标记注册成功
+        const settings = getExtensionSettings();
+        settings.aiEventRegistered = true;
+        saveSafeSettings();
+
+        console.log(`[${EXTENSION_ID}] AI事件监听器注册成功`);
+        toastr.success("AI检测功能已就绪");
       } else {
-        console.error(`[${EXTENSION_ID}] AI事件注册失败(已达最大重试次数）`);
-        toastr.error("AI/玩家消息切换功能未启用，请刷新页面重试");
+        throw new Error("事件绑定失败");
+      }
+    } catch (error) {
+      console.error(`[${EXTENSION_ID}] AI事件注册失败:`, error);
+
+      if (retryCount < maxRetries) {
+        console.warn(`[${EXTENSION_ID}] ${retryDelay}ms后重试注册`);
+        setTimeout(() => tryRegister(retryCount + 1), retryDelay);
+      } else {
+        console.error(`[${EXTENSION_ID}] 达到最大重试次数，AI事件注册失败`);
+        toastr.error("AI事件注册失败，请刷新页面重试");
       }
     }
   };
-  // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
-  setTimeout(tryRegister, 3000);
+
+  // 初始延迟后开始尝试注册
+  setTimeout(() => tryRegister(0), initialDelay);
 };
 
 // ==================== 扩展菜单按钮（含筛选状态显示） ====================
@@ -2584,25 +2663,28 @@ const initExtension = async () => {
       .addClass("fa-play");
     saveSafeSettings();
     // 6. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试
+    // 替换原来的AI注册部分
     const triggerAIRegister = () => {
       const currentSettings = getExtensionSettings();
-      if (currentSettings.aiEventRegistered) {
-        console.log(`[${EXTENSION_ID}] AI事件已注册,无需重复触发`);
-        return;
+
+      // 只有在启用且未注册时才尝试注册
+      if (currentSettings.enabled && !currentSettings.aiEventRegistered) {
+        console.log(`[${EXTENSION_ID}] 触发AI事件注册`);
+        registerAIEventListeners();
+
+        // 添加一个备用检查，5分钟后如果仍未注册成功则再次尝试
+        setTimeout(() => {
+          const checkSettings = getExtensionSettings();
+          if (!checkSettings.aiEventRegistered) {
+            console.warn(`[${EXTENSION_ID}] AI注册未成功，启动备用注册`);
+            registerAIEventListeners();
+          }
+        }, 300000); // 5分钟
       }
-      console.log(`[${EXTENSION_ID}] 触发AI事件注册(首次尝试）`);
-      registerAIEventListeners();
-      // 兜底：3秒后检查是否注册成功，未成功则重试一次
-      setTimeout(() => {
-        const checkSettings = getExtensionSettings();
-        if (!checkSettings.aiEventRegistered) {
-          console.warn(`[${EXTENSION_ID}] AI注册未成功,启动二次重试`);
-          registerAIEventListeners();
-        }
-      }, 3000);
     };
-    // 延迟3秒触发（给eventSource最终初始化留足时间）
-    setTimeout(triggerAIRegister, 3000);
+
+    // 延迟5秒触发，给SillyTavern更多初始化时间
+    setTimeout(triggerAIRegister, 5000);
 
     console.log(`[${EXTENSION_ID}] 扩展初始化完成（老版本适配）`);
     toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
