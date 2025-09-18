@@ -25,60 +25,70 @@ const getSafeToastr = () => {
 const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
-  const settings = getSafeGlobal("extension_settings", {});
-  if (!settings[EXTENSION_ID]) {
-    settings[EXTENSION_ID] = {
-      enabled: true,
-      serviceUrl: "http://localhost:9000",
-      playMode: "random",
-      autoSwitchMode: "timer",
-      switchInterval: 5000,
-      position: { x: 100, y: 100, width: 600, height: 400 },
-      isLocked: false,
-      isWindowVisible: true,
-      showInfo: false,
-      aiResponseCooldown: 3000,
-      lastAISwitchTime: 0,
-      randomPlayedIndices: [],
-      randomMediaList: [],
-      isPlaying: false,
-      transitionEffect: "fade",
-      preloadImages: true,
-      preloadVideos: false,
-      playerDetectEnabled: true,
-      aiDetectEnabled: true,
-      pollingInterval: 30000,
-      // 新增：补充 slideshowMode 默认值
-      slideshowMode: false,
-      // 视频配置
-      videoLoop: false,
-      videoVolume: 0.8,
-      mediaFilter: "all",
-      showVideoControls: true,
-      hideBorder: false,
-      customVideoControls: {
-        showProgress: true,
-        showVolume: true,
-        showLoop: true,
-        showTime: true,
-      },
-      progressUpdateInterval: null,
-      serviceDirectory: "",
-      // 修复相关字段
-      isMediaLoading: false,
-      currentRandomIndex: -1,
-      showMediaUpdateToast: false,
-      aiEventRegistered: false,
-      // 新增：标记当前筛选触发源，防止循环同步
-      filterTriggerSource: null,
-    };
+  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+  if (globalSettings[EXTENSION_ID]) {
+    return globalSettings[EXTENSION_ID];
   }
-  return settings[EXTENSION_ID];
+
+  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  const defaultSettings = {
+    enabled: true, // 全新安装时默认启用，已有配置时不会走到这一步
+    serviceUrl: "http://localhost:9000",
+    playMode: "random",
+    autoSwitchMode: "timer",
+    switchInterval: 5000,
+    position: { x: 100, y: 100, width: 600, height: 400 },
+    isLocked: false,
+    isWindowVisible: true,
+    showInfo: false,
+    aiResponseCooldown: 3000,
+    lastAISwitchTime: 0,
+    randomPlayedIndices: [],
+    randomMediaList: [],
+    isPlaying: false,
+    transitionEffect: "fade",
+    preloadImages: true,
+    preloadVideos: false,
+    playerDetectEnabled: true,
+    aiDetectEnabled: true,
+    pollingInterval: 30000,
+    slideshowMode: false,
+    videoLoop: false,
+    videoVolume: 0.8,
+    mediaFilter: "all",
+    showVideoControls: true,
+    hideBorder: false,
+    customVideoControls: {
+      showProgress: true,
+      showVolume: true,
+      showLoop: true,
+      showTime: true,
+    },
+    progressUpdateInterval: null,
+    serviceDirectory: "",
+    isMediaLoading: false,
+    currentRandomIndex: -1,
+    showMediaUpdateToast: false,
+    aiEventRegistered: false,
+    filterTriggerSource: null,
+  };
+
+  // 将默认设置写入全局，供后续保存使用
+  globalSettings[EXTENSION_ID] = defaultSettings;
+  return defaultSettings;
 };
 
 const saveSafeSettings = () => {
   const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  if (saveFn && typeof saveFn === "function") saveFn();
+  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
+  if (saveFn && typeof saveFn === "function") {
+    saveFn();
+    console.log(
+      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+    );
+  }
 };
 
 // 全局状态（沿用老版本简单管理）
@@ -2427,49 +2437,50 @@ const initExtension = async () => {
 
 // ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+eventSource就绪)`);
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
   const initWhenReady = () => {
-    // 新增：检查eventSource是否已就绪（即使导入，也确保实例初始化完成）
-    const isEventSourceReady =
-      typeof eventSource !== "undefined" && eventSource !== null;
-    const isDOMReady =
-      document.getElementById("extensionsMenu") &&
-      document.getElementById("extensions_settings");
+    // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
+    const checkGlobalSettings = () => {
+      const globalSettings = getSafeGlobal("extension_settings", {});
+      // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
+      const isDOMReady =
+        document.getElementById("extensionsMenu") &&
+        document.getElementById("extensions_settings");
+      // 条件2：全局设置已加载（或超时强制尝试）
+      const isSettingsReady =
+        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
 
-    if (isDOMReady && isEventSourceReady) {
-      initExtension();
-    } else {
-      // 未就绪则每500ms重试一次，最多等待15秒
-      const checkTimer = setInterval(() => {
-        const nowDOMReady =
-          document.getElementById("extensionsMenu") &&
-          document.getElementById("extensions_settings");
-        const nowEventReady =
-          typeof eventSource !== "undefined" && eventSource !== null;
-        if (nowDOMReady && nowEventReady) {
-          clearInterval(checkTimer);
-          initExtension();
-          console.log(`[${EXTENSION_ID}] DOM+eventSource均就绪,启动初始化`);
-        }
-      }, 500);
-      // 超时保护：15秒后强制尝试（避免无限等待）
-      setTimeout(() => {
+      if (isDOMReady && isSettingsReady) {
+        clearInterval(checkTimer);
+        const settings = getExtensionSettings();
+        console.log(
+          `[${EXTENSION_ID}] 初始化前总开关状态: enabled=${settings.enabled}`
+        );
+        initExtension();
+        console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
+        return;
+      }
+
+      // 超时保护：5秒后强制初始化（避免无限等待）
+      if (Date.now() - startTime > 5000) {
         clearInterval(checkTimer);
         const finalDOMReady =
           document.getElementById("extensionsMenu") &&
           document.getElementById("extensions_settings");
         if (finalDOMReady) {
-          console.warn(
-            `[${EXTENSION_ID}] 15秒超时,eventSource未完全就绪,但DOM已存在,强制启动初始化`
-          );
+          console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
           initExtension();
         } else {
-          console.error(`[${EXTENSION_ID}] 15秒超时,DOM仍未就绪,初始化失败`);
+          console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
           toastr.error("扩展初始化失败,核心DOM未加载");
         }
-      }, 15000);
-    }
+      }
+    };
+
+    const startTime = Date.now();
+    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms检查一次
   };
+
   initWhenReady();
 });
 // 脚本加载完成标识
