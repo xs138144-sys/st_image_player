@@ -212,14 +212,27 @@ const cleanupInvalidMedia = async () => {
 const refreshMediaList = async () => {
   const settings = getExtensionSettings();
   const oldListLength = mediaList.length;
+
+  // 强制重新拉取媒体列表，避免缓存空列表
   mediaList = await fetchMediaList(settings.mediaFilter);
   settings.randomMediaList = [...mediaList];
 
-  // 仅列表变化时重置索引（修复播放停住）
-  if (mediaList.length === 0 || mediaList.length !== oldListLength) {
+  // 列表变化或为空时，重置索引并提示用户
+  if (mediaList.length === 0) {
     currentMediaIndex = 0;
     settings.randomPlayedIndices = [];
     settings.currentRandomIndex = -1;
+    toastr.warning("当前筛选无可用媒体，请检查目录或筛选条件");
+  } else if (mediaList.length !== oldListLength) {
+    currentMediaIndex = 0;
+    settings.randomPlayedIndices = [];
+    settings.currentRandomIndex = -1;
+  }
+
+  // 若正在播放，重新启动定时器（避免列表更新后停住）
+  if (settings.isPlaying && settings.autoSwitchMode === "timer") {
+    clearTimeout(switchTimer);
+    startPlayback();
   }
 
   clearTimeout(switchTimer);
@@ -621,6 +634,8 @@ const setupWindowEvents = () => {
   const header = win.find(".image-player-header")[0];
   const resizeHandle = win.find(".resize-handle")[0];
   const settings = getExtensionSettings();
+  const panel = $(`#${SETTINGS_PANEL_ID}`);
+  const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
 
   // 1. 窗口拖拽
   header.addEventListener("mousedown", (e) => {
@@ -850,20 +865,35 @@ const setupWindowEvents = () => {
   win.find(".media-filter-btn").on("click", function (e) {
     e.stopPropagation();
     const filterType = $(this).data("type");
-    // 标记触发源，避免循环同步
-    settings.filterTriggerSource = "player";
+    const settings = getExtensionSettings();
+
+    // 直接更新筛选状态，不限制触发源（关键修复）
     settings.mediaFilter = filterType;
     saveSafeSettings();
+
+    // 同步播放器按钮状态
     win.find(".media-filter-btn").removeClass("active");
     $(this).addClass("active");
+
+    // 刷新媒体列表并同步到面板和菜单
     refreshMediaList().then(() => {
       currentMediaIndex = 0;
       settings.randomPlayedIndices = [];
       settings.currentRandomIndex = -1;
       showMedia("current");
+      // 同步面板下拉框
+      panel.find("#player-media-filter").val(filterType);
+      // 同步菜单筛选文本
+      menuBtn
+        .find(".filter-text")
+        .text(
+          filterType === "all"
+            ? "所有"
+            : filterType === "image"
+            ? "图片"
+            : "视频"
+        );
       updateExtensionMenu();
-      // 重置触发源
-      settings.filterTriggerSource = null;
     });
   });
 
@@ -916,53 +946,59 @@ const setupWindowEvents = () => {
 // 替换 index.js 中的 startPlayback 函数（约第 1290-1320 行）
 const startPlayback = () => {
   const settings = getExtensionSettings();
-  // 严格判断播放状态和模式（避免无效触发）
+  // 严格前置判断：排除无效状态，避免定时器残留
   if (
     !settings.enabled ||
     !settings.isPlaying ||
     settings.autoSwitchMode !== "timer"
   ) {
-    clearTimeout(switchTimer); // 无效状态时清除定时器，避免残留
+    clearTimeout(switchTimer);
     return;
   }
 
-  clearTimeout(switchTimer); // 先清除旧定时器，防止叠加
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const video = win.find(".image-player-video")[0];
   const isVideoVisible = video && video.style.display !== "none";
 
+  // 核心：无论视频/图片，先清除旧定时器，再执行逻辑（避免叠加）
+  clearTimeout(switchTimer);
+
+  // 视频播放逻辑（不变，确保定时器续期）
   if (isVideoVisible) {
-    // 视频逻辑：播放时仍重置定时器（避免切换模式后定时器残留）
     if (video.paused) {
       video.play().catch((err) => {
-        console.warn("视频自动播放失败（浏览器限制）:", err);
+        console.warn("视频自动播放失败:", err);
         toastr.warning("请点击视频手动播放");
       });
       startProgressUpdate();
     }
+    // 强制续设定时器（即使视频播放异常，也不中断定时逻辑）
     switchTimer = setTimeout(startPlayback, settings.switchInterval);
-  } else {
-    // 图片逻辑：用 finally 强制重置定时器（核心修复，无论成功/失败都续期）
-    showMedia("next")
-      .then(() => {
-        console.log(`[${EXTENSION_ID}] 图片定时切换成功，重置定时器`);
-      })
-      .catch((err) => {
-        console.warn(`[${EXTENSION_ID}] 图片切换失败，仍继续定时`, err);
-        // 失败时重试当前媒体，避免空白
-        if (settings.isPlaying) showMedia("current");
-      })
-      .finally(() => {
-        // 关键：只要仍在“定时播放模式”且“播放中”，就强制续设定时器
-        if (
-          settings.enabled &&
-          settings.isPlaying &&
-          settings.autoSwitchMode === "timer"
-        ) {
-          switchTimer = setTimeout(startPlayback, settings.switchInterval);
-        }
-      });
+    return;
   }
+
+  // 图片播放逻辑：用“立即执行函数+强制定时器”确保不中断
+  (async () => {
+    try {
+      await showMedia("next");
+      console.log(`[${EXTENSION_ID}] 图片切换成功，续设定时器`);
+    } catch (err) {
+      console.error(`[${EXTENSION_ID}] 图片切换失败，重试当前媒体`, err);
+      // 失败时强制显示当前媒体，避免空白
+      if (settings.isPlaying) await showMedia("current");
+    } finally {
+      // 关键：无论成功/失败，只要仍在“定时播放+播放中”，就强制续期
+      if (
+        settings.enabled &&
+        settings.isPlaying &&
+        settings.autoSwitchMode === "timer"
+      ) {
+        // 额外防护：避免定时器延迟累积（用当前时间计算准确间隔）
+        const delay = Math.max(1000, settings.switchInterval); // 最低1秒间隔，防止卡死
+        switchTimer = setTimeout(startPlayback, delay);
+      }
+    }
+  })();
 };
 // 修复随机索引管理：确保始终有可用索引
 const getRandomMediaIndex = () => {
@@ -1051,6 +1087,19 @@ const showMedia = async (direction) => {
     return Promise.resolve();
   }
   settings.isMediaLoading = true;
+
+  if (
+    settings.playMode === "sequential" &&
+    settings.slideshowMode &&
+    settings.autoSwitchMode === "timer" && // 新增：仅定时模式生效
+    mediaList.length > 0
+  ) {
+    if (direction === "next" && currentMediaIndex >= mediaList.length - 1) {
+      currentMediaIndex = 0;
+    } else if (direction === "prev" && currentMediaIndex <= 0) {
+      currentMediaIndex = mediaList.length - 1;
+    }
+  }
 
   try {
     if (switchTimer) clearTimeout(switchTimer);
@@ -1887,7 +1936,16 @@ const setupSettingsEvents = () => {
   // 播放模式变更
   panel.find("#player-play-mode").on("change", function () {
     const newMode = $(this).val();
-    panel.find("#player-slideshow-mode").prop("disabled", newMode === "random");
+    const slideshowCheckbox = panel.find("#player-slideshow-mode");
+    const settings = getExtensionSettings();
+
+    // 仅在“顺序播放”时启用循环选项，“随机播放”时禁用（关键修复）
+    slideshowCheckbox.prop("disabled", newMode === "random");
+    // 若切换到随机播放，自动关闭循环
+    if (newMode === "random") {
+      settings.slideshowMode = false;
+      slideshowCheckbox.prop("checked", false);
+    }
 
     saveCurrentSettings();
 
@@ -1906,26 +1964,32 @@ const setupSettingsEvents = () => {
   panel.find("#player-media-filter").on("change", function () {
     const newFilter = $(this).val();
     const settings = getExtensionSettings();
-    // 仅当触发源不是播放器时，才同步到播放器（避免循环）
-    if (settings.filterTriggerSource !== "player") {
-      settings.filterTriggerSource = "panel";
-      settings.mediaFilter = newFilter;
-      saveSafeSettings();
+    const win = $(`#${PLAYER_WINDOW_ID}`);
+    const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
 
-      refreshMediaList().then(() => {
-        currentMediaIndex = 0;
-        settings.randomPlayedIndices = [];
-        settings.currentRandomIndex = -1;
-        showMedia("current");
-        // 同步播放器筛选按钮状态
-        $(`#${PLAYER_WINDOW_ID} .media-filter-btn`).removeClass("active");
-        $(
-          `#${PLAYER_WINDOW_ID} .media-filter-btn[data-type="${newFilter}"]`
-        ).addClass("active");
-        // 重置触发源
-        settings.filterTriggerSource = null;
-      });
-    }
+    // 直接更新筛选状态，不限制触发源（关键修复）
+    settings.mediaFilter = newFilter;
+    saveSafeSettings();
+
+    // 刷新媒体列表并同步到播放器和菜单
+    refreshMediaList().then(() => {
+      currentMediaIndex = 0;
+      settings.randomPlayedIndices = [];
+      settings.currentRandomIndex = -1;
+      showMedia("current");
+      // 同步播放器按钮状态
+      win.find(".media-filter-btn").removeClass("active");
+      win
+        .find(`.media-filter-btn[data-type="${newFilter}"]`)
+        .addClass("active");
+      // 同步菜单筛选文本
+      menuBtn
+        .find(".filter-text")
+        .text(
+          newFilter === "all" ? "所有" : newFilter === "image" ? "图片" : "视频"
+        );
+      updateExtensionMenu();
+    });
   });
 
   // 过渡效果变更
@@ -2020,21 +2084,15 @@ const updateExtensionMenu = () => {
   panel.find("#player-play-mode").val(settings.playMode); // 同步面板下拉框
 
   // 3. 媒体筛选同步（菜单+播放器按钮+面板下拉框）
-  if (settings.filterTriggerSource === null) {
-    // 避免循环同步
-    // 同步播放器筛选按钮
-    win.find(".media-filter-btn").removeClass("active");
-    win
-      .find(`.media-filter-btn[data-type="${settings.mediaFilter}"]`)
-      .addClass("active");
-    // 同步面板下拉框
-    panel.find("#player-media-filter").val(settings.mediaFilter);
-    // 同步菜单文本
-    const filterTextMap = { all: "所有", image: "图片", video: "视频" };
-    menuBtn
-      .find(".filter-text")
-      .text(filterTextMap[settings.mediaFilter] || "所有");
-  }
+  win.find(".media-filter-btn").removeClass("active");
+  win
+    .find(`.media-filter-btn[data-type="${settings.mediaFilter}"]`)
+    .addClass("active");
+  panel.find("#player-media-filter").val(settings.mediaFilter);
+  const filterTextMap = { all: "所有", image: "图片", video: "视频" };
+  menuBtn
+    .find(".filter-text")
+    .text(filterTextMap[settings.mediaFilter] || "所有");
 
   // 4. 定时/检测模式同步（播放器按钮+面板切换器）
   const switchModeBtn = win.find(".switch-mode-toggle");
@@ -2062,8 +2120,24 @@ const updateExtensionMenu = () => {
   // 6. 边框隐藏同步（播放器样式+面板复选框）
   win.toggleClass("no-border", settings.hideBorder);
   panel.find("#player-hide-border").prop("checked", settings.hideBorder);
-};
+  // 新增：同步“媒体信息”状态（菜单+播放器+面板）
+  const showInfo = settings.showInfo;
+  // 同步播放器开关
+  win.find(".toggle-info").toggleClass("active", showInfo);
+  win.find(".image-info").toggle(showInfo);
+  // 同步面板复选框
+  panel.find("#player-show-info").prop("checked", showInfo);
+  // 同步菜单显示
+  menuBtn
+    .find(".media-info")
+    .text(showInfo ? win.find(".image-info").text() : "隐藏信息");
 
+  // 同步图片循环状态（面板+设置）
+  panel
+    .find("#player-slideshow-mode")
+    .prop("disabled", settings.playMode === "random")
+    .prop("checked", settings.slideshowMode);
+};
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
@@ -2151,12 +2225,17 @@ const registerAIEventListeners = () => {
 const addMenuButton = () => {
   const menuBtnId = `ext_menu_${EXTENSION_ID}`;
   if ($(`#${menuBtnId}`).length) return;
-
   const settings = getExtensionSettings();
+
+  // 新增“媒体信息”显示项（显示当前播放的文件名+类型）
   const btnHtml = `
     <div id="${menuBtnId}" class="list-group-item flex-container flexGap5">
       <div class="fa-solid fa-film"></div>
       <span>${EXTENSION_NAME}</span>
+      <!-- 新增：媒体信息显示 -->
+      <span class="media-info" style="margin-left:8px; font-size:10px; color:#a0a0a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        ${settings.showInfo ? "加载中..." : "隐藏信息"}
+      </span>
       <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">${
         settings.isPlaying ? "播放中" : "已暂停"
       }</span>
@@ -2183,22 +2262,35 @@ const addMenuButton = () => {
     });
   });
 
-  // 菜单状态实时更新（1秒一次，避免频繁DOM操作）
+  // 增强菜单状态更新：1秒同步一次，包含媒体信息
   setInterval(() => {
     const settings = getExtensionSettings();
-    $(`#${menuBtnId} .play-status`).text(
-      settings.isPlaying ? "播放中" : "已暂停"
-    );
-    $(`#${menuBtnId} .mode-text`).text(
-      settings.playMode === "random" ? "随机" : "顺序"
-    );
-    $(`#${menuBtnId} .filter-text`).text(
-      settings.mediaFilter === "all"
-        ? "所有"
-        : settings.mediaFilter === "image"
-        ? "图片"
-        : "视频"
-    );
+    const menuBtn = $(`#${menuBtnId}`);
+    const win = $(`#${PLAYER_WINDOW_ID}`);
+    const infoElement = win.find(".image-info");
+
+    // 1. 同步播放状态
+    menuBtn.find(".play-status").text(settings.isPlaying ? "播放中" : "已暂停");
+    // 2. 同步播放模式
+    menuBtn
+      .find(".mode-text")
+      .text(settings.playMode === "random" ? "随机" : "顺序");
+    // 3. 同步媒体筛选
+    menuBtn
+      .find(".filter-text")
+      .text(
+        settings.mediaFilter === "all"
+          ? "所有"
+          : settings.mediaFilter === "image"
+          ? "图片"
+          : "视频"
+      );
+    // 4. 同步媒体信息（关键修复）
+    if (settings.showInfo && infoElement.is(":visible")) {
+      menuBtn.find(".media-info").text(infoElement.text()).show();
+    } else {
+      menuBtn.find(".media-info").text("隐藏信息").show();
+    }
   }, 1000);
 };
 
