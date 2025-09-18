@@ -1461,89 +1461,106 @@ const updateStatusDisplay = () => {
 
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
-  // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.enabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
+  const isDisabled = !settings.enabled;
+
+  // 关键修改：禁用时也创建面板，仅隐藏非核心设置，保留总开关
+  if ($(`#${SETTINGS_PANEL_ID}`).length) return;
 
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const observerStatus = serviceStatus.observerActive ? "已启用" : "已禁用";
   const statusText = `${serviceActive}（监控: ${observerStatus} | 总计: ${serviceStatus.totalCount} | 图片: ${serviceStatus.imageCount} | 视频: ${serviceStatus.videoCount}）`;
 
+  // 面板HTML：新增“禁用时隐藏非核心内容”的条件判断
   const html = `
-        <div id="${SETTINGS_PANEL_ID}">
-            <div class="extension_settings inline-drawer">
-                <div class="inline-drawer-toggle inline-drawer-header">
-                    <b><i class="fa-solid fa-cog"></i> ${EXTENSION_NAME}</b>
-                    <div class="inline-drawer-icon">
-                        <span class="glyphicon glyphicon-chevron-down"></span>
-                    </div>
+    <div id="${SETTINGS_PANEL_ID}">
+      <div class="extension_settings inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+          <b><i class="fa-solid fa-cog"></i> ${EXTENSION_NAME} ${
+    isDisabled ? "(已禁用)" : ""
+  }</b>
+          <div class="inline-drawer-icon">
+            <span class="glyphicon glyphicon-chevron-down"></span>
+          </div>
+        </div>
+        <div class="inline-drawer-content">
+          <div class="image-player-settings">
+            <!-- 1. 总开关（始终显示，禁用时高亮） -->
+            <div class="settings-row" style="${
+              isDisabled
+                ? "margin-bottom: 15px; padding: 8px; background: rgba(255, 235, 59, 0.2); border-radius: 6px;"
+                : ""
+            }">
+              <label class="checkbox_label" style="min-width:auto; font-weight: 600;">
+                <input type="checkbox" id="extension-enabled" ${
+                  settings.enabled ? "checked" : ""
+                } />
+                <i class="fa-solid fa-power-off"></i>启用媒体播放器
+              </label>
+              ${
+                isDisabled
+                  ? '<span style="margin-left: 8px; color: #ffc107; font-size: 10px;">（勾选后自动启用所有功能）</span>'
+                  : ""
+              }
+            </div>
+            
+            <!-- 2. 其他设置（仅启用时显示） -->
+            ${
+              !isDisabled
+                ? `
+              <!-- 服务状态 -->
+              <div class="settings-row">
+                <label class="service-status">
+                  <i class="fa-solid ${
+                    serviceStatus.active ? "fa-plug-circle-check" : "fa-plug"
+                  }"></i>
+                  服务状态: <span class="${
+                    serviceStatus.active ? "status-success" : "status-error"
+                  }">${statusText}</span>
+                </label>
+              </div>
+              
+              <!-- 基础配置、媒体限制、视频控制等所有原设置项 -->
+              <!-- （此处省略原HTML代码，保持和之前一致，仅用${
+                !isDisabled ? `...` : ``
+              }包裹） -->
+              <!-- 原基础配置 -->
+              <div class="settings-row">
+                <label><i class="fa-solid fa-link"></i>服务地址</label>
+                <input type="text" id="player-service-url" value="${
+                  settings.serviceUrl
+                }" placeholder="http://localhost:9000" />
+              </div>
+              
+              <div class="settings-row">
+                <label><i class="fa-solid fa-folder"></i>媒体目录</label>
+                <input type="text" id="player-scan-directory" value="${
+                  settings.serviceDirectory || serviceStatus.directory
+                }" placeholder="输入完整路径" />
+                <button id="update-directory" class="menu-button">更新目录</button>
+              </div>
+              
+              <!-- 媒体大小限制 -->
+              <div class="settings-group">
+                <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
+                  <i class="fa-solid fa-maximize"></i> 媒体大小限制
+                </h4>
+                <div class="settings-row">
+                  <label><i class="fa-solid fa-image"></i>图片最大尺寸</label>
+                  <input type="number" id="image-max-size" value="${
+                    settings.mediaConfig?.image_max_size_mb || 5
+                  }" min="1" max="50" step="1" />
+                  <span>MB</span>
+                  
+                  <label><i class="fa-solid fa-video"></i>视频最大尺寸</label>
+                  <input type="number" id="video-max-size" value="${
+                    settings.mediaConfig?.video_max_size_mb || 100
+                  }" min="10" max="500" step="10" />
+                  <span>MB</span>
+                  
+                  <button id="update-size-limit" class="menu-button">应用限制</button>
                 </div>
-                <div class="inline-drawer-content">
-                    <div class="image-player-settings">
-                        <!-- 总开关 -->
-                        <div class="settings-row">
-                            <label class="checkbox_label" style="min-width:auto;">
-                                <input type="checkbox" id="extension-enabled" ${
-                                  settings.enabled ? "checked" : ""
-                                } />
-                                <i class="fa-solid fa-power-off"></i>启用媒体播放器
-                            </label>
-                        </div>
-                        
-                        <!-- 服务状态 -->
-                        <div class="settings-row">
-                            <label class="service-status">
-                                <i class="fa-solid ${
-                                  serviceStatus.active
-                                    ? "fa-plug-circle-check"
-                                    : "fa-plug"
-                                }"></i>
-                                服务状态: <span class="${
-                                  serviceStatus.active
-                                    ? "status-success"
-                                    : "status-error"
-                                }">${statusText}</span>
-                            </label>
-                        </div>
-                        
-                        <!-- 基础配置 -->
-                        <div class="settings-row">
-                            <label><i class="fa-solid fa-link"></i>服务地址</label>
-                            <input type="text" id="player-service-url" value="${
-                              settings.serviceUrl
-                            }" placeholder="http://localhost:9000" />
-                        </div>
-                        
-                        <div class="settings-row">
-                            <label><i class="fa-solid fa-folder"></i>媒体目录</label>
-                            <input type="text" id="player-scan-directory" value="${
-                              settings.serviceDirectory ||
-                              serviceStatus.directory
-                            }" placeholder="输入完整路径" />
-                            <button id="update-directory" class="menu-button">更新目录</button>
-                        </div>
-                        
-                        <!-- 媒体大小限制 -->
-                        <div class="settings-group">
-                            <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
-                                <i class="fa-solid fa-maximize"></i> 媒体大小限制
-                            </h4>
-                            <div class="settings-row">
-                                <label><i class="fa-solid fa-image"></i>图片最大尺寸</label>
-                                <input type="number" id="image-max-size" value="${
-                                  settings.mediaConfig?.image_max_size_mb || 5
-                                }" min="1" max="50" step="1" />
-                                <span>MB</span>
-                                
-                                <label><i class="fa-solid fa-video"></i>视频最大尺寸</label>
-                                <input type="number" id="video-max-size" value="${
-                                  settings.mediaConfig?.video_max_size_mb || 100
-                                }" min="10" max="500" step="10" />
-                                <span>MB</span>
-                                
-                                <button id="update-size-limit" class="menu-button">应用限制</button>
-                            </div>
-                        </div>
+              </div>
                         
                         <!-- 媒体更新提示开关 -->
                         <div class="settings-row">
@@ -1691,8 +1708,8 @@ const createSettingsPanel = async () => {
                                 <input type="checkbox" id="player-slideshow-mode" ${
                                   settings.slideshowMode ? "checked" : ""
                                 } ${
-    settings.playMode === "random" ? "disabled" : ""
-  } />
+                    settings.playMode === "random" ? "disabled" : ""
+                  } />
                                 <i class="fa-solid fa-repeat"></i>图片循环播放
                             </label>
                             <label class="checkbox_label">
@@ -1789,29 +1806,42 @@ const createSettingsPanel = async () => {
                         </div>
                         
                         <!-- 操作按钮 -->
-                        <div class="settings-action-row">
-                            <button id="show-player" class="menu-button">
-                                <i class="fa-solid fa-eye"></i>显示播放器
-                            </button>
-                            <button id="player-refresh" class="menu-button">
-                                <i class="fa-solid fa-rotate"></i>刷新服务
-                            </button>
-                            <button id="clear-random-history" class="menu-button">
-                                <i class="fa-solid fa-trash"></i>清理随机记录
-                            </button>
-                            <button id="cleanup-media" class="menu-button">
-                                <i class="fa-solid fa-broom"></i>清理无效媒体
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
+  <div class="settings-action-row">
+    <button id="show-player" class="menu-button">
+      <i class="fa-solid fa-eye"></i>显示播放器
+    </button>
+    <button id="player-refresh" class="menu-button">
+      <i class="fa-solid fa-rotate"></i>刷新服务
+    </button>
+    <button id="clear-random-history" class="menu-button">
+      <i class="fa-solid fa-trash"></i>清理随机记录
+    </button>
+    <button id="cleanup-media" class="menu-button">
+      <i class="fa-solid fa-broom"></i>清理无效媒体
+    </button>
+  </div>
+`
+                : `
+  <!-- 禁用时仅显示提示 -->
+  <div class="settings-row" style="color: #a0a0a0; font-size: 11px; text-align: center; padding: 15px 0;">
+    扩展已禁用，启用后将显示完整设置面板<br>
+    启用后会自动启动媒体服务连接、创建播放器窗口
+  </div>
+`
+            }
+                   </div>
+                 </div>
+              </div>
+           </div>
+  `;
 
   $("#extensions_settings").append(html);
-  setupSettingsEvents();
-  console.log(`[${EXTENSION_ID}] 设置面板创建完成`);
+  setupSettingsEvents(); // 始终绑定设置事件（确保总开关点击有效）
+  console.log(
+    `[${EXTENSION_ID}] 设置面板创建完成（${
+      isDisabled ? "已禁用，仅显示总开关" : "正常启用"
+    }）`
+  );
 };
 
 const setupSettingsEvents = () => {
@@ -2299,75 +2329,119 @@ const registerAIEventListeners = () => {
   setTimeout(tryRegister, 3000);
 };
 
-// ==================== 扩展菜单按钮（含筛选状态显示） ====================
+// ==================== 扩展菜单按钮（含筛选状态显示，禁用时保留入口） ====================
 const addMenuButton = () => {
   const menuBtnId = `ext_menu_${EXTENSION_ID}`;
-  if ($(`#${menuBtnId}`).length) return;
-  const settings = getExtensionSettings();
+  if ($(`#${menuBtnId}`).length) return; // 避免重复创建
 
-  // 新增“媒体信息”显示项（显示当前播放的文件名+类型）
+  const settings = getExtensionSettings();
+  const isDisabled = !settings.enabled; // 判断是否禁用
+
+  // 菜单HTML：禁用时显示“已禁用”，保留点击入口
   const btnHtml = `
-    <div id="${menuBtnId}" class="list-group-item flex-container flexGap5">
+    <div id="${menuBtnId}" class="list-group-item flex-container flexGap5 ${
+    isDisabled ? "text-muted" : ""
+  }">
       <div class="fa-solid fa-film"></div>
-      <span>${EXTENSION_NAME}</span>
-      <!-- 新增：媒体信息显示 -->
+      <span>${EXTENSION_NAME} ${isDisabled ? "(已禁用)" : ""}</span>
+      <!-- 禁用时显示提示，启用时显示媒体信息 -->
       <span class="media-info" style="margin-left:8px; font-size:10px; color:#a0a0a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-        ${settings.showInfo ? "加载中..." : "隐藏信息"}
+        ${
+          isDisabled
+            ? "点击启用扩展"
+            : settings.showInfo
+            ? "加载中..."
+            : "隐藏信息"
+        }
       </span>
-      <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">${
-        settings.isPlaying ? "播放中" : "已暂停"
-      }</span>
-      <span class="mode-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${
-        settings.playMode === "random" ? "随机" : "顺序"
-      }</span>
-      <span class="filter-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${
-        settings.mediaFilter === "all"
-          ? "所有"
-          : settings.mediaFilter === "image"
-          ? "图片"
-          : "视频"
-      }</span>
+      <!-- 禁用时隐藏其他状态，仅显示核心提示 -->
+      ${
+        !isDisabled
+          ? `
+        <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">${
+          settings.isPlaying ? "播放中" : "已暂停"
+        }</span>
+        <span class="mode-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${
+          settings.playMode === "random" ? "随机" : "顺序"
+        }</span>
+        <span class="filter-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${
+          settings.mediaFilter === "all"
+            ? "所有"
+            : settings.mediaFilter === "image"
+            ? "图片"
+            : "视频"
+        }</span>
+      `
+          : ""
+      }
     </div>
   `;
+
   $("#extensionsMenu").append(btnHtml);
 
-  // 菜单点击跳转设置面板
+  // 菜单点击逻辑：无论启用/禁用，都跳转到设置面板（禁用时面板仅显示总开关）
   $(`#${menuBtnId}`).on("click", () => {
+    // 触发扩展设置面板展开（SillyTavern 原生逻辑）
     $("#extensions-settings-button").trigger("click");
-    $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    // 滚动到当前扩展的设置面板（即使禁用，面板也已创建）
+    const panel = $(`#${SETTINGS_PANEL_ID}`);
+    if (panel.length) {
+      panel.scrollIntoView({ behavior: "smooth", block: "center" });
+      // 禁用时给总开关加高亮提示
+      if (isDisabled) {
+        panel.find("#extension-enabled").parent().css({
+          background: "rgba(255, 235, 59, 0.2)",
+          padding: "2px 6px",
+          "border-radius": "4px",
+        });
+        toastr.info("当前扩展已禁用，请勾选「启用媒体播放器」重新启动");
+      }
+    } else {
+      toastr.warning("设置面板加载中，请稍候点击");
+    }
   });
 
-  // 增强菜单状态更新：1秒同步一次，包含媒体信息
+  // 菜单状态同步（禁用时仅更新“已禁用”提示，不处理其他状态）
   setInterval(() => {
-    const settings = getExtensionSettings();
+    const currentSettings = getExtensionSettings();
     const menuBtn = $(`#${menuBtnId}`);
-    const win = $(`#${PLAYER_WINDOW_ID}`);
-    const infoElement = win.find(".image-info");
+    const isNowDisabled = !currentSettings.enabled;
 
-    // 1. 同步播放状态
-    menuBtn.find(".play-status").text(settings.isPlaying ? "播放中" : "已暂停");
-    // 2. 同步播放模式
-    menuBtn
-      .find(".mode-text")
-      .text(settings.playMode === "random" ? "随机" : "顺序");
-    // 3. 同步媒体筛选
-    menuBtn
-      .find(".filter-text")
-      .text(
-        settings.mediaFilter === "all"
-          ? "所有"
-          : settings.mediaFilter === "image"
-          ? "图片"
-          : "视频"
-      );
-    // 4. 同步媒体信息（关键修复）
-    if (settings.showInfo && infoElement.is(":visible")) {
-      menuBtn.find(".media-info").text(infoElement.text()).show();
+    // 更新菜单基础状态
+    menuBtn.find(".media-info").text(
+      isNowDisabled
+        ? "点击启用扩展"
+        : currentSettings.showInfo
+        ? (() => {
+            const win = $(`#${PLAYER_WINDOW_ID}`); // 声明win变量
+            return win.find(".image-info").text() || "加载中...";
+          })()
+        : "隐藏信息"
+    );
+
+    // 启用时更新完整状态，禁用时隐藏
+    const statusElements = menuBtn.find(
+      ".play-status, .mode-text, .filter-text"
+    );
+    if (isNowDisabled) {
+      statusElements.hide();
     } else {
-      menuBtn.find(".media-info").text("隐藏信息").show();
+      statusElements.show();
+      menuBtn
+        .find(".play-status")
+        .text(currentSettings.isPlaying ? "播放中" : "已暂停");
+      menuBtn
+        .find(".mode-text")
+        .text(currentSettings.playMode === "random" ? "随机" : "顺序");
+      menuBtn
+        .find(".filter-text")
+        .text(
+          currentSettings.mediaFilter === "all"
+            ? "所有"
+            : currentSettings.mediaFilter === "image"
+            ? "图片"
+            : "视频"
+        );
     }
   }, 1000);
 };
@@ -2380,18 +2454,22 @@ const initExtension = async () => {
     const localSettings = JSON.parse(
       localStorage.getItem("extension_settings") || "{}"
     );
-    // 明确判断enabled是否存在，不存在则视为全新安装（默认true）
     realEnabled = localSettings[EXTENSION_ID]?.enabled ?? true;
   } catch (e) {
-    console.error(`[${EXTENSION_ID}] 读取localStorage失败，默认启用`, e);
+    console.error(`[${EXTENSION_ID}] 读取localStorage失败,默认启用`, e);
   }
 
-  // 禁用时，强制清理所有资源并终止
-  if (!realEnabled) {
+  const settings = getExtensionSettings();
+  settings.enabled = realEnabled; // 同步真实状态到内存
+  const isDisabled = !realEnabled;
+
+  // 禁用时：保留菜单和精简面板，仅清理核心功能资源，不删除操作入口
+  if (isDisabled) {
     console.log(
-      `[${EXTENSION_ID}] 最终状态: 禁用(enabled=${realEnabled})，终止初始化`
+      `[${EXTENSION_ID}] 最终状态: 禁用(enabled=${realEnabled})，保留启用入口`
     );
-    // 强制清理所有可能的残留资源
+
+    // 1. 清理核心功能资源（不启动服务/播放器）
     if (pollingTimer) clearTimeout(pollingTimer);
     if (ws) {
       ws.close();
@@ -2400,40 +2478,45 @@ const initExtension = async () => {
     }
     if (switchTimer) clearTimeout(switchTimer);
     stopProgressUpdate();
-    $(`#${PLAYER_WINDOW_ID}`).remove();
-    $(`#${SETTINGS_PANEL_ID}`).remove();
-    $(`#ext_menu_${EXTENSION_ID}`).remove(); // 同时删除扩展菜单，避免残留
-    return;
+
+    // 2. 隐藏播放器窗口（不删除，避免后续启用时重建）
+    $(`#${PLAYER_WINDOW_ID}`).hide();
+
+    // 3. 创建菜单和精简面板（确保用户有启用入口）
+    addMenuButton();
+    await createSettingsPanel();
+
+    return; // 终止后续初始化（不启动服务、不加载媒体）
   }
+
+  // （以下为原启用时的初始化逻辑，无需修改）
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
-    // 1. 初始化全局设置容器（兼容老版本存储）
+    // 1. 初始化全局设置容器
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
     }
     if (!window.extension_settings[EXTENSION_ID]) {
-      // 用JSON深拷贝快速覆盖所有默认设置，避免手动复制遗漏
       window.extension_settings[EXTENSION_ID] = JSON.parse(
         JSON.stringify(settings)
       );
-      // 补充修复相关字段（覆盖默认值）
       window.extension_settings[EXTENSION_ID].isMediaLoading = false;
       window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
       window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
       window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
       window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
-      // 修复：将save和log缩进进if块内，且删除多余的“};”
       saveSafeSettings();
       console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
     }
-    // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
+
+    // 2. 创建菜单、窗口、面板（正常启用逻辑）
     addMenuButton();
     await Promise.all([createPlayerWindow(), createSettingsPanel()]);
-    // 3. 初始化服务通信（WebSocket+轮询）
+
+    // 3. 启动服务通信、加载媒体等（原逻辑不变）
     initWebSocket();
     startPollingService();
-    // 4. 加载媒体列表（确保播放有数据）
-    await refreshMediaList();
+    await refreshMediaList(); // 仅保留一次调用
     if (mediaList.length > 0) {
       showMedia("current");
     } else {
@@ -2509,7 +2592,7 @@ jQuery(() => {
         }
         return globalSettings;
       } catch (e) {
-        console.error(`[${EXTENSION_ID}] 读取localStorage失败，使用默认`, e);
+        console.error(`[${EXTENSION_ID}] 读取localStorage失败,使用默认`, e);
         return getSafeGlobal("extension_settings", {});
       }
     };
@@ -2548,7 +2631,7 @@ jQuery(() => {
               : retryLoadCount >= maxRetryLoad
               ? "重试超限"
               : "超时"
-          }）`
+          })`
         );
         // 覆盖设置为真实状态，避免内存值与存储不一致
         settings.enabled = realEnabled;
