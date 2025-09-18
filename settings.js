@@ -1,3 +1,4 @@
+const $ = window.jQuery || window.$;
 import { getSafeToastr } from "./utils.js";
 import { closeWebSocket } from "./websocket.js";
 import { stopPlayback, stopProgressUpdate } from "./mediaPlayer.js";

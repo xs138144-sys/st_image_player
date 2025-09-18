@@ -1,3 +1,4 @@
+const $ = window.jQuery || window.$;
 /**
  * 安全获取toastr（兼容SillyTavern环境）
  */

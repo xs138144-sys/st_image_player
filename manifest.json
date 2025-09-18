@@ -1,8 +1,8 @@
 {
   "display_name": "媒体播放器",
   "loading_order": 90,
-  "requires": [],
-  "optional": [],
+  "requires": ["jquery"],
+  "optional": ["toastr"],
   "js": "index.js",
   "css": "style.css",
   "author": "DeepSeek和豆包和反死",

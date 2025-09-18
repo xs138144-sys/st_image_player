@@ -1,3 +1,4 @@
+const $ = window.jQuery || window.$;
 import { getSettings, saveSafeSettings } from "./settings.js";
 import { refreshMediaList } from "./api.js";
 import { getSafeToastr } from "./utils.js";

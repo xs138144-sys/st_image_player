@@ -1,3 +1,4 @@
+const $ = window.jQuery || window.$;
 import { getSettings, saveSafeSettings, disableExtension } from "./settings.js";
 import {
   getSafeToastr,
@@ -35,7 +36,7 @@ let panel = null; // 设置面板缓存
  */
 export const createPlayerWindow = async () => {
   const settings = getSettings();
-  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+  if (!settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // 视频控制栏HTML（根据设置动态生成）
   const videoControlsHtml = settings.showVideoControls
@@ -196,6 +197,7 @@ export const createPlayerWindow = async () => {
   console.log(`[UI] 播放器窗口创建完成`);
 };
 
+// ... rest of the code remains the same ...
 /**
  * 创建设置面板
  * @returns {Promise<void>}

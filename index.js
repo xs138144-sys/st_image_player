@@ -1,11 +1,12 @@
+const $ = window.jQuery || window.$;
+
 import { getSettings, saveSafeSettings } from "./settings.js";
 import { initUI } from "./ui.js";
 import { initMediaPlayer } from "./mediaPlayer.js";
 import { initWebSocket } from "./websocket.js";
 import { registerAIEventListeners } from "./aiEvents.js";
-import { getSafeToastr } from "./utils.js";
+import { getSafeToastr, safeJQuery } from "./utils.js";
 
-// 扩展初始化函数
 async function initExtension() {
   const toastr = getSafeToastr();
   const settings = getSettings();
@@ -13,49 +14,45 @@ async function initExtension() {
   console.log("[MediaPlayer] 扩展初始化开始");
 
   try {
-    // 初始化媒体播放器
-    await initMediaPlayer();
+    // 确保jQuery可用后再初始化UI
+    safeJQuery(async () => {
+      await initMediaPlayer();
+      await initUI();
 
-    // 初始化UI
-    await initUI();
+      if (settings.masterEnabled) {
+        initWebSocket();
+      }
 
-    // 初始化WebSocket
-    if (settings.masterEnabled) {
-      initWebSocket();
-    }
+      if (settings.masterEnabled && !settings.aiEventRegistered) {
+        registerAIEventListeners();
+      }
 
-    // 注册AI事件监听
-    if (settings.masterEnabled && !settings.aiEventRegistered) {
-      registerAIEventListeners();
-    }
-
-    console.log("[MediaPlayer] 扩展初始化完成");
-    toastr.success("媒体播放器扩展已加载");
+      console.log("[MediaPlayer] 扩展初始化完成");
+      toastr.success("媒体播放器扩展已加载");
+    });
   } catch (e) {
     console.error("[MediaPlayer] 扩展初始化失败:", e);
     toastr.error(`媒体播放器加载失败: ${e.message}`);
   }
 }
 
-// SillyTavern扩展注册
-if (window.extensions) {
-  // 兼容SillyTavern的扩展注册方式
-  window.extensions.register({
-    name: "st_image_player",
-    display_name: "媒体播放器",
-    author: "DeepSeek和豆包和反死",
-    version: "1.4.1",
-    onLoad: initExtension,
-    onUnload: () => {
-      import("./settings.js").then(({ disableExtension }) =>
-        disableExtension()
-      );
-      console.log("[MediaPlayer] 扩展已卸载");
-    },
-  });
+// 安全启动
+if (typeof $ !== "undefined") {
+  initExtension();
 } else {
-  // 兼容旧版本或其他环境
-  document.addEventListener("DOMContentLoaded", initExtension);
+  console.warn("[MediaPlayer] jQuery not defined, waiting...");
+  let jQueryRetry = 0;
+  const waitForjQuery = setInterval(() => {
+    if (typeof $ !== "undefined" || jQueryRetry > 10) {
+      clearInterval(waitForjQuery);
+      if (typeof $ !== "undefined") {
+        initExtension();
+      } else {
+        console.error("[MediaPlayer] jQuery not available after 10s");
+      }
+    }
+    jQueryRetry++;
+  }, 500);
 }
 
 // 全局错误处理
