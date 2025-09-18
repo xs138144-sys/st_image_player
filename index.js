@@ -8,11 +8,15 @@ const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
-const eventSource = importedEventSource || window.eventSource;
-const event_types = importedEventTypes || window.event_types;
+const eventSource =
+  importedEventSource ||
+  (typeof window.eventSource !== "undefined" ? window.eventSource : null);
+const event_types =
+  importedEventTypes ||
+  (typeof window.eventTypes !== "undefined" ? window.eventTypes : {});
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
-
+let panel = null;
 // 1. 先定义 getExtensionSettings（确保后续可调用）
 const getExtensionSettings = () => {
   // 确保全局设置对象存在
@@ -83,10 +87,6 @@ const getExtensionSettings = () => {
   window.extension_settings[EXTENSION_ID] = defaultSettings;
   return defaultSettings;
 };
-
-// 2. 执行总开关检查（此时 getExtensionSettings 已定义）
-const settings = getExtensionSettings();
-if (!settings.masterEnabled) return;
 
 // 3. 定义 toastr（仅一次，无冗余）
 const getSafeToastr = () => {
@@ -1914,6 +1914,7 @@ const createSettingsPanel = async () => {
     `;
 
   $("#extensions_settings").append(html);
+  panel = $(`#${SETTINGS_PANEL_ID}`); // 赋值给全局 panel 变量
   setupSettingsEvents();
   console.log(`[${EXTENSION_ID}] 设置面板创建完成`);
 };
@@ -2141,7 +2142,12 @@ const setupSettingsEvents = () => {
 // 修复：完善 saveCurrentSettings 函数，加入视频状态同步逻辑
 const saveCurrentSettings = function () {
   const settings = getExtensionSettings();
-  const $this = $(this); // 正确获取事件触发元素（复选框/输入框）
+  const panel = $(`#${SETTINGS_PANEL_ID}`); // 确保正确获取面板
+
+  if (panel.length === 0) {
+    console.error("Settings panel not found");
+    return;
+  }
 
   // 1. 总开关逻辑（仅当触发源是总开关时执行）
   if ($this.attr("id") === "master-enabled") {
@@ -2482,6 +2488,11 @@ const addMenuButton = () => {
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
   const settings = getExtensionSettings();
+  if (!settings.masterEnabled) {
+    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，不进行初始化`);
+    createMinimalSettingsPanel();
+    return;
+  }
 
   // 总开关禁用：终止初始化
   if (!settings.masterEnabled) {
