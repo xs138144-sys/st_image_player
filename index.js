@@ -2353,10 +2353,24 @@ const addMenuButton = () => {
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
   const settings = getExtensionSettings();
-  // 总开关禁用：终止初始化并定时重试检查（核心修复）
-  if (!settings.enabled) {
-    console.log(`[${EXTENSION_ID}] 扩展当前禁用,3秒后重新检查`);
-    setTimeout(initExtension, 3000);
+  // 新增：二次校验存储状态，若实际为禁用，直接终止初始化（回滚启动）
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  const realEnabled = globalSettings[EXTENSION_ID]?.enabled ?? settings.enabled;
+  if (!realEnabled) {
+    console.log(
+      `[${EXTENSION_ID}] 扩展当前禁用(存储值: enabled=${realEnabled}),终止初始化`
+    );
+    // 清理可能已启动的资源（防止部分初始化残留）
+    if (pollingTimer) clearTimeout(pollingTimer);
+    if (ws) {
+      ws.close();
+      ws = null;
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+    }
+    if (switchTimer) clearTimeout(switchTimer);
+    stopProgressUpdate();
+    $(`#${PLAYER_WINDOW_ID}`).remove(); // 删除可能已创建的窗口
+    $(`#${SETTINGS_PANEL_ID}`).remove(); // 删除可能已创建的面板
     return;
   }
   try {
@@ -2382,8 +2396,7 @@ const initExtension = async () => {
     }
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
     addMenuButton();
-    await createPlayerWindow();
-    await createSettingsPanel();
+    await Promise.all([createPlayerWindow(), createSettingsPanel()]);
     // 3. 初始化服务通信（WebSocket+轮询）
     initWebSocket();
     startPollingService();
@@ -2400,6 +2413,14 @@ const initExtension = async () => {
       .removeClass("fa-pause")
       .addClass("fa-play");
     saveSafeSettings();
+
+    setTimeout(() => {
+      triggerAIRegister();
+      refreshMediaList().then(() => {
+        if (mediaList.length > 0) showMedia("current");
+        else toastr.info(`未检测到媒体文件，请在设置中配置扫描目录`);
+      });
+    }, 1000);
     // 6. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试
     const triggerAIRegister = () => {
       const currentSettings = getExtensionSettings();
@@ -2439,36 +2460,42 @@ const initExtension = async () => {
 jQuery(() => {
   console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
   const initWhenReady = () => {
-    // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
+    // 新增：加强全局设置校验，确保读取到真实的 enabled 状态（非默认值）
     const checkGlobalSettings = () => {
       const globalSettings = getSafeGlobal("extension_settings", {});
       // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
       const isDOMReady =
         document.getElementById("extensionsMenu") &&
         document.getElementById("extensions_settings");
-      // 条件2：全局设置已加载（或超时强制尝试）
-      const isSettingsReady =
-        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
+      // 条件2：全局设置已加载 + enabled 字段有效（排除默认值干扰）
+      const isSettingsValid =
+        !!globalSettings[EXTENSION_ID] &&
+        "enabled" in globalSettings[EXTENSION_ID]; // 关键：确认 enabled 字段存在
+      // 条件3：超时强制校验（5秒后无论是否就绪，都基于真实存储初始化）
+      const isTimeout = Date.now() - startTime > 5000;
 
-      if (isDOMReady && isSettingsReady) {
+      if (isDOMReady && (isSettingsValid || isTimeout)) {
         clearInterval(checkTimer);
         const settings = getExtensionSettings();
         console.log(
-          `[${EXTENSION_ID}] 初始化前总开关状态: enabled=${settings.enabled}`
+          `[${EXTENSION_ID}] 初始化前总开关状态: enabled=${
+            settings.enabled
+          }（存储加载${isSettingsValid ? "成功" : "超时，使用当前存储值"}）`
         );
+        // 核心：即使超时，也基于最终读取的存储值初始化（而非默认值）
         initExtension();
         console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
         return;
       }
 
-      // 超时保护：5秒后强制初始化（避免无限等待）
-      if (Date.now() - startTime > 5000) {
+      // 超时保护：5秒后强制初始化（基于最终存储值）
+      if (isTimeout) {
         clearInterval(checkTimer);
         const finalDOMReady =
           document.getElementById("extensionsMenu") &&
           document.getElementById("extensions_settings");
         if (finalDOMReady) {
-          console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
+          console.warn(`[${EXTENSION_ID}] 5秒超时,基于最终存储值强制初始化`);
           initExtension();
         } else {
           console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
@@ -2478,10 +2505,11 @@ jQuery(() => {
     };
 
     const startTime = Date.now();
-    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms检查一次
+    const checkTimer = setInterval(checkGlobalSettings, 200); // 缩短检查间隔，更快响应存储加载
   };
 
   initWhenReady();
 });
+
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
