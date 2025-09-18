@@ -597,7 +597,7 @@ const createPlayerWindow = async () => {
   }">
                         <i class="fa-solid fa-video"></i>
                     </button>
-                    <button class="hide player-hide-btn"><i class="fa-solid fa-minus"></i></button>
+                    <button class="hide"><i class="fa-solid fa-minus"></i></button>
                 </div>
             </div>
             <div class="image-player-body">
@@ -899,8 +899,8 @@ const setupWindowEvents = () => {
     updateExtensionMenu();
   });
 
-  // 隐藏窗口（使用唯一类名绑定）
-  win.find(".player-hide-btn").on("click", function () {
+  // 10. 隐藏窗口
+  win.find(".hide").on("click", function () {
     win.hide();
     settings.isWindowVisible = false;
     saveSafeSettings();
@@ -1890,8 +1890,32 @@ const setupSettingsEvents = () => {
   });
 
   const saveCurrentSettings = () => {
-    // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
-    settings.enabled = panel.find("#extension-enabled").prop("checked");
+    const settings = getExtensionSettings();
+
+    // 只有当master-enabled复选框变化时才处理总开关逻辑
+    if ($(this).attr("id") === "master-enabled") {
+      settings.masterEnabled = $(this).prop("checked");
+
+      if (!settings.masterEnabled) {
+        // 总开关禁用时的清理逻辑
+        if (pollingTimer) clearTimeout(pollingTimer);
+        if (ws) {
+          ws.close();
+          ws = null;
+          if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+        }
+        if (switchTimer) clearTimeout(switchTimer);
+        stopProgressUpdate();
+        $(`#${PLAYER_WINDOW_ID}`).hide();
+        settings.isWindowVisible = false;
+        settings.isPlaying = false;
+      } else {
+        // 总开关启用时的初始化逻辑
+        startPollingService();
+        initWebSocket();
+        if (settings.isWindowVisible) $(`#${PLAYER_WINDOW_ID}`).show();
+      }
+    }
 
     // 2. 同步其他基础设置
     settings.serviceUrl = panel.find("#player-service-url").val().trim();
@@ -2406,8 +2430,7 @@ const addMenuButton = () => {
   $("#extensionsMenu").append(btnHtml);
 
   // 菜单点击跳转设置面板
-  $(`#${menuBtnId}`).on("click", (e) => {
-    e.stopPropagation(); // 关键：阻止事件冒泡到父级，避免触发原生隐藏逻辑
+  $(`#${menuBtnId}`).on("click", () => {
     $("#extensions-settings-button").trigger("click");
     $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
       behavior: "smooth",
