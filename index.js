@@ -242,7 +242,9 @@ const refreshMediaList = async () => {
 // ==================== WebSocket 通信（无修改） ====================
 const initWebSocket = () => {
   const settings = getExtensionSettings();
+  // 总开关禁用：不初始化WebSocket（核心修复）
   if (!settings.enabled || ws) return;
+
   try {
     const wsUrl =
       settings.serviceUrl.replace("http://", "ws://") + "/socket.io";
@@ -278,6 +280,7 @@ const initWebSocket = () => {
     ws.onclose = () => {
       console.log(`[${EXTENSION_ID}] WebSocket连接关闭`);
       ws = null;
+      // 仅在启用时尝试重连
       if (settings.enabled) {
         wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
       }
@@ -286,19 +289,22 @@ const initWebSocket = () => {
     ws.onerror = (e) => {
       console.error(`[${EXTENSION_ID}] WebSocket错误`, e);
       ws = null;
+      // 仅在启用时尝试重连
       if (settings.enabled) {
         wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
       }
     };
 
+    // 心跳检测（仅在启用时发送）
     setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN) {
+      if (ws?.readyState === WebSocket.OPEN && settings.enabled) {
         ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
       }
     }, 30000);
   } catch (e) {
     console.error(`[${EXTENSION_ID}] WebSocket初始化失败`, e);
     ws = null;
+    // 仅在启用时尝试重连
     if (settings.enabled) {
       wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
     }
@@ -420,8 +426,10 @@ const bindVideoControls = () => {
 // ==================== 播放器窗口（修复媒体筛选同步） ====================
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
+  // 总开关禁用：不创建播放器窗口（核心修复）
   if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
+  // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
     ? `
         <div class="video-controls">
@@ -1367,17 +1375,20 @@ const onPlayerMessage = () => {
 // ==================== 服务轮询（无修改） ====================
 const startPollingService = () => {
   const settings = getExtensionSettings();
+  // 总开关禁用：停止轮询并清理定时器（核心修复）
   if (!settings.enabled) {
     if (pollingTimer) clearTimeout(pollingTimer);
     return;
   }
 
+  // 清除旧定时器，避免叠加
   if (pollingTimer) clearTimeout(pollingTimer);
+
   const poll = async () => {
     try {
       const prevCount = serviceStatus.totalCount;
       await checkServiceStatus();
-
+      // 媒体数量变化时刷新列表
       if (serviceStatus.totalCount !== prevCount) {
         await refreshMediaList();
         if (settings.showMediaUpdateToast) {
@@ -1390,7 +1401,10 @@ const startPollingService = () => {
     } catch (e) {
       console.error(`[${EXTENSION_ID}] 服务轮询失败`, e);
     } finally {
-      pollingTimer = setTimeout(poll, settings.pollingInterval);
+      // 仅在启用时续设定时器
+      if (settings.enabled) {
+        pollingTimer = setTimeout(poll, settings.pollingInterval);
+      }
     }
   };
 
@@ -1415,6 +1429,7 @@ const updateStatusDisplay = () => {
 
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
+  // 总开关禁用：不创建设置面板（核心修复）
   if (!settings.enabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
 
   await checkServiceStatus();
@@ -1772,7 +1787,10 @@ const setupSettingsEvents = () => {
   const panel = $(`#${SETTINGS_PANEL_ID}`);
 
   const saveCurrentSettings = () => {
+    // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
     settings.enabled = panel.find("#extension-enabled").prop("checked");
+
+    // 2. 同步其他基础设置
     settings.serviceUrl = panel.find("#player-service-url").val().trim();
     settings.serviceDirectory = panel
       .find("#player-scan-directory")
@@ -1816,12 +1834,40 @@ const setupSettingsEvents = () => {
       showTime: panel.find("#custom-show-time").prop("checked"),
     };
 
+    // 3. 持久化保存设置
     saveSafeSettings();
+
+    // 4. 总开关联动：禁用时清理所有资源（核心修复）
+    if (!settings.enabled) {
+      // 停止服务轮询
+      if (pollingTimer) clearTimeout(pollingTimer);
+      // 关闭WebSocket连接
+      if (ws) {
+        ws.close();
+        ws = null;
+        if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      }
+      // 停止播放定时器
+      if (switchTimer) clearTimeout(switchTimer);
+      // 停止视频进度更新
+      stopProgressUpdate();
+      // 隐藏播放器窗口
+      $(`#${PLAYER_WINDOW_ID}`).hide();
+      settings.isWindowVisible = false;
+      settings.isPlaying = false;
+    } else {
+      // 启用时重启核心功能
+      startPollingService();
+      initWebSocket();
+      // 显示播放器窗口（若之前隐藏）
+      if (settings.isWindowVisible) $(`#${PLAYER_WINDOW_ID}`).show();
+    }
+
+    // 5. 同步UI状态
     $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
     panel
       .find("#player-slideshow-mode")
       .prop("disabled", settings.playMode === "random");
-    startPollingService();
     updateExtensionMenu();
   };
 
@@ -2297,6 +2343,7 @@ const addMenuButton = () => {
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
   const settings = getExtensionSettings();
+  // 总开关禁用：终止初始化并定时重试检查（核心修复）
   if (!settings.enabled) {
     console.log(`[${EXTENSION_ID}] 扩展当前禁用,3秒后重新检查`);
     setTimeout(initExtension, 3000);
@@ -2347,10 +2394,10 @@ const initExtension = async () => {
     const triggerAIRegister = () => {
       const currentSettings = getExtensionSettings();
       if (currentSettings.aiEventRegistered) {
-        console.log(`[${EXTENSION_ID}] AI事件已注册，无需重复触发`);
+        console.log(`[${EXTENSION_ID}] AI事件已注册,无需重复触发`);
         return;
       }
-      console.log(`[${EXTENSION_ID}] 触发AI事件注册（首次尝试）`);
+      console.log(`[${EXTENSION_ID}] 触发AI事件注册(首次尝试）`);
       registerAIEventListeners();
       // 兜底：3秒后检查是否注册成功，未成功则重试一次
       setTimeout(() => {
