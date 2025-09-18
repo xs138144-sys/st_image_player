@@ -597,7 +597,7 @@ const createPlayerWindow = async () => {
   }">
                         <i class="fa-solid fa-video"></i>
                     </button>
-                    <button class="hide"><i class="fa-solid fa-minus"></i></button>
+                    <button class="hide player-hide-btn"><i class="fa-solid fa-minus"></i></button>
                 </div>
             </div>
             <div class="image-player-body">
@@ -899,8 +899,8 @@ const setupWindowEvents = () => {
     updateExtensionMenu();
   });
 
-  // 10. 隐藏窗口
-  win.find(".hide").on("click", function () {
+  // 隐藏窗口（使用唯一类名绑定）
+  win.find(".player-hide-btn").on("click", function () {
     win.hide();
     settings.isWindowVisible = false;
     saveSafeSettings();
@@ -2406,7 +2406,8 @@ const addMenuButton = () => {
   $("#extensionsMenu").append(btnHtml);
 
   // 菜单点击跳转设置面板
-  $(`#${menuBtnId}`).on("click", () => {
+  $(`#${menuBtnId}`).on("click", (e) => {
+    e.stopPropagation(); // 关键：阻止事件冒泡到父级，避免触发原生隐藏逻辑
     $("#extensions-settings-button").trigger("click");
     $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
       behavior: "smooth",
