@@ -22,6 +22,11 @@ const getSafeToastr = () => {
     }
   );
 };
+
+// 在所有函数开头添加总开关检查
+const settings = getExtensionSettings();
+if (!settings.masterEnabled) return;
+
 const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
@@ -1027,39 +1032,27 @@ const setupWindowEvents = () => {
     updateExtensionMenu();
   });
 
-  // 13. 播放器媒体筛选
+  // 修复媒体筛选按钮事件处理
   win.find(".media-filter-btn").on("click", function (e) {
     e.stopPropagation();
     const filterType = $(this).data("type");
     const settings = getExtensionSettings();
 
-    // 直接更新筛选状态，不限制触发源（关键修复）
+    // 直接更新所有状态
     settings.mediaFilter = filterType;
     saveSafeSettings();
 
-    // 同步播放器按钮状态
+    // 同步所有UI元素
     win.find(".media-filter-btn").removeClass("active");
     $(this).addClass("active");
+    panel.find("#player-media-filter").val(filterType);
 
-    // 刷新媒体列表并同步到面板和菜单
+    // 刷新媒体列表
     refreshMediaList().then(() => {
       currentMediaIndex = 0;
       settings.randomPlayedIndices = [];
       settings.currentRandomIndex = -1;
       showMedia("current");
-      // 同步面板下拉框
-      panel.find("#player-media-filter").val(filterType);
-      // 同步菜单筛选文本
-      menuBtn
-        .find(".filter-text")
-        .text(
-          filterType === "all"
-            ? "所有"
-            : filterType === "image"
-            ? "图片"
-            : "视频"
-        );
-      updateExtensionMenu();
     });
   });
 
@@ -1109,18 +1102,12 @@ const setupWindowEvents = () => {
 }; // 函数仅此处闭合，无提前或重复闭合
 
 // ==================== 播放控制（修复图片播放停住） ====================
-// 替换 index.js 中的 startPlayback 函数（约第 1290-1320 行）
 const startPlayback = () => {
   const settings = getExtensionSettings();
-  // 严格前置判断：排除无效状态，避免定时器残留
-  if (
-    !settings.enabled ||
-    !settings.isPlaying ||
-    settings.autoSwitchMode !== "timer"
-  ) {
-    clearTimeout(switchTimer);
-    return;
-  }
+  if (!settings.masterEnabled) return;
+
+  // 总是先清除现有定时器
+  clearTimeout(switchTimer);
 
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const video = win.find(".image-player-video")[0];
@@ -2388,6 +2375,11 @@ const updateExtensionMenu = () => {
 };
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
+  const settings = getExtensionSettings();
+  if (settings.aiEventRegistered) {
+    console.log(`[${EXTENSION_ID}] AI事件已注册，跳过重复注册`);
+    return;
+  }
   console.log(`[${EXTENSION_ID}] 开始注册AI事件监听器`);
   const maxRetries = 12; // 增加重试次数
   const initialDelay = 2000; // 初始延迟增加

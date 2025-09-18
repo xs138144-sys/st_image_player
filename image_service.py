@@ -69,9 +69,9 @@ class MediaDBHandler(FileSystemEventHandler):
             return
         
             # 新增：检查目录读权限
-        if not os.access(SCAN_DIRECTORY, os.R_OK):
-            logging.error(f"无目录读权限: {SCAN_DIRECTORY}")
-            return  # 或抛出自定义异常，在 API 层提示用户
+            if not os.access(SCAN_DIRECTORY, os.R_OK):
+                logging.error(f"无目录读权限: {SCAN_DIRECTORY}")
+                return  # 或抛出自定义异常，在 API 层提示用户
 
         logging.info(f"开始扫描目录: {SCAN_DIRECTORY}")
         all_extensions = MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]
