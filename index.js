@@ -23,6 +23,10 @@ const getSafeToastr = () => {
   );
 };
 
+// 在所有函数开头添加总开关检查
+const settings = getExtensionSettings();
+if (!settings.masterEnabled) return;
+
 const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
@@ -204,16 +208,14 @@ const createMinimalSettingsPanel = () => {
       saveSafeSettings();
 
       // 重新注册AI事件
-      $(`#${SETTINGS_PANEL_ID}-minimal`)
-        .find("#reregister-ai-events")
-        .on("click", () => {
-          const settings = getExtensionSettings();
-          settings.aiEventRegistered = false;
-          saveSafeSettings();
+      panel.find("#reregister-ai-events").on("click", () => {
+        const settings = getExtensionSettings();
+        settings.aiEventRegistered = false;
+        saveSafeSettings();
 
-          registerAIEventListeners();
-          toastr.info("正在尝试重新注册AI事件...");
-        });
+        registerAIEventListeners();
+        toastr.info("正在尝试重新注册AI事件...");
+      });
 
       if (
         window.extension_settings[EXTENSION_ID] &&
@@ -404,13 +406,7 @@ const refreshMediaList = async () => {
 const initWebSocket = () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不初始化WebSocket（核心修复）
-  if (!settings.masterEnabled) return;
-  if (
-    ws &&
-    (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
-  ) {
-    return;
-  }
+  if (!settings.enabled || ws) return;
 
   try {
     const wsUrl =
@@ -594,7 +590,7 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
@@ -1443,9 +1439,7 @@ const showMedia = async (direction) => {
     if (e.message.includes("Failed to fetch")) errorMsg = "服务连接失败";
     else if (e.message.includes("404")) errorMsg = "媒体文件不存在";
     else if (e.message.includes("无可用媒体"))
-      errorMsg = `无可用${
-        settings.mediaFilter === "all" ? "媒体" : settings.mediaFilter
-      }文件`;
+      errorMsg = `无可用${filterType === "all" ? "媒体" : filterType}文件`;
 
     if (retryCount < 3 && settings.enabled) {
       retryCount++;
@@ -2407,14 +2401,129 @@ const registerAIEventListeners = () => {
     return hasEventSource && hasEventTypes;
   };
 
-  // 方法1: 使用addEventListener (现代方式)
-  // 替换复杂的多方法检测为简单直接的绑定
-  if (window.eventSource && typeof window.eventSource.on === "function") {
-    window.eventSource.on(event_types.MESSAGE_RECEIVED, onAIResponse);
-    window.eventSource.on(event_types.MESSAGE_SENT, onPlayerMessage);
-    settings.aiEventRegistered = true;
-    saveSafeSettings();
-  }
+  // 更兼容的事件绑定方法
+  const bindEvent = (eventName, callback) => {
+    try {
+      // 方法1: 使用addEventListener (现代方式)
+      if (typeof window.eventSource.addEventListener === "function") {
+        window.eventSource.addEventListener(eventName, callback);
+        console.log(
+          `[${EXTENSION_ID}] 使用addEventListener绑定事件: ${eventName}`
+        );
+        return true;
+      }
+      // 方法2: 使用on方法 (旧方式)
+      else if (typeof window.eventSource.on === "function") {
+        window.eventSource.on(eventName, callback);
+        console.log(`[${EXTENSION_ID}] 使用on方法绑定事件: ${eventName}`);
+        return true;
+      }
+      // 方法3: 直接绑定到event_types (最兼容的方式)
+      else if (window.event_types && window.event_types[eventName]) {
+        const eventTypeValue = window.event_types[eventName];
+        window.eventSource.addEventListener(eventTypeValue, callback);
+        console.log(
+          `[${EXTENSION_ID}] 通过event_types绑定事件: ${eventName} -> ${eventTypeValue}`
+        );
+        return true;
+      }
+      // 方法4: 尝试直接使用字符串事件名
+      else {
+        window.eventSource.addEventListener(eventName, callback);
+        console.log(`[${EXTENSION_ID}] 尝试直接绑定事件: ${eventName}`);
+        return true;
+      }
+    } catch (e) {
+      console.error(`[${EXTENSION_ID}] 事件绑定失败: ${eventName}`, e);
+      return false;
+    }
+  };
+
+  const tryRegister = (retryCount = 0) => {
+    console.log(`[${EXTENSION_ID}] 尝试注册AI事件 (第${retryCount + 1}次)`);
+
+    // 检查依赖是否就绪
+    if (!checkDependencies()) {
+      if (retryCount < maxRetries) {
+        console.warn(`[${EXTENSION_ID}] 依赖未就绪，${retryDelay}ms后重试`);
+        setTimeout(() => tryRegister(retryCount + 1), retryDelay);
+        return;
+      } else {
+        console.error(`[${EXTENSION_ID}] 达到最大重试次数，AI事件注册失败`);
+        return;
+      }
+    }
+
+    try {
+      // 获取事件类型（兼容多种可能的事件名）
+      const messageReceivedEvent =
+        window.event_types?.MESSAGE_RECEIVED ||
+        window.event_types?.AI_MESSAGE_RECEIVED ||
+        "messageReceived";
+
+      const messageSentEvent =
+        window.event_types?.MESSAGE_SENT ||
+        window.event_types?.PLAYER_MESSAGE_SENT ||
+        "messageSent";
+
+      console.log(
+        `[${EXTENSION_ID}] 检测到事件类型: RECEIVED=${messageReceivedEvent}, SENT=${messageSentEvent}`
+      );
+
+      // 绑定AI回复事件
+      const aiBound = bindEvent(messageReceivedEvent, () => {
+        const settings = getExtensionSettings();
+        if (
+          settings.enabled &&
+          settings.autoSwitchMode === "detect" &&
+          settings.aiDetectEnabled &&
+          settings.isWindowVisible
+        ) {
+          console.log(`[${EXTENSION_ID}] AI回复事件触发`);
+          onAIResponse();
+        }
+      });
+
+      // 绑定玩家消息事件
+      const playerBound = bindEvent(messageSentEvent, () => {
+        const settings = getExtensionSettings();
+        if (
+          settings.enabled &&
+          settings.autoSwitchMode === "detect" &&
+          settings.playerDetectEnabled &&
+          settings.isWindowVisible
+        ) {
+          console.log(`[${EXTENSION_ID}] 玩家消息事件触发`);
+          onPlayerMessage();
+        }
+      });
+
+      if (aiBound && playerBound) {
+        // 标记注册成功
+        const settings = getExtensionSettings();
+        settings.aiEventRegistered = true;
+        saveSafeSettings();
+
+        console.log(`[${EXTENSION_ID}] AI事件监听器注册成功`);
+        toastr.success("AI检测功能已就绪");
+      } else {
+        throw new Error("事件绑定失败");
+      }
+    } catch (error) {
+      console.error(`[${EXTENSION_ID}] AI事件注册失败:`, error);
+
+      if (retryCount < maxRetries) {
+        console.warn(`[${EXTENSION_ID}] ${retryDelay}ms后重试注册`);
+        setTimeout(() => tryRegister(retryCount + 1), retryDelay);
+      } else {
+        console.error(`[${EXTENSION_ID}] 达到最大重试次数，AI事件注册失败`);
+        toastr.error("AI事件注册失败，请刷新页面重试");
+      }
+    }
+  };
+
+  // 初始延迟后开始尝试注册
+  setTimeout(() => tryRegister(0), initialDelay);
 };
 
 // ==================== 扩展菜单按钮（含筛选状态显示） ====================
@@ -2495,9 +2604,7 @@ const addMenuButton = () => {
 
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
-  // 在所有函数开头添加总开关检查
   const settings = getExtensionSettings();
-  if (!settings.masterEnabled) return;
 
   // 总开关禁用：终止初始化
   if (!settings.masterEnabled) {
