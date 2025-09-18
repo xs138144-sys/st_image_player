@@ -1852,12 +1852,17 @@ const setupSettingsEvents = () => {
     // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
     settings.enabled = panel.find("#extension-enabled").prop("checked");
 
-    // 2. 同步其他基础设置
-    settings.serviceUrl = panel.find("#player-service-url").val().trim();
-    settings.serviceDirectory = panel
-      .find("#player-scan-directory")
-      .val()
-      .trim();
+    // 【修复】获取服务地址：先判断 val() 是否存在，默认空字符串再 trim()
+    const serviceUrlVal = panel.find("#player-service-url").val() || "";
+    settings.serviceUrl = serviceUrlVal.trim();
+
+    // 【修复】获取媒体目录：同理处理 undefined 情况
+    const serviceDirVal = panel.find("#player-scan-directory").val() || "";
+    settings.serviceDirectory = serviceDirVal.trim();
+
+    // 2. 同步其他基础设置（后续代码不变，无需修改）
+    settings.playMode = panel.find("#player-play-mode").val();
+    settings.mediaFilter = panel.find("#player-media-filter").val();
     settings.playMode = panel.find("#player-play-mode").val();
     settings.mediaFilter = panel.find("#player-media-filter").val();
     settings.slideshowMode = panel
