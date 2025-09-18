@@ -60,6 +60,7 @@ MIME_MAP = {
 
 
 class MediaDBHandler(FileSystemEventHandler):
+    # 修复：类内方法统一缩进4个空格
     def update_db(self):
         global MEDIA_DB, SCAN_DIRECTORY
         MEDIA_DB = []
@@ -68,14 +69,15 @@ class MediaDBHandler(FileSystemEventHandler):
             logging.warning(f"目录不存在: {SCAN_DIRECTORY}")
             return
         
-            # 新增：检查目录读权限
-            if not os.access(SCAN_DIRECTORY, os.R_OK):
-                logging.error(f"无目录读权限: {SCAN_DIRECTORY}")
-                return  # 或抛出自定义异常，在 API 层提示用户
-
+        # 目录存在时检查读权限
+        if not os.access(SCAN_DIRECTORY, os.R_OK):
+            logging.error(f"无目录读权限: {SCAN_DIRECTORY}")
+            return
+        
         logging.info(f"开始扫描目录: {SCAN_DIRECTORY}")
         all_extensions = MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]
         
+        # 遍历目录收集媒体文件
         for root, _, files in os.walk(SCAN_DIRECTORY):
             for file in files:
                 file_lower = file.lower()
@@ -85,7 +87,7 @@ class MediaDBHandler(FileSystemEventHandler):
                         rel_path = os.path.relpath(full_path, SCAN_DIRECTORY).replace("\\", "/")
                         file_size = os.path.getsize(full_path)
                         
-                        # 判断媒体类型并检查大小
+                        # 判断媒体类型并检查大小限制
                         if file_lower.endswith(MEDIA_CONFIG["image"]["extensions"]):
                             media_type = "image"
                             max_size = MEDIA_CONFIG["image"]["max_size"]
@@ -105,8 +107,10 @@ class MediaDBHandler(FileSystemEventHandler):
                     except Exception as e:
                         logging.error(f"处理媒体文件错误: {file} - {str(e)}")
         
-        # 按修改时间排序（最新在前）
-        MEDIA_DB.sort(key=lambda x: x["last_modified"], reverse=True)
+        # 遍历结束后统一排序、统计、保存
+        if MEDIA_DB:
+            MEDIA_DB.sort(key=lambda x: x["last_modified"], reverse=True)
+        
         image_count = len([x for x in MEDIA_DB if x["media_type"] == "image"])
         video_count = len([x for x in MEDIA_DB if x["media_type"] == "video"])
         logging.info(f"扫描完成: 总计{len(MEDIA_DB)}个（图片{image_count} | 视频{video_count}）")
@@ -131,13 +135,11 @@ class MediaDBHandler(FileSystemEventHandler):
                 if ws in active_websockets:
                     active_websockets.remove(ws)
 
-    # 文件创建/删除/修改时更新DB
- 
+    # 文件创建时更新DB
     def on_created(self, event):
         if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
             MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
             LARGE_FILE_THRESHOLD = 200 * 1024 * 1024  # 200MB阈值
-            # 若为大文件，延长等待时间
             if os.path.exists(event.src_path) and os.path.getsize(event.src_path) > LARGE_FILE_THRESHOLD:
                 time.sleep(5)  # 大文件等待5秒
             else:
@@ -154,16 +156,15 @@ class MediaDBHandler(FileSystemEventHandler):
             self.send_update_event()
 
     def on_modified(self, event):
-        # 仅处理“非目录”且“是媒体文件”的情况（所有逻辑缩进进该if内）
+        # 仅处理非目录且是媒体文件的情况
         if not event.is_directory and any(event.src_path.lower().endswith(ext) for ext in 
             MEDIA_CONFIG["image"]["extensions"] + MEDIA_CONFIG["video"]["extensions"]):
-            LARGE_FILE_THRESHOLD = 200 * 1024 * 1024  # 变量在条件内定义，避免未定义风险
-            # 仅在需要处理时执行sleep和DB更新
+            LARGE_FILE_THRESHOLD = 200 * 1024 * 1024
             if os.path.exists(event.src_path) and os.path.getsize(event.src_path) > LARGE_FILE_THRESHOLD:
-                time.sleep(3)  # 大文件修改等待3秒
+                time.sleep(3)
             else:
-                time.sleep(1)   # 普通文件修改等待1秒
-            self.update_db()  # 仅媒体文件修改时更新DB
+                time.sleep(1)
+            self.update_db()
 
 
 def setup_watchdog():
