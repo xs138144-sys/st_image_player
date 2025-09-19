@@ -1,7 +1,7 @@
 import { eventSource, event_types } from "../../../../extensions.js";
 import { stMediaPlayer } from "../index.js";
 
-const EXT_ID = "st_media_player";
+const EXT_ID = "st_image_player";
 let $ = null;
 let playerWindow = null;
 let extensionButton = null;

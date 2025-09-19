@@ -1,33 +1,34 @@
-// 完全复用参考脚本的路径规则（向上跳转3级/4级，与参考脚本保持一致）
+// 关键修复：在路径中加入utils.js所在的子文件夹（假设在scripts/下，根据实际情况调整）
 import {
   extension_settings,
   eventSource,
   event_types,
 } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
-import { registerModuleCleanup } from "../../../../utils.js";
+import { registerModuleCleanup } from "../../../../modules/utils.js";
 
 const EXT_ID = "st_image_player";
 
-// 验证路径是否与参考脚本一致（打印实际请求的URL）
+// 打印所有核心文件的实际请求路径，重点验证utils.js是否指向子文件夹
 const logResolvedPath = (relativePath) => {
   const resolvedUrl = new URL(relativePath, window.location.href).href;
-  console.log(`[${EXT_ID}] 实际请求路径: ${resolvedUrl}`);
+  console.log(`[${EXT_ID}] 验证路径: ${resolvedUrl}`);
   return resolvedUrl;
 };
 
-// 初始化前验证所有核心文件路径
-const verifyCorePaths = () => {
-  // 与参考脚本的../../../extensions.js保持一致
-  logResolvedPath("../../../extensions.js");
-  // 与参考脚本的../../../../script.js保持一致
-  logResolvedPath("../../../../script.js");
-  logResolvedPath("../../../../utils.js");
+// 初始化前强制检查所有路径
+const verifyPaths = () => {
+  console.log(`[${EXT_ID}] 开始验证子文件夹路径`);
+  logResolvedPath("../../../extensions.js"); // 参考脚本的extensions.js路径
+  logResolvedPath("../../../../script.js"); // 参考脚本的script.js路径
+  logResolvedPath("../../../../modules/utils.js"); // 带子文件夹的utils.js路径（核心修复）
 };
+
+// 模拟参考脚本的路径逻辑（如果参考脚本的utils.js也在子文件夹）
 
 const safeInit = (fn) => {
   try {
-    console.log(`[${EXT_ID}] 开始初始化（路径与参考脚本一致）`);
+    console.log(`[${EXT_ID}] 开始初始化`);
     fn();
   } catch (error) {
     console.error(`[${EXT_ID}] 初始化失败:`, error);
@@ -68,7 +69,7 @@ const initPlayerExtension = () => {
 };
 
 const waitForST = () => {
-  verifyCorePaths(); // 验证路径是否与参考脚本的实际请求一致
+  verifyPaths(); // 验证utils.js是否指向正确的子文件夹
 
   if (window.appReady) {
     safeInit(initPlayerExtension);

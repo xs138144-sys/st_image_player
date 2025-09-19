@@ -1,5 +1,6 @@
 import { eventSource } from "../../../../extensions.js";
 import { stMediaPlayer } from "../index.js";
+import { getSettings } from "./settings.js"; // 添加导入
 
 const EXT_ID = "st_media_player";
 let player = null;
@@ -193,9 +194,8 @@ function updatePlaybackHistory(media) {
 }
 
 // 初始化播放器模块
-function init(settingsConfig) {
-  settings = settingsConfig;
-  playbackHistory = [];
+function init() {
+  settings = getSettings();
 
   // 监听UI容器就绪事件
   eventSource.on(`${EXT_ID}:playerContainerReady`, (data) => {
