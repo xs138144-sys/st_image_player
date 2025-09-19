@@ -1,8 +1,8 @@
-import { extension_settings, event_types } from "../../../extensions.js";
+import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 import { registerModuleCleanup } from "./modules/utils.js";
-
 const eventSource = deps.utils.getSafeGlobal("eventSource", null);
+const event_types = deps.utils.getSafeGlobal("event_types", {});
 
 const EXT_ID = "st_image_player";
 
