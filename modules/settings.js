@@ -1,118 +1,3 @@
-import { deps } from "../core/deps.js";
-import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced } from "../../../../script.js";
-
-const { EventBus, toastr } = deps;
-const EXT_ID = "st_image_player";
-
-// 当前配置版本
-const CONFIG_VERSION = "1.4.2";
-
-/**
- * 初始化设置模块
- */
-export const init = () => {
-  try {
-    // 确保配置存在并迁移到最新版本
-    ensureSettingsExist();
-    migrateSettings();
-
-    // 注册配置更新事件
-    EventBus.on("settingsUpdated", () => {
-      saveSettingsDebounced();
-    });
-
-    console.log(`[settings] 初始化完成，配置版本: ${CONFIG_VERSION}`);
-  } catch (e) {
-    toastr.error(`[settings] 初始化失败: ${e.message}`);
-    console.error(`[settings] 初始化错误:`, e);
-  }
-};
-
-/**
- * 清理设置模块
- */
-export const cleanup = () => {
-  console.log(`[settings] 配置模块已清理`);
-};
-
-/**
- * 确保设置对象存在
- */
-const ensureSettingsExist = () => {
-  if (!extension_settings[EXT_ID]) {
-    extension_settings[EXT_ID] = getDefaultSettings();
-    saveSettingsDebounced();
-  }
-};
-
-/**
- * 获取默认设置
- * @returns {Object} 默认设置对象
- */
-export const getDefaultSettings = () => {
-  return {
-    config_version: CONFIG_VERSION,
-    enabled: true,
-    lastPlayed: null,
-    volume: 0.8,
-    masterEnabled: true,
-    isWindowVisible: true,
-    playMode: "random",
-    autoSwitchMode: "detect",
-    showVideoControls: true,
-    customVideoControls: {
-      showProgress: true,
-      showVolume: true,
-      showLoop: true,
-      showTime: true
-    },
-    videoVolume: 0.8,
-    videoLoop: false,
-    hideBorder: false,
-    showInfo: true,
-    isLocked: false,
-    mediaFilter: "all",
-    isPlaying: false,
-    serviceDirectory: "",
-    serviceUrl: "",
-    mediaConfig: {
-      image_max_size_mb: 5,
-      video_max_size_mb: 100,
-      image_extensions: [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".apng"],
-      video_extensions: [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"],
-      preload_strategy: {
-        image: true,
-        video: false
-      }
-    },
-    pollingInterval: 30000,
-    websocket_timeout: 10000,
-    transitionEffect: "fade",
-    randomPlayedIndices: []
-  };
-};
-
-/**
- * 获取当前设置
- * @returns {Object} 当前设置
- */
-export const get = () => {
-  ensureSettingsExist();
-  return extension_settings[EXT_ID];
-};
-
-/**
- * 保存设置
- */
-export const save = () => {
-  ensureSettingsExist();
-  // 添加配置版本信息
-  extension_settings[EXT_ID].config_version = CONFIG_VERSION;
-  saveSettingsDebounced();
-  EventBus.emit("settingsUpdated", extension_settings[EXT_ID]);
-};
-
 /**
  * 迁移配置到最新版本
  */
@@ -176,8 +61,28 @@ const migrateSettings = () => {
 
     if (settings.config_version === "1.4.0") {
       // 1.4.0 -> 1.4.2 迁移
-      settings.mediaConfig.image_extensions.push(".webp", ".apng");
-      settings.mediaConfig.video_extensions.push(".mov", ".avi", ".mkv");
+      if (settings.mediaConfig.image_extensions) {
+        // 修复可能的拼写错误（老版本可能误写为image_extensionsions）
+        const targetExtList = settings.mediaConfig.image_extensionsions || settings.mediaConfig.image_extensions;
+        ["webp", "apng"].forEach(ext => {
+          const extWithDot = `.${ext}`;
+          if (!targetExtList.includes(extWithDot)) {
+            targetExtList.push(extWithDot);
+          }
+        });
+        // 修正拼写错误
+        if (settings.mediaConfig.image_extensionsions) {
+          settings.mediaConfig.image_extensions = targetExtList;
+          delete settings.mediaConfig.image_extensionsions;
+        }
+      }
+      if (settings.mediaConfig.video_extensions) {
+        [".mov", ".avi", ".mkv"].forEach(ext => {
+          if (!settings.mediaConfig.video_extensions.includes(ext)) {
+            settings.mediaConfig.video_extensions.push(ext);
+          }
+        });
+      }
       settings.config_version = CONFIG_VERSION;
     }
 
@@ -187,26 +92,18 @@ const migrateSettings = () => {
   }
 };
 
-/**
- * 禁用扩展
- */
-export const disableExtension = () => {
-  const settings = get();
-  settings.masterEnabled = false;
-  save();
-  EventBus.emit("extensionDisabled");
+const cleanup = () => {
+  try {
+    const settings = getExtensionSettings();
+    // 重置临时状态
+    settings.isMediaLoading = false;
+    settings.retryCount = 0;
+    deps.settings.save();
+    console.log(`[settings] 资源清理完成`);
+  } catch (e) {
+    toastr.error(`[settings] 清理失败: ${e.message}`);
+  }
 };
 
-/**
- * 重置为默认设置
- */
-export const resetToDefaults = () => {
-  if (confirm("确定要将媒体播放器设置重置为默认值吗？")) {
-    extension_settings[EXT_ID] = getDefaultSettings();
-    save();
-    toastr.success("设置已重置为默认值");
-    EventBus.emit("settingsReset");
-    return true;
-  }
-  return false;
-};
+// 导出必要的函数（根据实际模块结构补充）
+export { migrateSettings, cleanup };
