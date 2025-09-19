@@ -1,37 +1,33 @@
-// 正确路径：参考所有正常工作的扩展，核心文件在ST根目录的scripts/下
-// 无论扩展在data/default-user/extensions还是third-party/，路径完全相同
+// 完全复用参考脚本的路径规则（向上跳转3级/4级，与参考脚本保持一致）
 import {
   extension_settings,
   eventSource,
   event_types,
-} from "../../scripts/extensions.js";
-import { saveSettingsDebounced } from "../../scripts/script.js";
-import { registerModuleCleanup } from "../../scripts/utils.js";
+} from "../../../extensions.js";
+import { saveSettingsDebounced } from "../../../../script.js";
+import { registerModuleCleanup } from "../../../../utils.js";
 
 const EXT_ID = "st_image_player";
 
-// 验证ST实际解析的路径（关键调试）
+// 验证路径是否与参考脚本一致（打印实际请求的URL）
 const logResolvedPath = (relativePath) => {
   const resolvedUrl = new URL(relativePath, window.location.href).href;
   console.log(`[${EXT_ID}] 实际请求路径: ${resolvedUrl}`);
   return resolvedUrl;
 };
 
-// 初始化前强制验证核心文件路径
+// 初始化前验证所有核心文件路径
 const verifyCorePaths = () => {
-  logResolvedPath("../../scripts/extensions.js");
-  logResolvedPath("../../scripts/script.js");
-  logResolvedPath("../../scripts/utils.js");
-
-  // 额外验证ST根目录下的可能路径（备用）
-  logResolvedPath("../../extensions.js");
-  logResolvedPath("../../script.js");
-  logResolvedPath("../../utils.js");
+  // 与参考脚本的../../../extensions.js保持一致
+  logResolvedPath("../../../extensions.js");
+  // 与参考脚本的../../../../script.js保持一致
+  logResolvedPath("../../../../script.js");
+  logResolvedPath("../../../../utils.js");
 };
 
 const safeInit = (fn) => {
   try {
-    console.log(`[${EXT_ID}] 开始初始化`);
+    console.log(`[${EXT_ID}] 开始初始化（路径与参考脚本一致）`);
     fn();
   } catch (error) {
     console.error(`[${EXT_ID}] 初始化失败:`, error);
@@ -72,7 +68,7 @@ const initPlayerExtension = () => {
 };
 
 const waitForST = () => {
-  verifyCorePaths(); // 先打印实际请求路径，供你验证
+  verifyCorePaths(); // 验证路径是否与参考脚本的实际请求一致
 
   if (window.appReady) {
     safeInit(initPlayerExtension);
