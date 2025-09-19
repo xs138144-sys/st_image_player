@@ -76,6 +76,21 @@ export const getSafeGlobal = (name, defaultValue) => {
 };
 
 /**
+ * 注册模块清理函数
+ * @param {string} moduleId 模块ID
+ * @param {Function} cleanupFn 清理函数
+ */
+export const registerModuleCleanup = (moduleId, cleanupFn) => {
+  // 可以将清理函数存储到deps中或直接绑定到事件
+  deps.EventBus.on("extensionCleanup", (id) => {
+    if (id === moduleId) {
+      cleanupFn();
+    }
+  });
+  console.log(`[utils] 已注册模块清理函数: ${moduleId}`);
+};
+
+/**
  * 检查目录是否有效
  */
 export const isDirectoryValid = (path) => {
