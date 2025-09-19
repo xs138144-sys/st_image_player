@@ -1,3 +1,4 @@
+import { deps } from "./core/deps.js";
 import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 import { registerModuleCleanup } from "./modules/utils.js";
