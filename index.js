@@ -1,7 +1,14 @@
-import { deps } from "./core/deps.js";
 import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
+// 新增：导入deps和utils模块
+import { deps } from "./core/deps.js";
+import * as utils from "./modules/utils.js";
 import { registerModuleCleanup } from "./modules/utils.js";
+
+// 新增：注册utils到deps（关键修复）
+deps.registerModule('utils', utils);
+
+// 现在可以安全使用deps.utils了
 const eventSource = deps.utils.getSafeGlobal("eventSource", null);
 const event_types = deps.utils.getSafeGlobal("event_types", {});
 
