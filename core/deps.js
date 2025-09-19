@@ -1,38 +1,14 @@
-/**
- * 依赖管理中心 - 集中管理模块间共享依赖
- */
+// 扩展依赖管理
 export const deps = {
-  // 延迟加载的模块引用
+  // 模块容器（用于动态注册模块）
   modules: {},
 
-  // 注册模块引用
-  registerModule(name, module) {
-    this.modules[name] = module;
-  },
-
-  // 获取工具类
-  get utils() {
-    return this.modules.utils;
-  },
-
-  // 获取配置类
-  get settings() {
-    return this.modules.settings;
-  },
-
-  // 获取API模块
-  get api() {
-    return this.modules.api;
-  },
-
-  // 安全获取jQuery
+  // 安全获取 jQuery（关联到全局 window.jQuery 或 $）
   get jQuery() {
-    const $ = window.jQuery || window.$;
-    if (!$) console.warn("[deps] jQuery暂未就绪");
-    return $;
+    return window.jQuery || window.$ || null;
   },
 
-  // 安全获取toastr
+  // 安全获取 toastr（保持原逻辑）
   get toastr() {
     return (
       this.utils?.getSafeToastr?.() || {
@@ -43,4 +19,19 @@ export const deps = {
       }
     );
   },
+
+  // 注册模块到依赖容器
+  registerModule(moduleName, module) {
+    this.modules[moduleName] = module;
+    // 为常用模块创建快捷访问（如 settings、utils 等）
+    if (["settings", "utils", "api"].includes(moduleName)) {
+      this[moduleName] = module;
+    }
+  },
+
+  // 其他依赖（动态初始化）
+  EventBus: null,
+  settings: null,
+  utils: null,
+  api: null,
 };
