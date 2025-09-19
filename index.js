@@ -5,7 +5,7 @@ import {
   event_types,
 } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
-import { registerModuleCleanup } from "../../../../modules/utils.js";
+import { registerModuleCleanup } from "./modules/utils.js";
 
 const EXT_ID = "st_image_player";
 
@@ -21,7 +21,7 @@ const verifyPaths = () => {
   console.log(`[${EXT_ID}] 开始验证子文件夹路径`);
   logResolvedPath("../../../extensions.js"); // 参考脚本的extensions.js路径
   logResolvedPath("../../../../script.js"); // 参考脚本的script.js路径
-  logResolvedPath("../../../../modules/utils.js"); // 带子文件夹的utils.js路径（核心修复）
+  logResolvedPath("./modules/utils.js"); // 验证扩展内部的utils.js路径
 };
 
 // 模拟参考脚本的路径逻辑（如果参考脚本的utils.js也在子文件夹）
