@@ -74,19 +74,29 @@ const initPlayerExtension = () => {
 };
 
 const waitForST = () => {
-  verifyPaths(); // 验证utils.js是否指向正确的子文件夹
+  verifyPaths();
 
   if (window.appReady) {
     safeInit(initPlayerExtension);
     return;
   }
 
+  // 定义备选事件名（根据SillyTavern实际事件类型调整）
+  const appReadyEvent = event_types.APP_READY || "appReady" || "APP_READY";
+
+  // 检查事件名是否有效
+  if (!appReadyEvent) {
+    console.warn(`[${EXT_ID}] 未找到有效的APP_READY事件类型，直接初始化`);
+    safeInit(initPlayerExtension);
+    return;
+  }
+
   const readyHandler = () => {
-    eventSource.removeListener(event_types.APP_READY, readyHandler);
+    eventSource.removeListener(appReadyEvent, readyHandler);
     safeInit(initPlayerExtension);
   };
 
-  eventSource.on(event_types.APP_READY, readyHandler);
+  eventSource.on(appReadyEvent, readyHandler);
   setTimeout(() => {
     if (!window.appReady) {
       console.error(`[${EXT_ID}] 等待ST就绪超时`);
