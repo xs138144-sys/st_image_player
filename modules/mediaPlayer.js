@@ -1,4 +1,5 @@
-import { eventSource } from "../../../../extensions.js";
+import { event_types } from "../../../../extensions.js"; // 只导入存在的event_types
+const eventSource = deps.utils.getSafeGlobal("eventSource", null); // 从全局获取
 import { stMediaPlayer } from "../index.js";
 import { getSettings } from "./settings.js"; // 添加导入
 

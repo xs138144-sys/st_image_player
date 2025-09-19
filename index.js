@@ -1,11 +1,8 @@
-// 关键修复：在路径中加入utils.js所在的子文件夹（假设在scripts/下，根据实际情况调整）
-import {
-  extension_settings,
-  eventSource,
-  event_types,
-} from "../../../extensions.js";
+import { extension_settings, event_types } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 import { registerModuleCleanup } from "./modules/utils.js";
+
+const eventSource = deps.utils.getSafeGlobal("eventSource", null);
 
 const EXT_ID = "st_image_player";
 
