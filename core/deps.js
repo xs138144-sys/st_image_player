@@ -100,7 +100,7 @@ class EventBus {
     if (!this.events.has(eventName)) return;
     // 复制回调一份回调列表防止执行中修改
     const callbacks = [...this.events.get(eventName)];
-    callbacksbacks.forEach(callback => {
+    callbacks.forEach(callback => {
       try {
         callback(data);
       } catch (e) {

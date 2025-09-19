@@ -4,7 +4,7 @@ import { deps } from "../core/deps.js";
 export const DEFAULT_SETTINGS = {
   enabled: true,
   masterEnabled: true,
-  serviceUrl: "http://localhost:3000",
+  serviceUrl: "http://localhost:9000",
   serviceDirectory: "",
   mediaFilter: "all",
   playMode: "sequential", // sequential/random
@@ -29,7 +29,7 @@ export const DEFAULT_SETTINGS = {
   aiEventRegistered: false,
   mediaConfig: {
     image_max_size_mb: 5,
-    video_max_size_mb: 50,
+    video_max_size_mb: 100,
   },
 };
 
