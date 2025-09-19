@@ -89,26 +89,38 @@ const safeInit = () => {
     return;
   }
 
-  // 确保jQuery就绪后启动
+  // 确保jQuery就绪后启动（强化检测逻辑）
   const checkJQuery = () => {
+    // 优先从window获取jQuery，兼容全局挂载情况
+    const globalJQuery = window.jQuery || window.$;
+    if (globalJQuery) {
+      deps.jQuery = globalJQuery; // 注入到依赖中
+      initExtension();
+      return;
+    }
+
+    // 若依赖中已有jQuery直接使用
     if (deps.jQuery) {
       initExtension();
-    } else {
-      let retryCount = 0;
-      const interval = setInterval(() => {
-        if (deps.jQuery || retryCount > 40) {
-          // 最多等待20秒
-          clearInterval(interval);
-          if (deps.jQuery) {
-            initExtension();
-          } else {
-            console.error("[index] jQuery长时间未就绪，扩展无法启动");
-            deps.toastr.error("jQuery未就绪，扩展无法运行");
-          }
-        }
-        retryCount++;
-      }, 500);
+      return;
     }
+
+    // 重试逻辑（最多20秒）
+    let retryCount = 0;
+    const interval = setInterval(() => {
+      const globalJQuery = window.jQuery || window.$;
+      if (globalJQuery || deps.jQuery || retryCount > 40) {
+        clearInterval(interval);
+        deps.jQuery = globalJQuery || deps.jQuery; // 确保依赖被赋值
+        if (deps.jQuery) {
+          initExtension();
+        } else {
+          console.error("[index] jQuery长时间未就绪，扩展无法启动");
+          deps.toastr.error("jQuery未就绪，扩展无法运行");
+        }
+      }
+      retryCount++;
+    }, 500);
   };
 
   checkJQuery();
