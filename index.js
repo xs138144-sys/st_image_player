@@ -1,47 +1,32 @@
-// 修正核心依赖路径（关键修复：匹配ST实际目录结构）
-// 假设核心文件位于ST根目录（与third-party目录同级）
+// 正确路径：参考所有正常工作的扩展，核心文件在ST根目录的scripts/下
+// 无论扩展在data/default-user/extensions还是third-party/，路径完全相同
 import {
   extension_settings,
   eventSource,
   event_types,
-} from "../../extensions.js";
-import { saveSettingsDebounced } from "../../script.js";
-import { registerModuleCleanup } from "../../utils.js";
+} from "../../scripts/extensions.js";
+import { saveSettingsDebounced } from "../../scripts/script.js";
+import { registerModuleCleanup } from "../../scripts/utils.js";
 
-// 如果核心文件实际在ST根目录的"scripts/"子目录中（根据错误路径推测的备选方案）
-// import { extension_settings, eventSource, event_types } from "../../scripts/extensions.js";
-// import { saveSettingsDebounced } from "../../scripts/script.js";
-// import { registerModuleCleanup } from "../../scripts/utils.js";
+const EXT_ID = "st_image_player";
 
-const EXT_ID = "st_image_player"; // 与扩展目录名一致
-
-// 增强路径错误诊断
-const checkFileExists = async (path) => {
-  try {
-    await fetch(path);
-    return true;
-  } catch {
-    return false;
-  }
+// 验证ST实际解析的路径（关键调试）
+const logResolvedPath = (relativePath) => {
+  const resolvedUrl = new URL(relativePath, window.location.href).href;
+  console.log(`[${EXT_ID}] 实际请求路径: ${resolvedUrl}`);
+  return resolvedUrl;
 };
 
-// 初始化前先检查核心文件是否存在
-const preInitCheck = async () => {
-  const coreFiles = [
-    "../../extensions.js",
-    "../../script.js",
-    "../../utils.js",
-  ];
+// 初始化前强制验证核心文件路径
+const verifyCorePaths = () => {
+  logResolvedPath("../../scripts/extensions.js");
+  logResolvedPath("../../scripts/script.js");
+  logResolvedPath("../../scripts/utils.js");
 
-  for (const file of coreFiles) {
-    const exists = await checkFileExists(file);
-    if (!exists) {
-      console.error(`[${EXT_ID}] 核心文件缺失: ${file}，请检查路径是否正确`);
-      // 尝试提示可能的正确路径
-      const alternative = file.replace("../../", "../../scripts/");
-      console.warn(`[${EXT_ID}] 尝试备选路径: ${alternative}`);
-    }
-  }
+  // 额外验证ST根目录下的可能路径（备用）
+  logResolvedPath("../../extensions.js");
+  logResolvedPath("../../script.js");
+  logResolvedPath("../../utils.js");
 };
 
 const safeInit = (fn) => {
@@ -86,9 +71,8 @@ const initPlayerExtension = () => {
     .catch((err) => console.error(`[${EXT_ID}] 加载播放器模块失败:`, err));
 };
 
-const waitForST = async () => {
-  // 先执行文件存在性检查
-  await preInitCheck();
+const waitForST = () => {
+  verifyCorePaths(); // 先打印实际请求路径，供你验证
 
   if (window.appReady) {
     safeInit(initPlayerExtension);
