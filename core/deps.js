@@ -1,7 +1,24 @@
 /**
  * 依赖管理核心模块
- * 集中管理扩展所需的外部依赖和内部模块
+ * 集中管理扩展所需的外部依赖和内部模块，自动集成核心模块
  */
+// 导入核心模块（保持与旧版本一致的基础依赖）
+import {
+  getSafeToastr,
+  formatTime,
+  adjustVideoControlsLayout,
+  applyTransitionEffect,
+  getSafeGlobal,
+  isDirectoryValid,
+} from "../modules/utils.js";
+import {
+  getSettings,
+  saveSafeSettings,
+  disableExtension,
+  DEFAULT_SETTINGS,
+} from "../modules/settings.js";
+import { EventBus } from "./eventBus.js";
+
 export const deps = {
   // 模块存储
   modules: {},
@@ -42,10 +59,12 @@ export const deps = {
   },
 
   /**
-   * 获取jQuery
+   * 获取jQuery（兼容SillyTavern环境，保留旧版本的警告提示）
    */
   get jQuery() {
-    return window.jQuery || window.$ || null;
+    const $ = window.jQuery || window.$ || null;
+    if (!$) console.warn("[deps] jQuery暂未就绪");
+    return $;
   },
 
   /**
@@ -69,3 +88,23 @@ export const deps = {
     return this.getModule('settings');
   }
 };
+
+// 自动注册核心模块（融合旧版本的默认依赖，无需手动注册）
+deps.registerModule('utils', {
+  getSafeToastr,
+  formatTime,
+  adjustVideoControlsLayout,
+  applyTransitionEffect,
+  getSafeGlobal,
+  isDirectoryValid,
+});
+
+deps.registerModule('settings', {
+  get: getSettings,
+  save: saveSafeSettings,
+  disableExtension,
+  DEFAULT: DEFAULT_SETTINGS,
+});
+
+// 注册EventBus实例（新版本EventBus为类，需实例化）
+deps.registerModule('EventBus', new EventBus());

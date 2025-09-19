@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import random
 import logging
 import threading
 import urllib.parse
@@ -57,6 +58,13 @@ class ConfigManager:
                 "extensions": ('.webm', '.mp4', '.ogv', '.mov', '.avi', '.mkv'),
                 "max_size": 100 * 1024 * 1024  # 100MB
             }
+        }
+        # MIME类型映射（补充视频类型）
+        self.mime_map = {
+            '.apng': 'image/apng', '.webp': 'image/webp',
+            '.webm': 'video/webm', '.mp4': 'video/mp4',
+            '.ogv': 'video/ogg', '.mov': 'video/quicktime',
+            '.avi': 'video/x-msvideo', '.mkv': 'video/x-matroska'
         }
 
     @staticmethod
@@ -158,6 +166,10 @@ class ConfigManager:
             if video_max_mb is not None and 10 <= video_max_mb <= 500:
                 self.media_config["video"]["max_size"] = int(video_max_mb * 1024 * 1024)
 
+    def get_mime_type(self, file_ext):
+        with self.lock:
+            return self.mime_map.get(file_ext.lower())
+
 
 class MediaState:
     """媒体库状态管理器（线程安全）"""
@@ -214,6 +226,28 @@ class MediaState:
             image = len([m for m in self.media_db if m["media_type"] == "image"])
             video = total - image
             return {"total": total, "image": image, "video": video}
+
+    def cleanup_invalid(self):
+        """清理无效媒体（不存在或超大小）"""
+        with self.lock:
+            initial_count = len(self.media_db)
+            valid_media = []
+            for media in self.media_db:
+                try:
+                    if os.path.exists(media["path"]):
+                        max_size = config_mgr.get_media_config(media["media_type"]).get("max_size", 0)
+                        file_size = os.path.getsize(media["path"])
+                        if file_size <= max_size:
+                            valid_media.append(media)
+                            continue
+                        logging.info(f"超大小清理: {media['name']} ({file_size/1024/1024:.1f}MB)")
+                    else:
+                        logging.info(f"不存在清理: {media['name']}")
+                except Exception as e:
+                    logging.error(f"清理媒体{media['name']}失败: {str(e)}")
+                    continue
+            self.media_db = valid_media
+            return initial_count - len(self.media_db)
 
 
 # 全局实例化
@@ -508,15 +542,46 @@ def get_media():
     try:
         media_type = request.args.get("type", "all")
         media_list = media_state.get_media_list(media_type)
-        return jsonify(media_list)
+        counts = media_state.get_counts()
+        return jsonify({
+            "media": media_list,
+            "total_count": counts["total"],
+            "filtered_count": len(media_list),
+            "image_count": counts["image"],
+            "video_count": counts["video"],
+            "last_updated": config_mgr.save().get("last_updated", "")
+        })
     except Exception as e:
         logging.error(f"媒体列表接口错误: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/random-media', methods=['GET'])
+def get_random_media():
+    """获取随机媒体"""
+    try:
+        media_type = request.args.get("type", "all").lower()
+        candidates = media_state.get_media_list(media_type)
+        
+        if not candidates:
+            return jsonify({"status": "error", "message": f"无{media_type}媒体"}), 404
+        
+        media = random.choice(candidates)
+        return jsonify({
+            "url": f"/media/{media['rel_path']}",
+            "name": media["name"],
+            "size": media["size"],
+            "media_type": media["media_type"],
+            "last_modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(media["last_modified"]))
+        })
+    except Exception as e:
+        logging.error(f"随机媒体接口错误: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/media/<path:rel_path>', methods=['GET'])
 def get_media_file(rel_path):
-    """获取媒体文件（防路径遍历）"""
+    """获取媒体文件（支持断点续传）"""
     try:
         # 解码URL编码的路径
         rel_path = urllib.parse.unquote(rel_path)
@@ -525,7 +590,7 @@ def get_media_file(rel_path):
 
         # 严格验证路径是否在扫描目录内
         scan_dir_abs = os.path.abspath(scan_dir)
-        if not full_path.startswith(scan_dir_abs):
+        if not full_path.startswith(scan_dir_abs) or ".." in os.path.relpath(full_path, scan_dir_abs):
             logging.warning(f"路径越界尝试: {rel_path} -> {full_path}")
             return jsonify({"error": "路径不合法"}), 403
 
@@ -533,35 +598,127 @@ def get_media_file(rel_path):
             return jsonify({"error": "文件不存在"}), 404
 
         # 确定MIME类型
-        ext = os.path.splitext(full_path)[1].lower()
-        mime_map = {
-            '.apng': 'image/apng', '.webp': 'image/webp',
-            '.webm': 'video/webm', '.mp4': 'video/mp4',
-            '.ogv': 'video/ogg', '.mov': 'video/quicktime',
-            '.avi': 'video/x-msvideo', '.mkv': 'video/x-matroska'
-        }
-        mime_type = mime_map.get(ext, mimetypes.guess_type(full_path)[0] or 'application/octet-stream')
-        return send_file(full_path, mimetype=mime_type)
+        file_ext = os.path.splitext(full_path)[1].lower()
+        mime_type = config_mgr.get_mime_type(file_ext) or mimetypes.guess_type(full_path)[0]
+        if not mime_type:
+            mime_type = "image/" + file_ext[1:] if file_ext in config_mgr.get_media_config("image").get("extensions", ()) else "video/" + file_ext[1:]
+
+        # 视频断点续传处理
+        range_header = request.headers.get("Range")
+        if range_header and mime_type.startswith("video/"):
+            file_size = os.path.getsize(full_path)
+            start, end = range_header.split("=")[1].split("-")
+            start = int(start)
+            end = int(end) if end else file_size - 1
+            length = end - start + 1
+            
+            with open(full_path, "rb") as f:
+                f.seek(start)
+                data = f.read(length)
+            
+            headers = {
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": length,
+                "Content-Type": mime_type
+            }
+            return data, 206, headers
+        
+        # 普通文件传输
+        logging.debug(f"服务媒体: {full_path} (MIME: {mime_type})")
+        return send_file(
+            full_path,
+            mimetype=mime_type,
+            as_attachment=False,
+            conditional=True,
+            last_modified=os.path.getmtime(full_path)
+        )
     except Exception as e:
         logging.error(f"文件访问错误 {rel_path}: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/ws')
+@app.route('/cleanup', methods=['POST'])
+def cleanup_media():
+    """清理无效媒体"""
+    try:
+        removed = media_state.cleanup_invalid()
+        counts = media_state.get_counts()
+        config_mgr.save()
+        WebSocketManager.send_update_event()
+        
+        return jsonify({
+            "status": "success",
+            "removed": removed,
+            "remaining_total": counts["total"],
+            "remaining_image": counts["image"],
+            "remaining_video": counts["video"]
+        })
+    except Exception as e:
+        logging.error(f"清理接口错误: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/status', methods=['GET'])
+def service_status():
+    """获取服务状态"""
+    try:
+        config = config_mgr.save()
+        counts = media_state.get_counts()
+        return jsonify({
+            "active": True,
+            "observer_active": file_monitor.observer.is_alive() if file_monitor.observer else False,
+            "directory": config_mgr.get_scan_dir(),
+            "total_count": counts["total"],
+            "image_count": counts["image"],
+            "video_count": counts["video"],
+            "last_updated": config.get("last_updated", "未知"),
+            "media_config": config.get("media_config", {})
+        })
+    except Exception as e:
+        logging.error(f"状态接口错误: {str(e)}", exc_info=True)
+        return jsonify({"active": False, "error": str(e)}), 500
+
+
+# 兼容前端WebSocket路径请求
+@app.route("/socket.io/", methods=["GET"])
+@app.route("/socket.io", methods=["GET"])
+@app.route("/ws", methods=["GET"])
 def websocket_endpoint():
-    """WebSocket连接端点"""
+    """WebSocket连接端点（支持多路径兼容）"""
     ws = request.environ.get('wsgi.websocket')
     if not ws:
         return "需要WebSocket连接", 400
 
     WebSocketManager.add_connection(ws)
     try:
+        # 发送初始化消息
+        counts = media_state.get_counts()
+        init_msg = json.dumps({
+            "type": "init",
+            "total_count": counts["total"],
+            "image_count": counts["image"],
+            "video_count": counts["video"]
+        })
+        ws.send(init_msg)
+
         while True:
             message = ws.receive()
             if message is None:  # 连接关闭
                 break
-            if message == 'ping':
-                ws.send('pong')  # 心跳回应
+            
+            try:
+                msg = json.loads(message)
+                if msg.get("type") == "ping":
+                    ws.send(json.dumps({"type": "pong", "timestamp": time.time()}))
+                elif msg.get("type") == "filter_media":
+                    media_type = msg.get("media_type", "all")
+                    filtered = len(media_state.get_media_list(media_type))
+                    ws.send(json.dumps({"type": "filtered_media", "count": filtered}))
+            except json.JSONDecodeError:
+                logging.warning("收到无效的WebSocket消息")
+                ws.send(json.dumps({"type": "error", "message": "无效消息格式"}))
+                
     except Exception as e:
         logging.error(f"WebSocket错误: {str(e)}")
     finally:
@@ -578,7 +735,13 @@ def handle_config():
             # 更新CORS域名
             if "allowed_origins" in data and isinstance(data["allowed_origins"], list):
                 config_mgr.allowed_origins = data["allowed_origins"]
-            # 其他配置更新（如媒体格式）可在此扩展
+            # 更新媒体格式
+            if "media_config" in data:
+                media_cfg = data["media_config"]
+                if "image_extensions" in media_cfg:
+                    config_mgr.media_config["image"]["extensions"] = tuple(media_cfg["image_extensions"])
+                if "video_extensions" in media_cfg:
+                    config_mgr.media_config["video"]["extensions"] = tuple(media_cfg["video_extensions"])
             config_mgr.save()
             return jsonify({"status": "配置已更新"})
         except Exception as e:
@@ -608,13 +771,25 @@ def main():
         kwargs={"full_scan": True},
         daemon=True
     ).start()
+    
+    # 打印启动信息
+    logging.info("=" * 80)
+    logging.info("本地媒体服务启动（支持图片+视频）")
+    logging.info("服务地址: http://127.0.0.1:9000")
+    img_cfg = config_mgr.get_media_config("image")
+    video_cfg = config_mgr.get_media_config("video")
+    logging.info(f"图片限制: {img_cfg['max_size']/1024/1024:.1f}MB | 视频限制: {video_cfg['max_size']/1024/1024:.1f}MB")
+    logging.info(f"图片格式: {', '.join([ext[1:].upper() for ext in img_cfg['extensions']])}")
+    logging.info(f"视频格式: {', '.join([ext[1:].upper() for ext in video_cfg['extensions']])}")
+    logging.info(f"当前扫描目录: {config_mgr.get_scan_dir()}")
+    logging.info("=" * 80)
+
     # 启动服务器
     server = pywsgi.WSGIServer(
         ('0.0.0.0', 9000),
         app,
         handler_class=WebSocketHandler
     )
-    logging.info(f"服务启动: http://localhost:9000 (扫描目录: {config_mgr.get_scan_dir()})")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

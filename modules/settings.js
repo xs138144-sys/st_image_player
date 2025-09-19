@@ -98,12 +98,46 @@ const cleanup = () => {
     // 重置临时状态
     settings.isMediaLoading = false;
     settings.retryCount = 0;
-    deps.settings.save();
+    save();
     console.log(`[settings] 资源清理完成`);
   } catch (e) {
     toastr.error(`[settings] 清理失败: ${e.message}`);
   }
 };
 
-// 导出必要的函数（根据实际模块结构补充）
-export { migrateSettings, cleanup };
+/**
+ * 安全保存设置（兼容SillyTavern核心函数）
+ */
+export const save = () => {
+  const settings = getExtensionSettings();
+  const saveFn = window.saveSettingsDebounced || null;
+
+  // 更新全局配置
+  window.extension_settings[EXTENSION_ID] = settings;
+
+  // 1. 优先使用SillyTavern核心保存函数
+  if (saveFn && typeof saveFn === "function") {
+    try {
+      saveFn();
+      console.log(`[settings] 核心函数保存成功`);
+      return;
+    } catch (e) {
+      console.error(`[settings] 核心保存失败:`, e);
+    }
+  }
+
+  // 2. localStorage备用
+  try {
+    localStorage.setItem(
+      "extension_settings",
+      JSON.stringify(window.extension_settings)
+    );
+    console.log(`[settings] localStorage保存成功`);
+  } catch (e) {
+    toastr.error("设置保存失败，请请检查存储权限");
+    console.error(`[settings] localStorage保存失败:`, e);
+  }
+};
+
+// 导出必要的函数
+export { migrateSettings, cleanup, save };

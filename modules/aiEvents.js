@@ -4,6 +4,7 @@ import { deps } from "../core/deps.js";
 const eventSource = deps.utils.getSafeGlobal("eventSource", null);
 const event_types = deps.utils.getSafeGlobal("event_types", {});
 let eventListeners = []; // 事件监听器集合
+const winSelector = "#st-image-player-window"; // 补充定义选择器
 
 /**
  * 初始化AI事件模块
