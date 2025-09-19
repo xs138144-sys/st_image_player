@@ -1,27 +1,55 @@
-// 修正核心依赖的路径（关键修复：根据ST扩展目录结构调整相对路径）
+// 修正核心依赖路径（关键修复：匹配ST实际目录结构）
+// 假设核心文件位于ST根目录（与third-party目录同级）
 import {
   extension_settings,
   eventSource,
   event_types,
 } from "../../extensions.js";
 import { saveSettingsDebounced } from "../../script.js";
-import { registerModuleCleanup } from "../../utils.js"; // 修复utils.js的路径
+import { registerModuleCleanup } from "../../utils.js";
 
-const EXT_ID = "st_image_player"; // 与控制台检测到的扩展ID完全一致
+// 如果核心文件实际在ST根目录的"scripts/"子目录中（根据错误路径推测的备选方案）
+// import { extension_settings, eventSource, event_types } from "../../scripts/extensions.js";
+// import { saveSettingsDebounced } from "../../scripts/script.js";
+// import { registerModuleCleanup } from "../../scripts/utils.js";
 
-// 增强错误日志，明确记录路径问题
+const EXT_ID = "st_image_player"; // 与扩展目录名一致
+
+// 增强路径错误诊断
+const checkFileExists = async (path) => {
+  try {
+    await fetch(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// 初始化前先检查核心文件是否存在
+const preInitCheck = async () => {
+  const coreFiles = [
+    "../../extensions.js",
+    "../../script.js",
+    "../../utils.js",
+  ];
+
+  for (const file of coreFiles) {
+    const exists = await checkFileExists(file);
+    if (!exists) {
+      console.error(`[${EXT_ID}] 核心文件缺失: ${file}，请检查路径是否正确`);
+      // 尝试提示可能的正确路径
+      const alternative = file.replace("../../", "../../scripts/");
+      console.warn(`[${EXT_ID}] 尝试备选路径: ${alternative}`);
+    }
+  }
+};
+
 const safeInit = (fn) => {
   try {
-    console.log(`[${EXT_ID}] 开始初始化，依赖路径已修正`);
+    console.log(`[${EXT_ID}] 开始初始化`);
     fn();
   } catch (error) {
     console.error(`[${EXT_ID}] 初始化失败:`, error);
-    // 区分路径错误和其他错误
-    if (error.message.includes("Failed to fetch dynamically imported module")) {
-      console.error(
-        `[${EXT_ID}] 可能是模块路径错误，请检查ui.js和mediaPlayer.js的位置`
-      );
-    }
     eventSource.emit(event_types.EXTENSION_ERROR, {
       id: EXT_ID,
       error: error.message,
@@ -31,7 +59,6 @@ const safeInit = (fn) => {
 };
 
 const initPlayerExtension = () => {
-  // 初始化默认设置
   if (!extension_settings[EXT_ID]) {
     extension_settings[EXT_ID] = {
       enabled: true,
@@ -39,40 +66,30 @@ const initPlayerExtension = () => {
       volume: 0.8,
     };
     saveSettingsDebounced();
-    console.log(`[${EXT_ID}] 默认设置初始化完成`);
   }
 
-  // 注册清理函数（确保utils.js已正确加载）
   registerModuleCleanup(EXT_ID, () => {
     console.log(`[${EXT_ID}] 执行清理`);
     import("./modules/ui.js")
       .then((m) => m.cleanup?.())
-      .catch((err) => console.error(`[${EXT_ID}] 加载ui.js失败:`, err));
+      .catch((err) => console.error(`[${EXT_ID}] ui模块清理失败:`, err));
     import("./modules/mediaPlayer.js")
       .then((m) => m.cleanup?.())
-      .catch((err) =>
-        console.error(`[${EXT_ID}] 加载mediaPlayer.js失败:`, err)
-      );
+      .catch((err) => console.error(`[${EXT_ID}] 播放器模块清理失败:`, err));
   });
 
-  // 加载核心模块（确保路径正确）
   import("./modules/ui.js")
-    .then((ui) => {
-      if (ui.init) ui.init(EXT_ID);
-      else console.error(`[${EXT_ID}] ui.js缺少init方法`);
-    })
-    .catch((err) => console.error(`[${EXT_ID}] ui.js路径错误:`, err));
-
+    .then((ui) => ui.init?.(EXT_ID))
+    .catch((err) => console.error(`[${EXT_ID}] 加载ui模块失败:`, err));
   import("./modules/mediaPlayer.js")
-    .then((player) => {
-      if (player.init) player.init(EXT_ID);
-      else console.error(`[${EXT_ID}] mediaPlayer.js缺少init方法`);
-    })
-    .catch((err) => console.error(`[${EXT_ID}] mediaPlayer.js路径错误:`, err));
+    .then((player) => player.init?.(EXT_ID))
+    .catch((err) => console.error(`[${EXT_ID}] 加载播放器模块失败:`, err));
 };
 
-// 等待ST就绪（简化逻辑，确保兼容性）
-const waitForST = () => {
+const waitForST = async () => {
+  // 先执行文件存在性检查
+  await preInitCheck();
+
   if (window.appReady) {
     safeInit(initPlayerExtension);
     return;
@@ -86,7 +103,7 @@ const waitForST = () => {
   eventSource.on(event_types.APP_READY, readyHandler);
   setTimeout(() => {
     if (!window.appReady) {
-      console.error(`[${EXT_ID}] 等待ST超时，尝试强制初始化`);
+      console.error(`[${EXT_ID}] 等待ST就绪超时`);
       safeInit(initPlayerExtension);
     }
   }, 15000);
