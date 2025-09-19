@@ -1,156 +1,188 @@
-import { EventBus } from "./core/eventBus.js";
-import { deps } from "./core/deps.js";
+import {
+  extension_settings,
+  eventSource,
+  event_types,
+} from "../../../extensions.js";
+import { saveSettingsDebounced } from "../../../../script.js";
+import { registerModuleCleanup, getModule } from "../../../../utils.js";
 
-// 初始化事件总线并添加到依赖
-deps.EventBus = new EventBus();
+// 扩展唯一标识，与manifest.json保持一致
+const EXT_ID = "st_media_player";
+const EXT_DISPLAY_NAME = "媒体播放器";
 
-// 需加载的模块列表（按依赖顺序排列）
-const MODULES = [
-  "settings", // 配置模块（最先加载）
-  "utils", // 工具模块（基础依赖）
-  "api", // API模块（依赖settings/utils）
-  "websocket", // WebSocket模块（依赖settings/api）
-  "mediaPlayer", // 播放模块（依赖所有基础模块）
-  "aiEvents", // AI事件模块（依赖settings/utils）
-  "ui", // UI模块（最后加载，依赖所有模块）
-];
-
-// 存储所有模块的清理函数
-const moduleCleanupFns = new Map();
-
-/**
- * 动态加载单个模块
- */
-const loadModule = async (moduleName) => {
-  try {
-    // 动态导入模块
-    const module = await import(`./modules/${moduleName}.js`);
-
-    // 验证模块接口
-    if (typeof module.init !== "function") {
-      throw new Error(`模块${moduleName}缺少init()方法`);
-    }
-    if (typeof module.cleanup !== "function") {
-      throw new Error(`模块${moduleName}缺少cleanup()方法`);
-    }
-
-    // 注册模块到依赖
-    deps.registerModule(moduleName, module);
-
-    // 初始化模块
-    await module.init();
-    console.log(`[index] 模块加载完成: ${moduleName}`);
-
-    // 保存清理函数
-    moduleCleanupFns.set(moduleName, module.cleanup);
-
-    return true;
-  } catch (e) {
-    console.error(`[index] 模块加载失败: ${moduleName}`, e);
-    deps.toastr.error(`模块${moduleName}加载失败: ${e.message}`);
-    return false;
-  }
+// 全局依赖管理
+window.stMediaPlayer = window.stMediaPlayer || {
+  deps: {},
+  modules: {},
+  isInitialized: false,
 };
+const stMediaPlayer = window.stMediaPlayer;
 
-/**
- * 批量加载所有模块
- */
-const initExtension = async () => {
-  console.log(`[index] 媒体播放器扩展开始初始化（共${MODULES.length}个模块）`);
-  deps.toastr.info("媒体播放器扩展正在加载...");
-
-  try {
-    // 按顺序加载模块
-    for (const moduleName of MODULES) {
-      const success = await loadModule(moduleName);
-      if (!success) {
-        console.warn(`[index] 模块${moduleName}加载失败，继续加载其他模块`);
-      }
-    }
-
-    // 初始化完成通知
-    console.log(`[index] 所有模块加载完成`);
-    deps.toastr.success("媒体播放器扩展已加载就绪");
-    deps.EventBus.emit("extensionInitialized");
-  } catch (e) {
-    console.error(`[index] 扩展初始化全局错误:`, e);
-    deps.toastr.error(`扩展加载失败: ${e.message}`);
+// 初始化扩展设置
+function initSettings() {
+  if (!extension_settings[EXT_ID]) {
+    extension_settings[EXT_ID] = {
+      enabled: true,
+      rememberLastPosition: true,
+      defaultVolume: 80,
+      autoPlay: false,
+    };
+    saveSettingsDebounced();
   }
-};
+  return extension_settings[EXT_ID];
+}
 
-/**
- * 安全启动扩展（等待SillyTavern环境就绪）
- */
-const safeInit = () => {
-  // 检查SillyTavern全局配置容器
-  if (!window.extension_settings) {
-    console.warn(`[index] SillyTavern环境未就绪，1秒后重试`);
-    setTimeout(safeInit, 1000);
-    return;
-  }
-
-  // 确保jQuery就绪后启动（强化检测逻辑）
-  const checkJQuery = () => {
-    // 优先从window获取jQuery，兼容全局挂载情况
-    const globalJQuery = window.jQuery || window.$;
-    if (globalJQuery) {
-      deps.jQuery = globalJQuery; // 注入到依赖中
-      initExtension();
-      return;
-    }
-
-    // 若依赖中已有jQuery直接使用
-    if (deps.jQuery) {
-      initExtension();
-      return;
-    }
-
-    // 重试逻辑（最多20秒）
-    let retryCount = 0;
-    const interval = setInterval(() => {
-      const globalJQuery = window.jQuery || window.$;
-      if (globalJQuery || deps.jQuery || retryCount > 40) {
-        clearInterval(interval);
-        deps.jQuery = globalJQuery || deps.jQuery; // 确保依赖被赋值
-        if (deps.jQuery) {
-          initExtension();
-        } else {
-          console.error("[index] jQuery长时间未就绪，扩展无法启动");
-          deps.toastr.error("jQuery未就绪，扩展无法运行");
-        }
-      }
-      retryCount++;
-    }, 500);
-  };
-
-  checkJQuery();
-};
-
-// 启动扩展
-safeInit();
-
-// 全局错误处理
-window.addEventListener("error", (e) => {
-  console.error("[index] 全局错误:", e.error);
-  deps.toastr.error(`媒体播放器错误: ${e.error.message}`);
-});
-
-// 扩展卸载时清理资源
-window.addEventListener("beforeunload", () => {
-  console.log(`[index] 开始清理扩展资源`);
-  deps.EventBus.emit("extensionDisable");
-
-  // 执行所有模块的清理函数
-  moduleCleanupFns.forEach((cleanup, moduleName) => {
-    try {
-      cleanup();
-      console.log(`[index] 模块${moduleName}已清理`);
-    } catch (e) {
-      console.error(`[index] 模块${moduleName}清理失败:`, e);
-    }
+// 注册扩展到ST系统
+function registerExtension() {
+  // 注册扩展元数据
+  eventSource.emit(event_types.REGISTER_EXTENSION, {
+    id: EXT_ID,
+    name: EXT_DISPLAY_NAME,
+    description: "带窗口控制、AI检测、视频播放的全媒体播放器扩展",
+    version: "1.4.2",
   });
 
-  // 清理事件总线
-  deps.EventBus.clear();
-  console.log(`[index] 扩展资源已完全清理`);
-});
+  // 注册设置面板
+  eventSource.emit(event_types.ADD_SETTING_PANEL, {
+    id: `${EXT_ID}-settings`,
+    name: EXT_DISPLAY_NAME,
+    render: () =>
+      import("./modules/settings.js").then((m) => m.renderSettings()),
+  });
+}
+
+// 初始化扩展核心功能
+async function initExtension() {
+  if (stMediaPlayer.isInitialized) return;
+
+  try {
+    const settings = initSettings();
+
+    // 只有在启用状态下才初始化
+    if (!settings.enabled) {
+      console.log(`[${EXT_ID}] 扩展已禁用`);
+      return;
+    }
+
+    // 加载核心模块
+    const mediaPlayer = await import("./modules/mediaPlayer.js");
+    const ui = await import("./modules/ui.js");
+
+    // 初始化模块
+    await mediaPlayer.init(settings);
+    await ui.init(settings);
+
+    // 存储模块引用
+    stMediaPlayer.modules.mediaPlayer = mediaPlayer;
+    stMediaPlayer.modules.ui = ui;
+
+    stMediaPlayer.isInitialized = true;
+    console.log(`[${EXT_ID}] 扩展初始化完成`);
+
+    // 触发扩展就绪事件
+    eventSource.emit(`${EXT_ID}:ready`);
+  } catch (error) {
+    console.error(`[${EXT_ID}] 初始化失败:`, error);
+    // 向ST系统报告错误
+    eventSource.emit(event_types.EXTENSION_ERROR, {
+      id: EXT_ID,
+      error: error.message,
+    });
+  }
+}
+
+// 清理扩展资源
+function cleanupExtension() {
+  if (!stMediaPlayer.isInitialized) return;
+
+  // 调用各模块的清理函数
+  if (stMediaPlayer.modules.ui && stMediaPlayer.modules.ui.cleanup) {
+    stMediaPlayer.modules.ui.cleanup();
+  }
+
+  if (
+    stMediaPlayer.modules.mediaPlayer &&
+    stMediaPlayer.modules.mediaPlayer.cleanup
+  ) {
+    stMediaPlayer.modules.mediaPlayer.cleanup();
+  }
+
+  // 移除事件监听器
+  eventSource.removeAllListeners(`${EXT_ID}:`);
+
+  stMediaPlayer.isInitialized = false;
+  console.log(`[${EXT_ID}] 扩展已清理`);
+}
+
+// 处理扩展启用/禁用状态变化
+function handleExtensionStateChange() {
+  const settings = extension_settings[EXT_ID];
+  if (settings.enabled && !stMediaPlayer.isInitialized) {
+    initExtension();
+  } else if (!settings.enabled && stMediaPlayer.isInitialized) {
+    cleanupExtension();
+  }
+}
+
+// 等待ST环境就绪
+function waitForSTEnvironment() {
+  // 检查是否已加载jQuery
+  const checkDependencies = () => {
+    const $ = window.jQuery || window.$;
+    if ($) {
+      stMediaPlayer.deps.jQuery = $;
+      return true;
+    }
+    return false;
+  };
+
+  // 立即检查一次
+  if (checkDependencies()) {
+    return Promise.resolve();
+  }
+
+  // 定时检查依赖
+  return new Promise((resolve) => {
+    let checkCount = 0;
+    const checkInterval = setInterval(() => {
+      if (checkDependencies() || checkCount >= 40) {
+        // 最多检查20秒
+        clearInterval(checkInterval);
+        resolve();
+      }
+      checkCount++;
+    }, 500);
+  });
+}
+
+// 主初始化流程
+async function main() {
+  // 等待ST应用就绪
+  if (!window.appReady) {
+    await new Promise((resolve) => {
+      const readyHandler = () => {
+        eventSource.removeListener(event_types.APP_READY, readyHandler);
+        resolve();
+      };
+      eventSource.on(event_types.APP_READY, readyHandler);
+    });
+  }
+
+  // 等待依赖加载
+  await waitForSTEnvironment();
+
+  // 注册扩展
+  registerExtension();
+
+  // 注册清理函数
+  registerModuleCleanup(EXT_ID, cleanupExtension);
+
+  // 监听设置变化
+  eventSource.on(event_types.SETTINGS_UPDATED, handleExtensionStateChange);
+
+  // 初始化扩展
+  initExtension();
+}
+
+// 启动主流程
+main();

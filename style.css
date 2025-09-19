@@ -1,406 +1,114 @@
-/* 播放器窗口样式 */
-.image-player-window {
+/* 播放器主窗口样式 */
+.st-player-window {
     position: fixed;
     z-index: 1000;
-    background: rgba(30, 30, 30, 0.95);
-    border: 1px solid #444;
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    overflow: hidden;
-    transition: all 0.2s ease;
-}
-
-.image-player-window.no-border {
-    border: none;
-    box-shadow: none;
-}
-
-/* 窗口头部 */
-.image-player-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 12px;
-    background: #2a2a2a;
-    border-bottom: 1px solid #444;
-    cursor: move;
-}
-
-.image-player-header .title {
-    color: #e0e0e0;
-    font-weight: 500;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.window-controls {
-    display: flex;
-    gap: 4px;
-}
-
-.window-controls button {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: #bbb;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.1s ease;
-}
-
-.window-controls button:hover {
-    background: #444;
-    color: #fff;
-}
-
-.window-controls button.active {
-    color: #4da6ff;
-}
-
-/* 窗口主体 */
-.image-player-body {
-    display: flex;
-    flex-direction: column;
-    height: calc(100% - 34px - 40px);
-    /* 减去头部和控制栏高度 */
-    overflow: hidden;
-}
-
-.image-container {
-    position: relative;
-    flex: 1;
-    overflow: hidden;
-    background: #000;
-}
-
-.image-player-img,
-.image-player-video {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    transition: opacity 0.3s ease;
-}
-
-.image-player-video {
-    display: none;
-    background: #000;
-}
-
-.loading-animation {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #aaa;
-    background: #000;
-    font-style: italic;
-}
-
-.image-info {
-    padding: 4px 8px;
-    font-size: 12px;
-    color: #ccc;
-    background: #2a2a2a;
-    border-top: 1px solid #444;
-}
-
-/* 视频控制栏 */
-.video-controls {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
-    padding: 6px;
-}
-
-.progress-container {
-    width: 100%;
-    height: 4px;
-    margin-bottom: 6px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-    cursor: pointer;
-}
-
-.progress-bar {
-    position: relative;
-    width: 100%;
-    height: 100%;
-}
-
-.progress-loaded {
-    position: absolute;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.3);
-    width: 0%;
-}
-
-.progress-played {
-    position: absolute;
-    height: 100%;
-    background: #4da6ff;
-    width: 0%;
-}
-
-.progress-handle {
-    position: absolute;
-    top: 50%;
-    width: 10px;
-    height: 10px;
+    /* 确保在ST界面之上 */
+    width: 800px;
+    max-width: 90vw;
     background: #fff;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
-}
-
-.video-control-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.video-control-btn {
-    background: transparent;
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-    transition: background 0.1s ease;
-}
-
-.video-control-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.video-control-btn.active {
-    color: #4da6ff;
-}
-
-.volume-slider-container {
-    width: 80px;
-}
-
-.volume-slider {
-    width: 100%;
-    accent-color: #4da6ff;
-}
-
-.time-display {
-    font-size: 12px;
-    color: #ddd;
-    margin-left: auto;
-}
-
-/* 播放控制栏 */
-.image-player-controls {
-    display: flex;
-    align-items: center;
-    padding: 6px 10px;
-    background: #2a2a2a;
-    border-top: 1px solid #444;
-    height: 40px;
-}
-
-.controls-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.media-filter-group {
-    margin-left: auto;
-}
-
-.control-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #3a3a3a;
-    border: none;
-    color: #ddd;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.1s ease;
-}
-
-.control-btn:hover {
-    background: #4a4a4a;
-    color: #fff;
-}
-
-.control-btn.active {
-    background: #4da6ff;
-    color: #fff;
-}
-
-.control-text {
-    font-size: 12px;
-    color: #bbb;
-    min-width: 100px;
-    text-align: center;
-}
-
-.resize-handle {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 12px;
-    height: 12px;
-    cursor: nwse-resize;
-    background: linear-gradient(135deg, transparent 50%, #444 50%);
-}
-
-/* 设置面板样式 */
-#st-image-player-settings {
-    margin: 10px 0;
-    border: 1px solid #444;
     border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    /* 与ST弹窗风格统一 */
+    overflow: hidden;
+    font-family: var(--st-font-family);
+    /* 使用ST系统字体 */
+}
+
+/* 窗口标题栏 */
+.st-player-header {
+    padding: 8px 16px;
+    background: var(--st-primary-color);
+    /* 继承ST主题色 */
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* 控制按钮样式（统一替换inline-style） */
+.st-player-btn {
+    padding: 6px 12px;
+    margin: 0 4px;
+    border: none;
+    border-radius: 4px;
+    background: var(--st-btn-bg);
+    color: var(--st-btn-color);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.st-player-btn:hover {
+    background: var(--st-btn-hover-bg);
+    /* 适配ST按钮 hover 效果 */
+    transform: translateY(-1px);
+}
+
+/* 扩展菜单按钮（修复在ST菜单中的显示） */
+#st_media_player-button {
+    margin-left: 8px;
+    padding: 4px 8px;
+}
+
+/* 播放器内容区域 */
+.st-player-content {
+    padding: 16px;
+}
+
+/* 视频容器 */
+.st-video-container {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    position: relative;
     overflow: hidden;
 }
 
-.image-player-settings {
-    padding: 10px;
-}
-
-.settings-group {
-    margin: 15px 0;
-    padding: 10px;
-    background: rgba(40, 40, 40, 0.5);
-    border-radius: 4px;
-}
-
-.settings-row {
+/* 控制栏 */
+.st-player-controls {
+    padding: 12px;
     display: flex;
     align-items: center;
-    margin: 8px 0;
     gap: 10px;
+    background: #f5f5f5;
 }
 
-.settings-row label {
-    min-width: 160px;
-    color: #ddd;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.settings-row input[type="text"],
-.settings-row input[type="number"],
-.settings-row select {
+/* 进度条样式 */
+.st-progress-bar {
     flex: 1;
-    padding: 4px 6px;
-    background: #2a2a2a;
-    border: 1px solid #555;
+    height: 6px;
+    background: #ddd;
     border-radius: 3px;
-    color: #ddd;
-    font-size: 13px;
+    cursor: pointer;
+    overflow: hidden;
 }
 
-.settings-row input[type="checkbox"] {
-    margin-right: 6px;
+.st-progress-fill {
+    height: 100%;
+    background: var(--st-primary-color);
+    width: 0%;
 }
 
-.service-status {
-    color: #ddd;
-    font-size: 13px;
-    padding: 5px 0;
+/* 设置面板样式（保持原有功能，优化布局） */
+.st-player-settings {
+    padding: 16px;
+    border-top: 1px solid #eee;
 }
 
-.status-success {
-    color: #4cd964;
-}
-
-.status-error {
-    color: #ff3b30;
-}
-
-.settings-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 15px;
-    padding-top: 10px;
-    border-top: 1px solid #444;
-}
-
-.hint {
-    font-size: 12px;
-    color: #888;
-    margin-left: 5px;
-}
-
-/* 过渡效果 */
-.fade-transition {
-    animation: fadeIn 0.5s ease-in-out;
-}
-
-.slide-transition {
-    animation: slideIn 0.5s ease-in-out;
-}
-
-.zoom-transition {
-    animation: zoomIn 0.5s ease-in-out;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes slideIn {
-    from {
-        transform: translateX(50px);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-@keyframes zoomIn {
-    from {
-        transform: scale(0.9);
-        opacity: 0;
-    }
-
-    to {
-        transform: scale(1);
-        opacity: 1;
-    }
-}
-
-/* 扩展菜单按钮 */
-#ext_menu_st_image_player {
+.setting-item {
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+}
+
+/* 响应式调整（适配ST不同窗口大小） */
+@media (max-width: 768px) {
+    .st-player-window {
+        width: 95vw;
+    }
+
+    .st-player-controls {
+        flex-wrap: wrap;
+    }
 }

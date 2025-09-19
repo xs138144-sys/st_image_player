@@ -1,505 +1,253 @@
-import { deps } from "../core/deps.js";
+import { eventSource } from "../../../../extensions.js";
+import { stMediaPlayer } from "../index.js";
 
-// 模块私有变量
-let mediaList = [];
-let currentMediaIndex = 0;
-let switchTimer = null;
-let preloadedMedia = null;
-let currentMediaType = "image";
-let progressUpdateInterval = null;
-let eventListeners = []; // 事件监听器集合
+const EXT_ID = "st_media_player";
+let player = null;
+let playerContainer = null;
+let settings = null;
+let currentMedia = null;
+let playbackHistory = [];
 
-const winSelector = "#st-image-player-window";
+// 创建视频播放器
+function createPlayer(container) {
+  if (player) {
+    destroyPlayer();
+  }
 
-/**
- * 初始化媒体播放器模块
- */
-export const init = () => {
+  // 创建播放器元素
+  player = document.createElement("video");
+  player.id = `${EXT_ID}-video-player`;
+  player.className = "st-media-player";
+  player.controls = true;
+  player.style.width = "100%";
+  player.style.maxHeight = "500px";
+  player.volume = settings.defaultVolume / 100;
+  player.autoplay = settings.autoPlay;
+
+  // 添加到容器
+  container.innerHTML = "";
+  container.appendChild(player);
+
+  // 绑定播放器事件
+  player.addEventListener("play", handlePlay);
+  player.addEventListener("pause", handlePause);
+  player.addEventListener("ended", handleEnded);
+  player.addEventListener("error", handleError);
+  player.addEventListener("timeupdate", handleTimeUpdate);
+
+  console.log(`[${EXT_ID}] 播放器已创建`);
+  return player;
+}
+
+// 销毁播放器
+function destroyPlayer() {
+  if (!player) return;
+
+  // 移除事件监听器
+  player.removeEventListener("play", handlePlay);
+  player.removeEventListener("pause", handlePause);
+  player.removeEventListener("ended", handleEnded);
+  player.removeEventListener("error", handleError);
+  player.removeEventListener("timeupdate", handleTimeUpdate);
+
+  // 停止播放并移除元素
+  player.pause();
+  if (player.parentNode) {
+    player.parentNode.removeChild(player);
+  }
+  player = null;
+
+  console.log(`[${EXT_ID}] 播放器已销毁`);
+}
+
+// 加载媒体文件
+function loadMedia(url, type = "video/mp4") {
+  if (!player) {
+    eventSource.emit(`${EXT_ID}:error`, {
+      message: "播放器未初始化",
+    });
+    return false;
+  }
+
   try {
-    // 注册事件监听（接收外部请求）
-    const removePlayListener = deps.EventBus.on("requestMediaPlay", (data) => {
-      showMedia(data?.direction || "current");
+    player.src = url;
+    player.type = type;
+    currentMedia = { url, type, lastPosition: 0 };
+
+    // 尝试恢复上次播放位置
+    const historyItem = playbackHistory.find((item) => item.url === url);
+    if (historyItem && settings.rememberLastPosition) {
+      setTimeout(() => {
+        player.currentTime = historyItem.lastPosition;
+      }, 1000);
+    }
+
+    eventSource.emit(`${EXT_ID}:status`, {
+      message: `正在加载媒体: ${url}`,
     });
 
-    const removeStartPlaybackListener = deps.EventBus.on(
-      "requestStartPlayback",
-      startPlayback
-    );
-
-    const removeStopPlaybackListener = deps.EventBus.on(
-      "requestStopPlayback",
-      stopPlayback
-    );
-
-    const removeResumePlaybackListener = deps.EventBus.on(
-      "requestResumePlayback",
-      startPlayback
-    );
-
-    const removeUpdateVolumeListener = deps.EventBus.on(
-      "requestUpdateVolume",
-      (data) => {
-        updateVolume(data.volume);
-      }
-    );
-
-    const removeMediaListListener = deps.EventBus.on(
-      "mediaListRefreshed",
-      (data) => {
-        mediaList = data.list;
-        console.log(
-          `[mediaPlayer] 媒体列表已更新，共${mediaList.length}个媒体`
-        );
-      }
-    );
-
-    // 保存事件监听器
-    eventListeners = [
-      removePlayListener,
-      removeStartPlaybackListener,
-      removeStopPlaybackListener,
-      removeResumePlaybackListener,
-      removeUpdateVolumeListener,
-      removeMediaListListener,
-    ];
-
-    // 初始化媒体列表
-    deps.EventBus.emit("requestRefreshMediaList");
-
-    console.log(`[mediaPlayer] 媒体播放器模块初始化完成`);
-  } catch (e) {
-    deps.toastr.error(`[mediaPlayer] 初始化失败: ${e.message}`);
-    console.error(`[mediaPlayer] 初始化错误:`, e);
-  }
-};
-
-/**
- * 清理媒体播放器模块
- */
-export const cleanup = () => {
-  try {
-    // 清除切换定时器
-    if (switchTimer) {
-      clearTimeout(switchTimer);
-      switchTimer = null;
+    if (settings.autoPlay) {
+      player.play().catch(handlePlayError);
     }
 
-    // 清除进度更新定时器
-    if (progressUpdateInterval) {
-      clearInterval(progressUpdateInterval);
-      progressUpdateInterval = null;
+    return true;
+  } catch (error) {
+    eventSource.emit(`${EXT_ID}:error`, {
+      message: `加载媒体失败: ${error.message}`,
+    });
+    return false;
+  }
+}
+
+// 播放/暂停切换
+function togglePlayback() {
+  if (!player) return false;
+
+  if (player.paused) {
+    player.play().catch(handlePlayError);
+    return true;
+  } else {
+    player.pause();
+    return true;
+  }
+}
+
+// 处理播放错误
+function handlePlayError(error) {
+  let message = "播放失败";
+
+  switch (error.name) {
+    case "NotAllowedError":
+      message = "自动播放被浏览器阻止，请手动点击播放";
+      break;
+    case "NotFoundError":
+      message = "媒体文件未找到";
+      break;
+    case "NotSupportedError":
+      message = "不支持的媒体格式";
+      break;
+  }
+
+  eventSource.emit(`${EXT_ID}:error`, { message });
+}
+
+// 播放器事件处理函数
+function handlePlay() {
+  eventSource.emit(`${EXT_ID}:status`, {
+    message: "开始播放",
+  });
+}
+
+function handlePause() {
+  // 保存当前播放位置
+  if (currentMedia) {
+    currentMedia.lastPosition = player.currentTime;
+    updatePlaybackHistory(currentMedia);
+  }
+
+  eventSource.emit(`${EXT_ID}:status`, {
+    message: "已暂停",
+  });
+}
+
+function handleEnded() {
+  eventSource.emit(`${EXT_ID}:status`, {
+    message: "播放结束",
+  });
+}
+
+function handleError() {
+  const errorMessages = {
+    1: "获取媒体时发生错误",
+    2: "媒体格式不支持",
+    3: "解码媒体时发生错误",
+    4: "媒体无法播放",
+  };
+
+  const message = errorMessages[player.error.code] || "播放时发生未知错误";
+  eventSource.emit(`${EXT_ID}:error`, { message });
+}
+
+function handleTimeUpdate() {
+  // 定期保存播放位置（每30秒）
+  if (currentMedia && player.currentTime % 30 < 0.5) {
+    currentMedia.lastPosition = player.currentTime;
+    updatePlaybackHistory(currentMedia);
+  }
+}
+
+// 更新播放历史
+function updatePlaybackHistory(media) {
+  const index = playbackHistory.findIndex((item) => item.url === media.url);
+  if (index >= 0) {
+    playbackHistory[index] = { ...media };
+  } else {
+    // 限制历史记录数量
+    if (playbackHistory.length >= 10) {
+      playbackHistory.shift();
     }
-
-    // 取消所有事件监听
-    eventListeners.forEach((removeListener) => removeListener());
-    eventListeners = [];
-
-    // 停止视频播放
-    const $ = deps.jQuery;
-    if ($) {
-      const video = $(winSelector).find(".image-player-video")[0];
-      if (video) video.pause();
-    }
-
-    // 释放预加载资源
-    preloadedMedia = null;
-
-    console.log(`[mediaPlayer] 媒体播放器模块已清理`);
-  } catch (e) {
-    deps.toastr.error(`[mediaPlayer] 清理失败: ${e.message}`);
-    console.error(`[mediaPlayer] 清理错误:`, e);
-  }
-};
-
-/**
- * 获取随机媒体索引（避免重复）
- */
-const getRandomMediaIndex = () => {
-  const settings = deps.settings.getSettings();
-  const list = settings.randomMediaList || [];
-
-  // 空列表兜底
-  if (list.length === 0) return 0;
-
-  // 所有媒体已播放 → 重置
-  if (settings.randomPlayedIndices.length >= list.length) {
-    settings.randomPlayedIndices = [];
-    deps.toastr.info("随机播放列表已循环，重新开始");
+    playbackHistory.push({ ...media });
   }
 
-  // 筛选可用索引
-  let availableIndices = list
-    .map((_, i) => i)
-    .filter((i) => !settings.randomPlayedIndices.includes(i));
+  // 可以在这里添加本地存储逻辑
+}
 
-  // 极端情况：索引为空 → 强制重置
-  if (availableIndices.length === 0) {
-    settings.randomPlayedIndices = [];
-    availableIndices = list.map((_, i) => i);
-  }
+// 初始化播放器模块
+function init(settingsConfig) {
+  settings = settingsConfig;
+  playbackHistory = [];
 
-  // 随机选择并记录
-  const randomIndex =
-    availableIndices[Math.floor(Math.random() * availableIndices.length)];
-  deps.settings.saveSettings({
-    currentRandomIndex: randomIndex,
-    randomPlayedIndices: [...settings.randomPlayedIndices, randomIndex],
+  // 监听UI容器就绪事件
+  eventSource.on(`${EXT_ID}:playerContainerReady`, (data) => {
+    playerContainer = data.container;
+    createPlayer(playerContainer);
   });
 
-  return randomIndex;
-};
-
-/**
- * 预加载媒体（图片/视频）
- */
-const preloadMediaItem = async (url, type) => {
-  const settings = deps.settings.getSettings();
-
-  // 跳过预加载的情况
-  if (
-    (type === "video" && !settings.preloadVideos) ||
-    (type === "image" && !settings.preloadImages)
-  ) {
-    return null;
-  }
-
-  try {
-    return await new Promise((resolve, reject) => {
-      if (type === "image") {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error("图片预加载失败"));
-        img.src = url;
-      } else if (type === "video") {
-        const video = document.createElement("video");
-        video.preload = "metadata";
-        video.onloadedmetadata = () => resolve(video);
-        video.onerror = () => reject(new Error("视频预加载失败"));
-        video.src = url;
-      } else {
-        resolve(null);
-      }
-    });
-  } catch (e) {
-    console.warn(`[mediaPlayer] 预加载${type}失败:`, e);
-    return null;
-  }
-};
-
-/**
- * 显示媒体（图片/视频）
- */
-export const showMedia = async (direction) => {
-  const settings = deps.settings.getSettings();
-  const $ = deps.jQuery;
-
-  if (!$) {
-    console.warn(`[mediaPlayer] jQuery未就绪，无法显示媒体`);
-    return;
-  }
-
-  const win = $(winSelector);
-  const imgElement = win.find(".image-player-img")[0];
-  const videoElement = win.find(".image-player-video")[0];
-  const loadingElement = win.find(".loading-animation")[0];
-  const infoElement = win.find(".image-info")[0];
-
-  // 加载中 → 跳过重复调用
-  if (settings.isMediaLoading) {
-    console.log(`[mediaPlayer] 加载中，跳过调用`);
-    return;
-  }
-
-  deps.settings.saveSettings({ isMediaLoading: true });
-  win.find(".control-text").text("加载中...");
-
-  try {
-    // 1. 检查服务状态
-    const status = await new Promise((resolve) => {
-      const removeListener = deps.EventBus.on(
-        "serviceStatusChecked",
-        (status) => {
-          removeListener();
-          resolve(status);
-        }
-      );
-      deps.EventBus.emit("requestCheckServiceStatus");
-    });
-
-    if (!status.active) throw new Error("媒体服务未连接");
-
-    // 2. 确保媒体列表最新
-    mediaList = await new Promise((resolve) => {
-      const removeListener = deps.EventBus.on("mediaListRefreshed", (data) => {
-        removeListener();
-        resolve(data.list);
+  // 监听窗口显示事件
+  eventSource.on(`${EXT_ID}:windowShown`, () => {
+    if (currentMedia && player) {
+      eventSource.emit(`${EXT_ID}:status`, {
+        message: `继续播放: ${currentMedia.url}`,
       });
-      deps.EventBus.emit("requestRefreshMediaList", {
-        filterType: settings.mediaFilter,
-      });
-    });
-
-    if (mediaList.length === 0)
-      throw new Error(`无可用${settings.mediaFilter}媒体`);
-
-    // 3. 隐藏当前媒体，显示加载中
-    $(imgElement).hide();
-    $(videoElement).hide();
-    $(loadingElement).show();
-
-    // 4. 确定当前媒体（随机/顺序）
-    let mediaUrl, mediaName, mediaType;
-    if (settings.playMode === "random") {
-      const list = settings.randomMediaList || mediaList;
-      let randomIndex = -1;
-
-      switch (direction) {
-        case "next":
-          randomIndex = getRandomMediaIndex();
-          break;
-        case "prev":
-          if (settings.randomPlayedIndices.length > 1) {
-            const newIndices = [...settings.randomPlayedIndices];
-            newIndices.pop();
-            randomIndex = newIndices.pop();
-            newIndices.push(randomIndex);
-
-            deps.settings.saveSettings({
-              randomPlayedIndices: newIndices,
-              currentRandomIndex: randomIndex,
-            });
-          } else {
-            randomIndex = settings.randomPlayedIndices[0] || 0;
-          }
-          break;
-        case "current":
-          randomIndex =
-            settings.currentRandomIndex !== -1
-              ? settings.currentRandomIndex
-              : getRandomMediaIndex();
-          break;
-      }
-
-      // 索引安全检查
-      randomIndex = Math.max(0, Math.min(randomIndex, list.length - 1));
-      const media = list[randomIndex];
-      mediaUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-        media.rel_path
-      )}`;
-      mediaName = media.name;
-      mediaType = media.media_type;
-    } else {
-      // 顺序播放 → 更新索引
-      switch (direction) {
-        case "next":
-          currentMediaIndex = (currentMediaIndex + 1) % mediaList.length;
-          break;
-        case "prev":
-          currentMediaIndex =
-            (currentMediaIndex - 1 + mediaList.length) % mediaList.length;
-          break;
-        case "current":
-          currentMediaIndex = Math.max(
-            0,
-            Math.min(currentMediaIndex, mediaList.length - 1)
-          );
-          break;
-      }
-
-      const media = mediaList[currentMediaIndex];
-      mediaUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-        media.rel_path
-      )}`;
-      mediaName = media.name;
-      mediaType = media.media_type;
     }
+  });
 
-    currentMediaType = mediaType;
-
-    // 5. 隐藏加载，显示媒体
-    $(loadingElement).hide();
-    if (mediaType === "image") {
-      // 显示图片
-      deps.utils.applyTransitionEffect(imgElement, settings.transitionEffect);
-      if (preloadedMedia && preloadedMedia.src === mediaUrl) {
-        $(imgElement).attr("src", mediaUrl).show();
-      } else {
-        await new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            $(imgElement).attr("src", mediaUrl).show();
-            resolve();
-          };
-          img.onerror = () => reject(new Error("图片加载失败"));
-          img.src = mediaUrl;
-        });
-      }
-
-      $(videoElement).hide();
-      stopProgressUpdate(); // 停止视频进度更新
-    } else if (mediaType === "video") {
-      // 显示视频
-      videoElement.currentTime = 0;
-      videoElement.loop = settings.videoLoop;
-      $(videoElement).attr("src", mediaUrl).show();
-
-      // 等待视频元数据加载
-      await new Promise((resolve, reject) => {
-        const onLoaded = () => {
-          videoElement.removeEventListener("loadedmetadata", onLoaded);
-          videoElement.removeEventListener("error", onError);
-          resolve();
-        };
-
-        const onError = () => {
-          videoElement.removeEventListener("loadedmetadata", onLoaded);
-          videoElement.removeEventListener("error", onError);
-          reject(new Error("视频加载失败"));
-        };
-
-        videoElement.addEventListener("loadedmetadata", onLoaded);
-        videoElement.addEventListener("error", onError);
-      });
-
-      $(imgElement).hide();
-      videoElement.play();
-      startProgressUpdate(videoElement); // 启动视频进度更新
+  // 监听暂停命令
+  eventSource.on(`${EXT_ID}:pause`, () => {
+    if (player && !player.paused) {
+      player.pause();
     }
+  });
 
-    // 6. 更新信息显示
-    $(infoElement).text(mediaName);
-    win
-      .find(".control-text")
-      .text(`${mediaType === "image" ? "图片" : "视频"}: ${mediaName}`);
+  console.log(`[${EXT_ID}] 播放器模块初始化完成`);
+  return true;
+}
 
-    // 7. 预加载下一个媒体
-    if (
-      settings.autoSwitchMode === "timer" ||
-      settings.preloadImages ||
-      settings.preloadVideos
-    ) {
-      const nextIndex =
-        settings.playMode === "random"
-          ? getRandomMediaIndex()
-          : (currentMediaIndex + 1) % mediaList.length;
+// 清理播放器资源
+function cleanup() {
+  // 保存最后播放位置
+  handlePause();
 
-      const nextMedia =
-        settings.playMode === "random"
-          ? (settings.randomMediaList || mediaList)[nextIndex]
-          : mediaList[nextIndex];
+  // 销毁播放器
+  destroyPlayer();
 
-      if (nextMedia) {
-        const nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-          nextMedia.rel_path
-        )}`;
-        preloadedMedia = await preloadMediaItem(nextUrl, nextMedia.media_type);
-      }
-    }
+  // 清除引用
+  playerContainer = null;
+  currentMedia = null;
+  playbackHistory = [];
 
-    // 8. 自动切换设置
-    if (settings.autoSwitchMode === "timer" && settings.isPlaying) {
-      setupNextMediaSwitch();
-    }
-  } catch (e) {
-    console.error(`[mediaPlayer] 显示媒体失败:`, e);
-    deps.toastr.error(`显示媒体失败: ${e.message}`);
-    $(loadingElement).hide();
-  } finally {
-    deps.settings.saveSettings({ isMediaLoading: false });
-  }
-};
+  // 移除事件监听器
+  eventSource.removeAllListeners(`${EXT_ID}:playerContainerReady`);
+  eventSource.removeAllListeners(`${EXT_ID}:windowShown`);
+  eventSource.removeAllListeners(`${EXT_ID}:pause`);
 
-/**
- * 设置下一个媒体切换定时器
- */
-const setupNextMediaSwitch = () => {
-  if (switchTimer) clearTimeout(switchTimer);
+  console.log(`[${EXT_ID}] 播放器模块已清理`);
+}
 
-  const settings = deps.settings.getSettings();
-  // 视频模式下使用视频时长作为切换时间
-  const switchTime =
-    currentMediaType === "video" && !settings.videoLoop
-      ? Math.max(
-          5000,
-          deps.jQuery(winSelector).find(".image-player-video")[0]?.duration *
-            1000 || 5000
-        )
-      : settings.switchInterval;
-
-  switchTimer = setTimeout(() => {
-    showMedia("next");
-  }, switchTime);
-};
-
-/**
- * 开始播放（自动切换）
- */
-export const startPlayback = () => {
-  const settings = deps.settings.getSettings();
-  if (settings.isPlaying) return;
-
-  deps.settings.saveSettings({ isPlaying: true });
-  deps.toastr.info("开始自动播放");
-  setupNextMediaSwitch();
-};
-
-/**
- * 停止播放（自动切换）
- */
-export const stopPlayback = () => {
-  if (switchTimer) {
-    clearTimeout(switchTimer);
-    switchTimer = null;
-  }
-
-  deps.settings.saveSettings({ isPlaying: false });
-  deps.toastr.info("已停止自动播放");
-};
-
-/**
- * 启动视频进度更新
- */
-const startProgressUpdate = (videoElement) => {
-  if (progressUpdateInterval) clearInterval(progressUpdateInterval);
-
-  const $ = deps.jQuery;
-  const progressBar = $(winSelector).find(".video-progress");
-
-  progressUpdateInterval = setInterval(() => {
-    if (!videoElement || videoElement.paused) return;
-
-    const percent = (videoElement.currentTime / videoElement.duration) * 100;
-    progressBar.val(percent);
-
-    // 更新时间显示
-    $(winSelector)
-      .find(".video-time")
-      .text(
-        `${deps.utils.formatTime(
-          videoElement.currentTime
-        )} / ${deps.utils.formatTime(videoElement.duration)}`
-      );
-  }, 1000);
-};
-
-/**
- * 停止视频进度更新
- */
-const stopProgressUpdate = () => {
-  if (progressUpdateInterval) {
-    clearInterval(progressUpdateInterval);
-    progressUpdateInterval = null;
-  }
-};
-
-/**
- * 更新音量
- */
-export const updateVolume = (volume) => {
-  const $ = deps.jQuery;
-  const video = $(winSelector).find(".image-player-video")[0];
-  if (video) {
-    video.volume = volume;
-    deps.settings.saveSettings({ volume });
-  }
+export default {
+  init,
+  cleanup,
+  loadMedia,
+  togglePlayback,
+  getPlayer: () => player,
 };
