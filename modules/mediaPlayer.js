@@ -8,14 +8,18 @@ const {
 } = deps;
 const { formatTime, applyTransitionEffect } = utils;
 
+// 声明模块级变量
+let switchTimer = null;
+let progressUpdateInterval = null;
+const winSelector = "#st-image-player-window"; // 播放器窗口选择器
+let preloadedMedia = null;
+
 // 模块内状态
 let mediaList = [];
 let currentMediaIndex = 0;
-let switchTimer = null;
-let preloadedMedia = null;
 let currentMediaType = "image";
-let progressUpdateInterval = null;
-const winSelector = "#st-image-player-window";
+
+
 
 /**
  * 初始化媒体播放器

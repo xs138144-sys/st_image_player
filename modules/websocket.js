@@ -4,6 +4,7 @@ const { EventBus, toastr, settings: { get, save } } = deps;
 let websocket = null;
 let heartbeatTimer = null;
 let reconnectTimeout = null;
+let ws = null; // WebSocket实例
 const DEFAULT_RECONNECT_DELAY = 10000; // 默认10秒重连
 
 /**
@@ -106,16 +107,14 @@ const connectWebSocket = () => {
   }
 };
 
-/**
- * 关闭WebSocket连接
- */
-export const closeWebSocket = () => {
-  if (websocket) {
-    websocket.close(1000, "正常关闭");
-    websocket = null;
+// 实现关闭连接函数
+const closeWebSocket = () => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close(1000, "扩展清理");
+    console.log(`[websocket] 连接已关闭`);
   }
+  ws = null;
 };
-
 /**
  * 启动心跳检测（保留旧版30秒间隔，发送ping类型）
  */

@@ -43,6 +43,17 @@ export const init = () => {
 /**
  * 清理AI事件模块
  */
+
+
+/**
+ * 清理所有事件监听
+ */
+const cleanupEventListeners = () => {
+  eventListeners.forEach((removeListener) => removeListener());
+  eventListeners = [];
+  console.log(`[aiEvents] 事件监听已清理`);
+};
+
 export const cleanup = () => {
   try {
     cleanupEventListeners();
@@ -53,14 +64,7 @@ export const cleanup = () => {
   }
 };
 
-/**
- * 清理所有事件监听
- */
-const cleanupEventListeners = () => {
-  eventListeners.forEach((removeListener) => removeListener());
-  eventListeners = [];
-  console.log(`[aiEvents] 事件监听已清理`);
-};
+
 
 /**
  * 检查AI事件依赖是否就绪
@@ -235,7 +239,7 @@ const registerAIEventListeners = () => {
       // 4. 注册成功
       deps.settings.saveSettings({ aiEventRegistered: true });
       console.log(`[aiEvents] 注册成功`);
-      deps.toastr.success("AI检测功能已就绪");
+      deps.toastr.success("AI检测功能已就绪"); cleanupEventListeners()
     } catch (e) {
       console.error(`[aiEvents] 注册失败:`, e);
       if (retryCount < maxRetries) {

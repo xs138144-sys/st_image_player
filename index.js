@@ -58,7 +58,8 @@ const loadModule = async (moduleName) => {
     await module.init();
     console.log(`[index] 模块加载完成: ${moduleName}`);
 
-    // 注册模块清理    deps.registerModule(moduleName, module);
+    // 注册模块到依赖管理器
+    deps.registerModule(moduleName, module);
 
     // 注册模块清理事件（扩展禁用时触发）
     const removeCleanupListener = EventBus.on(

@@ -307,7 +307,9 @@ export const createPlayerWindow = async () => {
             <i class="fa-solid ${settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol"
     }"></i>
           </button>
-          <button class="control-btn switch-mode-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""
+          <button class="control-btn switch-mode-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""}">
+    <i class="fa-solid fa-exchange"></i>
+          </button>
     }" title="${settings.autoSwitchMode === "detect" ? "检测播放" : "定时切换"
     }">
             <i class="fa-solid ${settings.autoSwitchMode === "detect" ? "fa-robot" : "fa-clock"

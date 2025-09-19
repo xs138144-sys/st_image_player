@@ -1,6 +1,9 @@
 /**
  * 迁移配置到最新版本
  */
+
+const EXTENSION_ID = "st_image_player";
+const CONFIG_VERSION = "1.4.2"; // 与扩展版本一致
 const migrateSettings = () => {
   const settings = get();
 
@@ -60,36 +63,37 @@ const migrateSettings = () => {
     }
 
     if (settings.config_version === "1.4.0") {
-      // 1.4.0 -> 1.4.2 迁移
-      if (settings.mediaConfig.image_extensions) {
-        // 修复可能的拼写错误（老版本可能误写为image_extensionsions）
-        const targetExtList = settings.mediaConfig.image_extensionsions || settings.mediaConfig.image_extensions;
-        ["webp", "apng"].forEach(ext => {
-          const extWithDot = `.${ext}`;
-          if (!targetExtList.includes(extWithDot)) {
-            targetExtList.push(extWithDot);
-          }
-        });
-        // 修正拼写错误
-        if (settings.mediaConfig.image_extensionsions) {
-          settings.mediaConfig.image_extensions = targetExtList;
-          delete settings.mediaConfig.image_extensionsions;
-        }
-      }
-      if (settings.mediaConfig.video_extensions) {
-        [".mov", ".avi", ".mkv"].forEach(ext => {
-          if (!settings.mediaConfig.video_extensions.includes(ext)) {
-            settings.mediaConfig.video_extensions.push(ext);
-          }
-        });
-      }
+      // 1.4.0 -> 1.4.2 迁移：确保所有支持的格式被添加
+      const imageExts = settings.mediaConfig.image_extensions || [];
+      const requiredImageExts = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".apng"];
+      requiredImageExts.forEach(ext => {
+        if (!imageExts.includes(ext)) imageExts.push(ext);
+      });
+      settings.mediaConfig.image_extensions = imageExts;
+
+      const videoExts = settings.mediaConfig.video_extensions || [];
+      const requiredVideoExts = [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"];
+      requiredVideoExts.forEach(ext => {
+        if (!videoExts.includes(ext)) videoExts.push(ext);
+      });
+      settings.mediaConfig.video_extensions = videoExts;
+
       settings.config_version = CONFIG_VERSION;
     }
-
-    // 保存迁移后的配置
-    save();
-    toastr.info(`媒体播放器配置已更新到最新版本`);
+    if (settings.mediaConfig.video_extensions) {
+      [".mov", ".avi", ".mkv"].forEach(ext => {
+        if (!settings.mediaConfig.video_extensions.includes(ext)) {
+          settings.mediaConfig.video_extensions.push(ext);
+        }
+      });
+    }
+    settings.config_version = CONFIG_VERSION;
   }
+
+  // 保存迁移后的配置
+  save();
+  toastr.info(`媒体播放器配置已更新到最新版本`);
+
 };
 
 const cleanup = () => {
