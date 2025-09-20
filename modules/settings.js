@@ -45,6 +45,17 @@ if (!extension_settings[EXTENSION_ID]) {
     transitionEffect: "fade",
     randomPlayedIndices: [],
     config_version: CONFIG_VERSION
+    aiDetectEnabled: true,
+    playerDetectEnabled: true,
+    preloadImages: true,
+    preloadVideos: false,
+    aiResponseCooldown: 3000,
+    switchInterval: 5000,
+    lastSwitchTime: 0,
+    switchTriggers: {
+      aiResponse: true,
+      userMessage: true
+    }
   };
 }
 
@@ -144,21 +155,30 @@ const migrateSettings = () => {
         }
       }
 
-      settings.config_version = CONFIG_VERSION;
+      if (settings.aiDetectEnabled === undefined) settings.aiDetectEnabled = true;
+      if (settings.playerDetectEnabled === undefined) settings.playerDetectEnabled = true;
+      if (settings.preloadImages === undefined) settings.preloadImages = true;
+      if (settings.preloadVideos === undefined) settings.preloadVideos = false;
+      if (settings.aiResponseCooldown === undefined) settings.aiResponseCooldown = 3000;
+      if (settings.switchInterval === undefined) settings.switchInterval = 5000;
+      if (settings.lastSwitchTime === undefined) settings.lastSwitchTime = 0;
     }
-
-
-    const videoExts = settings.mediaConfig.video_extensions || [];
-    const requiredVideoExts = [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"];
-    requiredVideoExts.forEach(ext => {
-      if (!videoExts.includes(ext)) videoExts.push(ext);
-    });
-    settings.mediaConfig.video_extensions = videoExts;
 
     settings.config_version = CONFIG_VERSION;
   }
 
+
+  const videoExts = settings.mediaConfig.video_extensions || [];
+  const requiredVideoExts = [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"];
+  requiredVideoExts.forEach(ext => {
+    if (!videoExts.includes(ext)) videoExts.push(ext);
+  });
+  settings.mediaConfig.video_extensions = videoExts;
+
   settings.config_version = CONFIG_VERSION;
+}
+
+settings.config_version = CONFIG_VERSION;
 }
 
 // 保存迁移后的配置

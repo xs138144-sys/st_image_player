@@ -619,6 +619,48 @@ export const createSettingsPanel = async () => {
   console.log(`[ui] 设置面板创建完成`);
 };
 
+// modules/ui.js 补充设置面板事件
+export const createSettingsPanel = async () => {
+  // 原有HTML渲染逻辑...
+
+  // 补充检测模式子选项显示/隐藏逻辑
+  panel.find("#toggle-detect-mode").on("click", function () {
+    const isActive = $(this).hasClass("active");
+    panel.find("#detect-sub-options").toggle(isActive);
+  });
+
+  // 补充播放模式切换时的联动（禁用/启用循环选项）
+  panel.find("#player-play-mode").on("change", function () {
+    const isRandom = $(this).val() === "random";
+    panel.find("#player-slideshow-mode").prop("disabled", isRandom);
+    if (isRandom) {
+      panel.find("#player-slideshow-mode").prop("checked", false);
+      // 同步到设置
+      const settings = deps.settings.get();
+      settings.slideshowMode = false;
+      deps.settings.save();
+    }
+  });
+
+  // 补充所有设置项的保存逻辑（与老版index.js的saveCurrentSettings对应）
+  const saveSettings = () => {
+    const settings = deps.settings.get();
+    // 同步检测模式子选项
+    settings.aiDetectEnabled = panel.find("#player-ai-detect").prop("checked");
+    settings.playerDetectEnabled = panel.find("#player-player-detect").prop("checked");
+    // 同步预加载设置
+    settings.preloadImages = panel.find("#player-preload-images").prop("checked");
+    settings.preloadVideos = panel.find("#player-preload-videos").prop("checked");
+    // 同步切换间隔
+    settings.switchInterval = parseInt(panel.find("#player-interval").val()) || 5000;
+    // 保存
+    deps.settings.save();
+  };
+
+  // 绑定设置项变更事件
+  panel.find("#player-ai-detect, #player-player-detect, #player-preload-images, #player-preload-videos, #player-interval")
+    .on("change input", saveSettings);
+};
 
 const setupWindowEvents = () => {
   const $ = deps.jQuery;

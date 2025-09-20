@@ -48,6 +48,7 @@ export const formatTime = (seconds) => {
 /**
  * 调整视频控制栏布局
  */
+// modules/utils.js 补充调整逻辑
 export const adjustVideoControlsLayout = (win) => {
   const settings = deps.settings.get();
   const $ = deps.jQuery;

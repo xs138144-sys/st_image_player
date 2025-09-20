@@ -18,27 +18,56 @@ let mediaList = [];
 let currentMediaIndex = 0;
 let currentMediaType = "image";
 
-// 添加老版本特有的AI检测功能
+// modules/mediaPlayer.js 补充完善
+export const initPlayer = () => {
+  // 原有初始化逻辑...
+
+  // 注册AI事件监听器（关键：确保在初始化时调用）
+  const removeListeners = registerAIEventListeners();
+
+  // 绑定播放器播放器销毁时清理事件监听
+  EventBus.on("destroyPlayerDestroy", () => {
+    removeListeners.forEach(remove => remove());
+  });
+
+  // 补充之前缺失的定时切换启动逻辑
+  if (get().autoSwitchMode === "timer") {
+    EventBus.emit("startTimerSwitch");
+  }
+};
+
+// 修正原registerAIEventListeners函数事件名称与触发源匹配（关键修复）
 const registerAIEventListeners = () => {
   console.log(`[mediaPlayer] 注册AI事件监听器`);
 
-  // 监听AI回复事件（修复：恢复触发AI回复时自动切换媒体）
+  // 修复事件名称与触发源一致（老版本使用"aiResponse"和"playerMessage"）
   const removeAIResponseListener = EventBus.on("aiResponse", () => {
     const settings = get();
     if (settings.autoSwitchMode === "detect" && settings.aiDetectEnabled) {
+      // 补充冷却时间检查（与之前的triggerAuto切换逻辑统一）
+      const now = Date.now();
+      if (now - (settings.lastSwitchTime || 0) < (settings.aiResponseCooldown || 3000)) {
+        return;
+      }
+      settings.lastSwitchTime = now;
+      save();
       showMedia("next");
     }
   });
 
-  // 玩家消息事件（修复：玩家发送消息时自动切换媒体）
   const removePlayerMessageListener = EventBus.on("playerMessage", () => {
     const settings = get();
     if (settings.autoSwitchMode === "detect" && settings.playerDetectEnabled) {
+      const now = Date.now();
+      if (now - (settings.lastSwitchTime || 0) < (settings.aiResponseCooldown || 3000)) {
+        return;
+      }
+      settings.lastSwitchTime = now;
+      save();
       showMedia("next");
     }
   });
 
-  // 保存取消监听方法（修复：确保事件能正确解绑，避免内存泄漏）
   return [removeAIResponseListener, removePlayerMessageListener];
 };
 
