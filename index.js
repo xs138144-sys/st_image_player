@@ -2,6 +2,9 @@ import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 import { deps } from "./core/deps.js";
 
+// 添加 utils 导入
+import { utils } from "./modules/utils.js"; // 添加这行
+
 const EXT_ID = "st_image_player";
 
 // 需加载的模块列表（按依赖顺序排列）
@@ -169,7 +172,6 @@ window.addEventListener("error", (e) => {
   }
 });
 
-// 扩展卸载时清理资源
 window.addEventListener("beforeunload", () => {
   deps.EventBus.emit("extensionDisable");
   if (window.moduleCleanupListeners) {
@@ -182,15 +184,3 @@ window.addEventListener("beforeunload", () => {
   console.log(`[index] 扩展资源已清理`);
 });
 
-// 注册清理函数
-utils.registerModuleCleanup(EXT_ID, () => {
-  console.log(`[${EXT_ID}] 执行全局清理`);
-  deps.EventBus.emit("extensionDisable");
-  if (window.moduleCleanupListeners) {
-    window.moduleCleanupListeners.forEach((removeListener) => {
-      if (typeof removeListener === "function") {
-        removeListener();
-      }
-    });
-  }
-});

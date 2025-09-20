@@ -1,5 +1,5 @@
-import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced } from "../../../../script.js";
+import { extension_settings } from "./../../../extensions.js";
+import { saveSettingsDebounced } from "./../../../../script.js";
 import { deps } from "../core/deps.js";
 
 const EXTENSION_ID = "st_image_player";
