@@ -2,6 +2,27 @@
 
 基于 SillyTavern 老版本图片播放器（v1.3.0）重构迭代，安全集成全媒体播放能力，聚焦稳定性修复与功能优化，保留老版本核心交互逻辑，同时解决新版本潜在的脚本崩溃、状态不同步等问题，适配多系统环境。
 
+st_image_player/
+├── 核心配置文件
+│ ├── manifest.json # 扩展元数据配置（ID、依赖、入口等）
+│ ├── requirements.txt # 后端服务依赖（Flask、WebSocket 等）
+│ └── README.md # 项目说明文档
+├── 入口与初始化
+│ └── index.js # 扩展入口，负责模块加载、初始化流程控制
+├── 后端服务
+│ └── image_service.py # 媒体服务后端（文件扫描、API 提供、WebSocket 支持）
+├── 核心基础模块（core/）
+│ ├── deps.js # 依赖管理（安全获取 toastr、注册模块）
+│ └── eventBus.js # 事件总线（跨模块通信中枢）
+└── 功能模块（modules/）
+├── utils.js # 工具函数（目录验证、过渡效果等）
+├── settings.js # 配置管理（保存/读取扩展设置）
+├── api.js # 后端接口封装（媒体列表、服务状态等 HTTP 请求）
+├── websocket.js # 实时通信（与后端 WebSocket 连接管理）
+├── mediaPlayer.js # 播放核心（媒体显示、状态管理、播放控制）
+├── aiEvents.js # AI 事件处理（监听 AI/用户消息触发媒体切换）
+└── ui.js # 界面组件（播放器窗口、设置面板创建与事件绑
+
 ## 一、核心功能
 
 ### 1. 基础播放能力（向下兼容老版本）

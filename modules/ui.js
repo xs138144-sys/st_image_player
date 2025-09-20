@@ -15,7 +15,7 @@ const {
 
 const EXTENSION_ID = "st_image_player";
 const PLAYER_WINDOW_ID = "st-image-player-window";
-const SETTINGS_PANEL_ID = "st-image-player-settings-panel"; // 修复ID格式错误
+const SETTINGS_PANEL_ID = "st-image-player-settings-panel";
 
 /**
  * 初始化UI模块（创建界面+绑定事件）
@@ -73,41 +73,43 @@ export const init = () => {
       removeMediaStateListener
     ];
 
-    const $ = deps.jQuery;
-    if (!$) {
-      toastr.error("jQuery 未加载，UI 功能无法使用");
-      return;
-    }
+    // 使用safeJQuery确保jQuery可用
+    safeJQuery(() => {
+      const $ = deps.jQuery;
+      if (!$) {
+        toastr.error("jQuery 未加载，UI 功能无法使用");
+        return;
+      }
 
-    // 创建扩展菜单按钮
-    createExtensionButton();
+      // 创建扩展菜单按钮
+      createExtensionButton();
 
-    // 启用状态下创建UI
-    if (settings.masterEnabled) {
-      safeJQuery(async () => {
-        await createPlayerWindow();
-        await createSettingsPanel();
+      // 启用状态下创建UI
+      if (settings.masterEnabled) {
+        createPlayerWindow();
+        createSettingsPanel();
+
         // 检查服务就绪后显示初始媒体
-        const status = await new Promise((resolve) => {
-          const removeListener = EventBus.on(
-            "serviceStatusChecked",
-            (status) => {
-              removeListener();
-              resolve(status);
+        const statusListener = EventBus.on(
+          "serviceStatusChecked",
+          (status) => {
+            statusListener(); // 移除监听器
+            if (status.active && settings.isWindowVisible) {
+              EventBus.emit("requestShowInitialMedia");
             }
-          );
-          EventBus.emit("requestCheckServiceStatus");
-        });
-        if (status.active && settings.isWindowVisible) {
-          EventBus.emit("requestShowInitialMedia");
-        }
-      });
-    }
+          }
+        );
+        EventBus.emit("requestCheckServiceStatus");
+      }
+    });
 
     console.log(`[ui] 初始化完成，已注册事件监听`);
   } catch (e) {
-    toastr.error(`[ui] 初始化失败: ${e.message}`);
     console.error(`[ui] 初始化错误:`, e);
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`[ui] 初始化失败: ${e.message}`);
+    }
   }
 };
 
@@ -116,24 +118,33 @@ export const init = () => {
  */
 export const cleanup = () => {
   try {
-    const $ = deps.jQuery;
-    if ($) {
-      // 移除UI元素
-      $(`#${PLAYER_WINDOW_ID}`).remove();
-      $(`#${SETTINGS_PANEL_ID}`).remove();
-      $(`#ext_menu_${EXTENSION_ID}`).remove();
-    }
+    safeJQuery(() => {
+      const $ = deps.jQuery;
+      if ($) {
+        // 移除UI元素
+        $(`#${PLAYER_WINDOW_ID}`).remove();
+        $(`#${SETTINGS_PANEL_ID}`).remove();
+        $(`#ext_menu_${EXTENSION_ID}`).remove();
+      }
+    });
 
     // 取消事件监听
     if (window.uiEventListeners) {
-      window.uiEventListeners.forEach((removeListener) => removeListener());
+      window.uiEventListeners.forEach((removeListener) => {
+        if (typeof removeListener === "function") {
+          removeListener();
+        }
+      });
       window.uiEventListeners = null;
     }
 
     console.log(`[ui] 资源清理完成`);
   } catch (e) {
-    toastr.error(`[ui] 清理失败: ${e.message}`);
     console.error(`[ui] 清理错误:`, e);
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`[ui] 清理失败: ${e.message}`);
+    }
   }
 };
 
@@ -232,94 +243,118 @@ const createExtensionButton = () => {
  */
 export const createPlayerWindow = async () => {
   const settings = get();
-  const $ = deps.jQuery;
-  if (!$ || !settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
-  // 视频控制栏HTML（根据设置动态生成）
-  const videoControlsHtml = settings.showVideoControls
-    ? `
-    <div class="video-controls">
-      ${settings.customVideoControls.showProgress
+  safeJQuery(() => {
+    const $ = deps.jQuery;
+    if (!$ || !settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+
+    // 视频控制栏HTML（根据设置动态生成）
+    const videoControlsHtml = settings.showVideoControls
       ? `
-        <div class="progress-container">
-          <div class="progress-bar">
-            <div class="progress-loaded"></div>
-            <div class="progress-played"></div>
-            <div class="progress-handle"></div>
-          </div>
-        </div>
-      `
-      : ""
-    }
-      <div class="video-control-group">
-        ${settings.customVideoControls.showVolume
-      ? `
-          <button class="video-control-btn volume-btn">
-            <i class="fa-solid ${settings.videoVolume > 0 ? "fa-volume-high" : "fa-volume-mute"
-      }"></i>
-          </button>
-          <div class="volume-slider-container">
-            <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="${settings.videoVolume
-      }" />
+      <div class="video-controls">
+        ${settings.customVideoControls.showProgress
+        ? `
+          <div class="progress-container">
+            <div class="progress-bar">
+              <div class="progress-loaded"></div>
+              <div class="progress-played"></div>
+              <div class="progress-handle"></div>
+            </div>
           </div>
         `
-      : ""
-    }
-        ${settings.customVideoControls.showLoop
-      ? `
-          <button class="video-control-btn loop-btn ${settings.videoLoop ? "active" : ""
-      }">
-            <i class="fa-solid fa-repeat"></i>
-          </button>
-        `
-      : ""
-    }
-        ${settings.customVideoControls.showTime
-      ? `
-          <div class="time-display">
-            <span class="current-time">00:00</span> / <span class="total-time">00:00</span>
+        : ""
+      }
+        <div class="video-control-group">
+          ${settings.customVideoControls.showVolume
+        ? `
+            <button class="video-control-btn volume-btn">
+              <i class="fa-solid ${settings.videoVolume > 0 ? "fa-volume-high" : "fa-volume-mute"
+        }"></i>
+            </button>
+            <div class="volume-slider-container">
+              <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="${settings.videoVolume
+        }" />
+            </div>
+          `
+        : ""
+      }
+          ${settings.customVideoControls.showLoop
+        ? `
+            <button class="video-control-btn loop-btn ${settings.videoLoop ? "active" : ""
+        }">
+              <i class="fa-solid fa-repeat"></i>
+            </button>
+          `
+        : ""
+      }
+          ${settings.customVideoControls.showTime
+        ? `
+            <div class="time-display">
+              <span class="current-time">00:00</span> / <span class="total-time">00:00</span>
+            </div>
+          `
+        : ""
+      }
+        </div>
+      </div>
+    `
+      : "";
+
+    // 完整闭合的播放器窗口HTML
+    const html = `
+      <div id="${PLAYER_WINDOW_ID}" class="st-player-window ${settings.hideBorder ? "no-border" : ""}" style="${settings.windowPosition ? `left: ${settings.windowPosition.left}px; top: ${settings.windowPosition.top}px; width: ${settings.windowSize?.width || 640}px; height: ${settings.windowSize?.height || 480}px;` : ""}">
+        <div class="st-player-header">
+          <div class="title"><i class="fa-solid fa-film"></i> 媒体播放器</div>
+          <div class="window-controls">
+            <button class="lock"><i class="fa-solid ${settings.isLocked ? "fa-lock" : "fa-lock-open"}"></i></button>
+            <button class="toggle-info ${settings.showInfo ? "active" : ""}"><i class="fa-solid fa-circle-info"></i></button>
           </div>
-        `
-      : ""
-    }
-      </div>
-    </div>
-  `
-    : "";
-
-  // 完整闭合的播放器窗口HTML
-  const html = `
-    <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? "no-border" : ""}" style="${settings.windowPosition ? `left: ${settings.windowPosition.left}px; top: ${settings.windowPosition.top}px; width: ${settings.windowSize?.width || 640}px; height: ${settings.windowSize?.height || 480}px;` : ""}">
-      <div class="image-player-header">
-        <div class="title"><i class="fa-solid fa-film"></i> 媒体播放器</div>
-        <div class="window-controls">
-          <button class="lock"><i class="fa-solid ${settings.isLocked ? "fa-lock" : "fa-lock-open"}"></i></button>
-          <button class="toggle-info ${settings.showInfo ? "active" : ""}"><i class="fa-solid fa-circle-info"></i></button>
         </div>
-      </div>
-      <div class="st-player-content">
-        <div class="st-video-container">
-          <img class="st-player-img" src="" alt="媒体内容" />
-          <video class="st-player-video" controlsList="nodownload" preload="${settings.mediaConfig.preload_strategy.video ? "auto" : "none"}"></video>
-          <div class="loading-animation">加载中...</div>
+        <div class="st-player-content">
+          <div class="st-video-container">
+            <img class="st-player-img" src="" alt="媒体内容" />
+            <video class="st-player-video" controlsList="nodownload" preload="${settings.mediaConfig.preload_strategy.video ? "auto" : "none"}"></video>
+            <div class="loading-animation">加载中...</div>
+          </div>
+          <div class="image-info"></div>
+          ${videoControlsHtml}
         </div>
-        <div class="image-info"></div>
-        ${videoControlsHtml}
+        <div class="st-player-controls">
+          <div class="controls-group">
+            <button class="control-btn prev"><i class="fa-solid fa-backward-step"></i></button>
+            <button class="control-btn play-pause"><i class="fa-solid ${settings.isPlaying ? "fa-pause" : "fa-play"}"></i></button>
+            <button class="control-btn next"><i class="fa-solid fa-forward-step"></i></button>
+          </div>
+          <div class="controls-group">
+            <span class="control-text">${settings.playMode === "random" ? "随机播放" : "顺序播放"}</span>
+            <button class="control-btn mode-switch"><i class="fa-solid fa-shuffle"></i></button>
+          </div>
+          <div class="controls-group">
+            <span class="control-text">${settings.autoSwitchMode === "detect" ? "检测模式" : "定时模式"}</span>
+            <button class="control-btn switch-mode-toggle"><i class="fa-solid fa-clock"></i></button>
+          </div>
+          <div class="controls-group media-filter-group">
+            <button class="control-btn media-filter-btn ${settings.mediaFilter === "all" ? "active" : ""}" data-type="all"><i class="fa-solid fa-photo-film"></i></button>
+            <button class="control-btn media-filter-btn ${settings.mediaFilter === "image" ? "active" : ""}" data-type="image"><i class="fa-solid fa-image"></i></button>
+            <button class="control-btn media-filter-btn ${settings.mediaFilter === "video" ? "active" : ""}" data-type="video"><i class="fa-solid fa-video"></i></button>
+          </div>
+        </div>
+        <div class="resize-handle"></div>
       </div>
-    </div>
-  `;
+    `;
 
-  $("body").append(html);
-  adjustVideoControlsLayout($(`#${PLAYER_WINDOW_ID}`));
-  setupWindowEvents(); // 绑定窗口交互事件
-  positionWindow(); // 定位窗口
-  bindVideoControls(); // 绑定视频控制事件
+    $("body").append(html);
+    adjustVideoControlsLayout($(`#${PLAYER_WINDOW_ID}`));
+    setupWindowEvents(); // 绑定窗口交互事件
+    positionWindow(); // 定位窗口
+    bindVideoControls(); // 绑定视频控制事件
 
-  // 初始化视频音量
-  const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-  if (video) video.volume = settings.videoVolume;
+    // 初始化视频音量
+    const video = $(`#${PLAYER_WINDOW_ID} .st-player-video`)[0];
+    if (video) video.volume = settings.videoVolume;
 
-  console.log(`[ui] 播放器窗口创建完成`);
+    console.log(`[ui] 播放器窗口创建完成`);
+  });
 };
 
 /**

@@ -27,9 +27,14 @@ const MODULES = [
 
 // 打印所有核心文件的实际请求路径
 const logResolvedPath = (relativePath) => {
-  const resolvedUrl = new URL(relativePath, window.location.href).href;
-  console.log(`[${EXT_ID}] 验证路径: ${resolvedUrl}`);
-  return resolvedUrl;
+  try {
+    const resolvedUrl = new URL(relativePath, window.location.href).href;
+    console.log(`[${EXT_ID}] 验证路径: ${resolvedUrl}`);
+    return resolvedUrl;
+  } catch (e) {
+    console.error(`[${EXT_ID}] 路径验证失败: ${relativePath}`, e);
+    return relativePath;
+  }
 };
 
 // 初始化前强制检查所有路径
@@ -43,15 +48,27 @@ const verifyPaths = () => {
 /**
  * 动态加载单个模块
  */
+/**
+ * 动态加载单个模块
+ */
 const loadModule = async (moduleName) => {
   try {
-    const module = await import(`./modules/${moduleName}.js`);
+    // 确保模块路径正确
+    const modulePath = `./modules/${moduleName}.js`;
+    const module = await import(modulePath);
+
+    // 检查模块是否有效
+    if (!module || typeof module !== 'object') {
+      throw new Error(`模块加载失败: ${moduleName}`);
+    }
+
     // 每个模块必须实现init和cleanup方法
     if (typeof module.init !== "function") {
       throw new Error(`缺少init()方法`);
     }
     if (typeof module.cleanup !== "function") {
-      throw new Error(`缺少cleanup()方法`);
+      console.warn(`[index] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
+      module.cleanup = () => { }; // 提供默认清理函数
     }
 
     // 初始化模块
@@ -72,7 +89,10 @@ const loadModule = async (moduleName) => {
     return true;
   } catch (e) {
     console.error(`[index] 模块加载失败: ${moduleName}`, e);
-    deps.toastr.error(`模块${moduleName}加载失败: ${e.message}`);
+    // 只有在toastr可用时才显示错误
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`模块${moduleName}加载失败: ${e.message}`);
+    }
     return false;
   }
 };
@@ -106,17 +126,24 @@ const initExtension = async () => {
 const safeInit = (fn) => {
   try {
     console.log(`[${EXT_ID}] 开始初始化`);
-    fn();
+    return fn();
   } catch (error) {
     console.error(`[${EXT_ID}] 初始化失败:`, error);
-    eventSource?.emit(event_types.EXTENSION_ERROR, {
-      id: EXT_ID,
-      error: error.message,
-      stack: error.stack,
-    });
+    if (eventSource && event_types && event_types.EXTENSION_ERROR) {
+      eventSource.emit(event_types.EXTENSION_ERROR, {
+        id: EXT_ID,
+        error: error.message,
+        stack: error.stack,
+      });
+    }
+    // 确保错误不会阻止后续代码执行
+    return null;
   }
 };
 
+/**
+ * 安全启动扩展（等待SillyTavern环境就绪）
+ */
 /**
  * 安全启动扩展（等待SillyTavern环境就绪）
  */
@@ -180,19 +207,18 @@ const waitForSTAndInit = () => {
     saveSettingsDebounced();
   }
 
+  // 检查ST是否已经就绪
   if (window.appReady) {
-    safeInit(initExtension);
-    return;
+    return safeInit(initExtension);
   }
 
   // 定义备选事件名（根据SillyTavern实际事件类型调整）
-  const appReadyEvent = event_types.APP_READY || "appReady" || "APP_READY";
+  const appReadyEvent = event_types?.APP_READY || "appReady";
 
-  // 检查事件名是否有效
-  if (!appReadyEvent) {
-    console.warn(`[${EXT_ID}] 未找到有效的APP_READY事件类型，直接初始化`);
-    safeInit(initExtension);
-    return;
+  // 检查事件源是否可用
+  if (!eventSource) {
+    console.warn(`[${EXT_ID}] 事件源不可用，直接初始化`);
+    return safeInit(initExtension);
   }
 
   const readyHandler = () => {
@@ -200,10 +226,18 @@ const waitForSTAndInit = () => {
     safeInit(initExtension);
   };
 
-  eventSource.on(appReadyEvent, readyHandler);
+  // 添加事件监听器
+  if (typeof eventSource.on === "function") {
+    eventSource.on(appReadyEvent, readyHandler);
+  } else {
+    console.warn(`[${EXT_ID}] 事件源不支持on方法，直接初始化`);
+    safeInit(initExtension);
+  }
+
+  // 设置超时，防止永远等待
   setTimeout(() => {
     if (!window.appReady) {
-      console.error(`[${EXT_ID}] 等待ST就绪超时`);
+      console.warn(`[${EXT_ID}] 等待ST就绪超时，尝试直接初始化`);
       safeInit(initExtension);
     }
   }, 15000);
@@ -213,16 +247,24 @@ const waitForSTAndInit = () => {
 waitForSTAndInit();
 
 // 全局错误处理
+// 全局错误处理
 window.addEventListener("error", (e) => {
   console.error("[index] 全局错误:", e.error);
-  deps.toastr.error(`媒体播放器错误: ${e.error.message}`);
+  // 只有在toastr可用时才显示错误
+  if (deps.toastr && typeof deps.toastr.error === "function") {
+    deps.toastr.error(`媒体播放器错误: ${e.error?.message || "未知错误"}`);
+  }
 });
 
 // 扩展卸载时清理资源
 window.addEventListener("beforeunload", () => {
   EventBus.emit("extensionDisable");
   if (window.moduleCleanupListeners) {
-    window.moduleCleanupListeners.forEach((removeListener) => removeListener());
+    window.moduleCleanupListeners.forEach((removeListener) => {
+      if (typeof removeListener === "function") {
+        removeListener();
+      }
+    });
   }
   console.log(`[index] 扩展资源已清理`);
 });
@@ -232,6 +274,10 @@ registerModuleCleanup(EXT_ID, () => {
   console.log(`[${EXT_ID}] 执行全局清理`);
   EventBus.emit("extensionDisable");
   if (window.moduleCleanupListeners) {
-    window.moduleCleanupListeners.forEach((removeListener) => removeListener());
+    window.moduleCleanupListeners.forEach((removeListener) => {
+      if (typeof removeListener === "function") {
+        removeListener();
+      }
+    });
   }
 });

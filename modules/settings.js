@@ -1,9 +1,51 @@
 import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
-import { deps } from "../core/deps.js"; // 新增依赖导入
+import { deps } from "../core/deps.js";
 
 const EXTENSION_ID = "st_image_player";
 const CONFIG_VERSION = "1.4.2";
+
+// 确保扩展设置存在
+if (!extension_settings[EXTENSION_ID]) {
+  extension_settings[EXTENSION_ID] = {
+    enabled: true,
+    lastPlayed: null,
+    volume: 0.8,
+    masterEnabled: true,
+    isWindowVisible: true,
+    playMode: "random",
+    autoSwitchMode: "detect",
+    showVideoControls: true,
+    customVideoControls: {
+      showProgress: true,
+      showVolume: true,
+      showLoop: true,
+      showTime: true
+    },
+    videoVolume: 0.8,
+    videoLoop: false,
+    hideBorder: false,
+    showInfo: true,
+    isLocked: false,
+    mediaFilter: "all",
+    isPlaying: false,
+    serviceDirectory: "",
+    mediaConfig: {
+      image_max_size_mb: 5,
+      video_max_size_mb: 100,
+      preload_strategy: {
+        image: true,
+        video: false
+      }
+    },
+    pollingInterval: 30000,
+    websocket_timeout: 10000,
+    transitionEffect: "fade",
+    randomPlayedIndices: [],
+    config_version: CONFIG_VERSION
+  };
+}
+
 const migrateSettings = () => {
   const settings = get();
 
@@ -86,7 +128,10 @@ const migrateSettings = () => {
 
   // 保存迁移后的配置
   save();
-  deps.toastr.info(`媒体播放器配置已更新到最新版本`); // 修复toastr引用
+  // 使用安全的toastr调用
+  if (deps.toastr && typeof deps.toastr.info === "function") {
+    deps.toastr.info(`媒体播放器配置已更新到最新版本`);
+  }
 };
 
 const cleanup = () => {
@@ -98,7 +143,11 @@ const cleanup = () => {
     save();
     console.log(`[settings] 资源清理完成`);
   } catch (e) {
-    deps.toastr.error(`[settings] 清理失败: ${e.message}`); // 修复toastr引用
+    console.error(`[settings] 清理失败:`, e);
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`[settings] 清理失败: ${e.message}`);
+    }
   }
 };
 
@@ -128,10 +177,22 @@ export const save = () => {
     localStorage.setItem("extension_settings", JSON.stringify(window.extension_settings));
     console.log(`[settings] localStorage保存成功`);
   } catch (e) {
-    deps.toastr.error("设置保存失败，请检查存储权限");
     console.error(`[settings] localStorage保存失败:`, e);
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error("设置保存失败，请检查存储权限");
+    }
   }
 };
 
+/**
+ * 初始化设置模块
+ */
+export const init = () => {
+  // 执行配置迁移
+  migrateSettings();
+  console.log(`[settings] 设置模块初始化完成`);
+};
+
 // 导出必要的函数
-export { migrateSettings, cleanup, save, get };
+export { migrateSettings, cleanup, save, get, init };

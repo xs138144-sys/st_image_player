@@ -1,6 +1,7 @@
 import { deps } from "../core/deps.js";
 
-const { jQuery: $ } = deps;
+// 移除这行，因为 jQuery 可能还未加载
+// const { jQuery: $ } = deps;
 
 /**
  * 初始化工具函数
@@ -49,6 +50,9 @@ export const formatTime = (seconds) => {
  */
 export const adjustVideoControlsLayout = (win) => {
   const settings = deps.settings.get();
+  const $ = deps.jQuery;
+  if (!$) return;
+
   const $controls = win ? win.find(".video-controls") : $(`#st-image-player-window .video-controls`);
 
   if (!settings.showVideoControls) {
@@ -124,17 +128,17 @@ export const isDirectoryValid = (path) => {
  * 安全等待jQuery就绪
  */
 export const safeJQuery = (callback) => {
-  if (typeof $ !== "undefined") {
+  if (typeof window.jQuery !== "undefined") {
     callback();
     return;
   }
 
   let retry = 0;
   const interval = setInterval(() => {
-    if (typeof $ !== "undefined" || retry > 20) {
+    if (typeof window.jQuery !== "undefined" || retry > 20) {
       clearInterval(interval);
-      if (typeof $ !== "undefined") callback();
-      else deps.toastr.error("jQuery 20秒内未就绪，扩展无法运行");
+      if (typeof window.jQuery !== "undefined") callback();
+      else console.error("jQuery 20秒内未就绪，扩展无法运行");
     }
     retry++;
   }, 500);

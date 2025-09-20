@@ -10,6 +10,11 @@ export class EventBus {
    * @returns {Function} 取消监听的函数
    */
   on(eventName, callback) {
+    if (typeof callback !== 'function') {
+      console.error('[EventBus] 回调必须是函数', eventName, callback);
+      return () => { };
+    }
+
     if (!this.events.has(eventName)) {
       this.events.set(eventName, new Set());
     }
@@ -18,11 +23,23 @@ export class EventBus {
 
     // 返回取消监听函数
     return () => {
+      this.off(eventName, callback);
+    };
+  }
+
+  /**
+   * 移除特定事件的特定监听
+   * @param {string} eventName 事件名称
+   * @param {Function} callback 回调函数
+   */
+  off(eventName, callback) {
+    if (this.events.has(eventName)) {
+      const callbacks = this.events.get(eventName);
       callbacks.delete(callback);
       if (callbacks.size === 0) {
         this.events.delete(eventName);
       }
-    };
+    }
   }
 
   /**
@@ -36,7 +53,9 @@ export class EventBus {
       const callbacks = new Set(this.events.get(eventName));
       callbacks.forEach(callback => {
         try {
-          callback(...args);
+          if (typeof callback === 'function') {
+            callback(...args);
+          }
         } catch (e) {
           console.error(`[EventBus] 执行${eventName}回调失败:`, e);
         }
@@ -52,5 +71,14 @@ export class EventBus {
     if (this.events.has(eventName)) {
       this.events.delete(eventName);
     }
+  }
+
+  /**
+   * 检查事件是否有监听器
+   * @param {string} eventName 事件名称
+   * @returns {boolean}
+   */
+  hasListeners(eventName) {
+    return this.events.has(eventName) && this.events.get(eventName).size > 0;
   }
 }

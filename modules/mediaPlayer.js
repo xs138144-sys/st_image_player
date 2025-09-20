@@ -2,7 +2,6 @@ import { deps } from "../core/deps.js";
 
 const {
   EventBus,
-  toastr,
   settings: { get, save },
   utils,
 } = deps;
@@ -19,31 +18,34 @@ let mediaList = [];
 let currentMediaIndex = 0;
 let currentMediaType = "image";
 
-
-
-const init = () => {
+/**
+ * 初始化媒体播放器模块
+ */
+export const init = () => {
   console.log(`[mediaPlayer] 播放模块初始化`);
-  // 初始化window.media状态容器
-  window.media = {
-    // 媒体元数据
-    meta: {
-      type: null, // 'image' | 'video'
-      url: null,
-      name: null,
-      path: null, // 原始路径
-      size: null, // 尺寸信息
-    },
-    // 播放状态
-    state: {
-      isPlaying: false,
-      currentTime: 0, // 视频当前时间
-      duration: 0, // 总时长
-      isLooping: false,
-      isLoading: false,
-      isError: false
-    }
-  };
+
   try {
+    // 初始化window.media状态容器
+    window.media = window.media || {
+      // 媒体元数据
+      meta: {
+        type: null, // 'image' | 'video'
+        url: null,
+        name: null,
+        path: null, // 原始路径
+        size: null, // 尺寸信息
+      },
+      // 播放状态
+      state: {
+        isPlaying: false,
+        currentTime: 0, // 视频当前时间
+        duration: 0, // 总时长
+        isLooping: false,
+        isLoading: false,
+        isError: false
+      }
+    };
+
     // 注册事件监听（接收外部请求）
     const removePlayListener = EventBus.on("requestMediaPlay", (data) => {
       showMedia(data?.direction || "current");
@@ -64,7 +66,7 @@ const init = () => {
     const removeUpdateVolumeListener = EventBus.on(
       "requestUpdateVolume",
       (data) => {
-        updateVolume(data.volume);
+        updateVolume(data);
       }
     );
     const removeMediaListListener = EventBus.on(
@@ -90,19 +92,46 @@ const init = () => {
     // 初始化媒体列表
     EventBus.emit("requestRefreshMediaList");
 
+    // 启动进度更新定时器
+    progressUpdateInterval = setInterval(updateProgress, 1000);
+
     console.log(`[mediaPlayer] 初始化完成，已注册事件监听`);
   } catch (e) {
-    toastr.error(`[mediaPlayer] 初始化失败: ${e.message}`);
     console.error(`[mediaPlayer] 初始化错误:`, e);
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`[mediaPlayer] 初始化失败: ${e.message}`);
+    }
   }
-  progressUpdateInterval = setInterval(updateProgress, 1000);
 };
 
+/**
+ * 更新进度显示
+ */
+const updateProgress = () => {
+  const $ = deps.jQuery;
+  if (!$) return;
 
-const updateProgress = () => { };
+  const video = $(winSelector).find(".st-player-video")[0];
+  if (video && video.duration) {
+    const $win = $(winSelector);
+    $win.find(".current-time").text(formatTime(video.currentTime));
+    $win.find(".total-time").text(formatTime(video.duration));
 
-export { init };
+    const percent = (video.currentTime / video.duration) * 100;
+    $win.find(".progress-played").css("width", `${percent}%`);
 
+    // 更新window.media状态
+    if (window.media) {
+      window.media.state.currentTime = video.currentTime;
+      window.media.state.duration = video.duration;
+    }
+  }
+};
+
+/**
+ * 清理媒体播放器模块
+ */
 export const cleanup = () => {
   try {
     // 清除切换定时器
@@ -119,14 +148,18 @@ export const cleanup = () => {
 
     // 取消事件监听
     if (window.mediaPlayerListeners) {
-      window.mediaPlayerListeners.forEach((removeListener) => removeListener());
+      window.mediaPlayerListeners.forEach((removeListener) => {
+        if (typeof removeListener === "function") {
+          removeListener();
+        }
+      });
       window.mediaPlayerListeners = null;
     }
 
     // 停止视频播放
     const $ = deps.jQuery;
     if ($) {
-      const video = $(winSelector).find(".image-player-video")[0];
+      const video = $(winSelector).find(".st-player-video")[0];
       if (video) video.pause();
     }
 
@@ -135,8 +168,11 @@ export const cleanup = () => {
 
     console.log(`[mediaPlayer] 资源清理完成`);
   } catch (e) {
-    deps.toastr.error(`[mediaPlayer] 清理失败: ${e.message}`);
     console.error(`[mediaPlayer] 清理错误:`, e);
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`[mediaPlayer] 清理失败: ${e.message}`);
+    }
   }
 };
 
@@ -153,7 +189,10 @@ const getRandomMediaIndex = () => {
   // 所有媒体已播放 → 重置
   if (settings.randomPlayedIndices.length >= list.length) {
     settings.randomPlayedIndices = [];
-    toastr.info("随机播放列表已循环，重新开始");
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.info === "function") {
+      deps.toastr.info("随机播放列表已循环，重新开始");
+    }
   }
 
   // 筛选可用索引
@@ -170,7 +209,7 @@ const getRandomMediaIndex = () => {
   // 随机选择并记录
   const randomIndex =
     availableIndices[Math.floor(Math.random() * availableIndices.length)];
-  settings.current.currentRandomIndex = randomIndex;
+  settings.currentRandomIndex = randomIndex;
   settings.randomPlayedIndices.push(randomIndex);
   save();
 
@@ -184,8 +223,8 @@ const preloadMediaItem = async (url, type) => {
   const settings = get();
   // 跳过预加载的情况
   if (
-    (type === "video" && !settings.preloadVideos) ||
-    (type === "image" && !settings.preloadImages)
+    (type === "video" && !settings.mediaConfig.preload_strategy.video) ||
+    (type === "image" && !settings.mediaConfig.preload_strategy.image)
   ) {
     return null;
   }
@@ -225,8 +264,8 @@ export const showMedia = async (direction) => {
   }
 
   const win = $(winSelector);
-  const imgElement = win.find(".image-player-img")[0];
-  const videoElement = win.find(".image-player-video")[0];
+  const imgElement = win.find(".st-player-img")[0];
+  const videoElement = win.find(".st-player-video")[0];
   const loadingElement = win.find(".loading-animation")[0];
   const infoElement = win.find(".image-info")[0];
 
@@ -344,7 +383,7 @@ export const showMedia = async (direction) => {
       // 显示图片
       applyTransitionEffect(imgElement, settings.transitionEffect);
 
-      // 图片加载逻辑（保留完整的加载逻辑，删除重复代码）
+      // 图片加载逻辑
       if (preloadedMedia && preloadedMedia.src === mediaUrl) {
         $(imgElement).attr("src", mediaUrl).show();
         // 更新尺寸信息
@@ -456,7 +495,10 @@ export const showMedia = async (direction) => {
 
   } catch (e) {
     console.error(`[mediaPlayer] 显示媒体失败:`, e);
-    toastr.error(`显示媒体失败: ${e.message}`);
+    // 使用安全的toastr调用
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`显示媒体失败: ${e.message}`);
+    }
     settings.isMediaLoading = false;
     save();
   }
@@ -471,13 +513,13 @@ const startAutoSwitch = () => {
 
   clearTimeout(switchTimer);
   switchTimer = setTimeout(() => {
-    const video = $(winSelector).find(".image-player-video")[0];
+    const video = $(winSelector).find(".st-player-video")[0];
     if (!video || !video.loop) {
       showMedia("next");
     } else {
       startAutoSwitch();
     }
-  }, settings.autoSwitchDelay);
+  }, settings.autoSwitchInterval || 5000);
 };
 
 /**
@@ -488,7 +530,7 @@ export const startPlayback = () => {
   settings.isPlaying = true;
   save();
   startAutoSwitch();
-  const video = $(winSelector).find(".image-player-video")[0];
+  const video = $(winSelector).find(".st-player-video")[0];
   if (video) video.play();
 };
 
@@ -500,7 +542,7 @@ export const stopPlayback = () => {
   settings.isPlaying = false;
   save();
   clearTimeout(switchTimer);
-  const video = $(winSelector).find(".image-player-video")[0];
+  const video = $(winSelector).find(".st-player-video")[0];
   if (video) video.pause();
 };
 
@@ -509,9 +551,13 @@ export const stopPlayback = () => {
  */
 const updateVolume = (volume) => {
   const $ = deps.jQuery;
-  const video = $(winSelector).find(".image-player-video")[0];
+  const video = $(winSelector).find(".st-player-video")[0];
   if (video) {
     video.volume = volume;
+    // 更新设置
+    const settings = get();
+    settings.videoVolume = volume;
+    save();
   }
 };
 
@@ -540,9 +586,9 @@ const stopProgressUpdate = () => {
  */
 const updateVideoProgress = (video) => {
   const $win = $(winSelector);
-  $win.find(".time-display").text(
-    `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`
-  );
+  $win.find(".current-time").text(formatTime(video.currentTime));
+  $win.find(".total-time").text(formatTime(video.duration));
+
   const percent = (video.currentTime / video.duration) * 100;
   $win.find(".progress-played").css("width", `${percent}%`);
 };

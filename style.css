@@ -5,14 +5,13 @@
     width: 800px;
     max-width: 90vw;
     background: rgba(30, 30, 30, 0.95);
-    /* 保留深色主题基础 */
     border: 1px solid #444;
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     overflow: hidden;
     font-family: var(--st-font-family);
-    transition: all 0.2s ease;
-    /* 补充过渡动画 */
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
 }
 
 .st-player-window.no-border {
@@ -22,61 +21,61 @@
 
 /* 窗口标题栏 */
 .st-player-header {
-    padding: 6px 12px;
-    background: var(--st-primary-color);
+    padding: 8px 12px;
+    background: linear-gradient(to right, var(--st-primary-color), #2a6ba0);
     color: white;
     display: flex;
     justify-content: space-between;
     align-items: center;
     cursor: move;
-    /* 补充拖拽功能 */
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    user-select: none;
 }
 
 .st-player-header .title {
-    color: #e0e0e0;
-    font-weight: 500;
+    color: #fff;
+    font-weight: 600;
     font-size: 14px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
 /* 窗口控制按钮 */
 .window-controls {
     display: flex;
-    gap: 4px;
+    gap: 6px;
 }
 
 .window-controls button {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: transparent;
     border: none;
-    color: #bbb;
-    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.8);
+    border-radius: 4px;
     cursor: pointer;
-    transition: all 0.1s ease;
+    transition: all 0.2s ease;
 }
 
 .window-controls button:hover {
-    background: #444;
+    background: rgba(255, 255, 255, 0.15);
     color: #fff;
 }
 
 .window-controls button.active {
-    color: var(--st-primary-color);
-    /* 适配主题色 */
+    color: #ffcc00;
+    background: rgba(255, 204, 0, 0.15);
 }
 
 /* 播放器内容区域 */
 .st-player-content {
     display: flex;
     flex-direction: column;
-    height: calc(100% - 34px - 40px);
+    height: calc(100% - 42px - 48px);
     /* 减去头部和控制栏高度 */
     overflow: hidden;
 }
@@ -88,17 +87,17 @@
     width: 100%;
     background: #000;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .st-player-img,
 .st-player-video {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .st-player-video {
@@ -106,7 +105,7 @@
     background: #000;
 }
 
-/* 加载动画（补充旧版本功能） */
+/* 加载动画 */
 .loading-animation {
     position: absolute;
     top: 0;
@@ -119,15 +118,37 @@
     color: #aaa;
     background: #000;
     font-style: italic;
+    flex-direction: column;
+    gap: 10px;
 }
 
-/* 媒体信息栏（补充旧版本功能） */
+.loading-animation:after {
+    content: "";
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--st-primary-color);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 媒体信息栏 */
 .image-info {
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-size: 12px;
     color: #ccc;
-    background: #2a2a2a;
+    background: rgba(42, 42, 42, 0.9);
     border-top: 1px solid #444;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* 视频控制栏 */
@@ -136,24 +157,35 @@
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.8);
     color: #fff;
-    padding: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: opacity 0.3s ease;
+}
+
+.video-controls.hidden {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .progress-container {
     width: 100%;
-    height: 4px;
-    margin-bottom: 6px;
+    height: 6px;
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
+    border-radius: 3px;
     cursor: pointer;
+    position: relative;
 }
 
 .progress-bar {
     position: relative;
     width: 100%;
     height: 100%;
+    border-radius: 3px;
+    overflow: hidden;
 }
 
 .progress-loaded {
@@ -161,31 +193,42 @@
     height: 100%;
     background: rgba(255, 255, 255, 0.3);
     width: 0%;
+    transition: width 0.2s ease;
 }
 
 .progress-played {
     position: absolute;
     height: 100%;
     background: var(--st-primary-color);
-    /* 适配主题色 */
     width: 0%;
+    transition: width 0.2s ease;
 }
 
 .progress-handle {
     position: absolute;
     top: 50%;
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     background: #fff;
     border-radius: 50%;
     transform: translate(-50%, -50%);
-    box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.progress-container:hover .progress-handle {
+    opacity: 1;
+}
+
+.progress-container:hover {
+    height: 8px;
 }
 
 .video-control-group {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
 .video-control-btn {
@@ -193,55 +236,66 @@
     border: none;
     color: #fff;
     cursor: pointer;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 3px;
-    transition: background 0.1s ease;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
 
 .video-control-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1);
 }
 
 .video-control-btn.active {
     color: var(--st-primary-color);
-    /* 适配主题色 */
+    background: rgba(41, 128, 185, 0.2);
 }
 
 .volume-slider-container {
     width: 80px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    margin-right: 5px;
+}
+
+.volume-btn:hover+.volume-slider-container,
+.volume-slider-container:hover {
+    opacity: 1;
 }
 
 .volume-slider {
     width: 100%;
+    height: 4px;
     accent-color: var(--st-primary-color);
-    /* 适配主题色 */
+    cursor: pointer;
 }
 
 .time-display {
     font-size: 12px;
     color: #ddd;
     margin-left: auto;
+    font-variant-numeric: tabular-nums;
 }
 
 /* 播放控制栏 */
 .st-player-controls {
     display: flex;
     align-items: center;
-    padding: 6px 10px;
+    padding: 8px 12px;
     background: #2a2a2a;
     border-top: 1px solid #444;
-    height: 40px;
-    gap: 10px;
+    height: 48px;
+    gap: 12px;
 }
 
 .controls-group {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
 .media-filter-group {
@@ -254,7 +308,7 @@
     padding: 6px 12px;
     margin: 0 4px;
     border: none;
-    border-radius: 4px;
+    border-radius: 5px;
     background: var(--st-btn-bg);
     color: var(--st-btn-color);
     cursor: pointer;
@@ -268,12 +322,13 @@
 .st-player-btn:hover,
 .control-btn:hover {
     background: var(--st-btn-hover-bg);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .control-btn {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     background: #3a3a3a;
     color: #ddd;
@@ -287,6 +342,7 @@
 .control-btn.active {
     background: var(--st-primary-color);
     color: #fff;
+    box-shadow: 0 0 10px rgba(41, 128, 185, 0.5);
 }
 
 .control-text {
@@ -294,98 +350,340 @@
     color: #bbb;
     min-width: 100px;
     text-align: center;
+    font-weight: 500;
 }
 
-/* 窗口缩放手柄（补充旧版本功能） */
+/* 窗口缩放手柄 */
 .resize-handle {
     position: absolute;
     right: 0;
     bottom: 0;
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     cursor: nwse-resize;
-    background: linear-gradient(135deg, transparent 50%, #444 50%);
+    background: linear-gradient(135deg, transparent 50%, #555 50%);
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.resize-handle:hover {
+    opacity: 1;
 }
 
 /* 设置面板样式 */
-#st-image-player-settings,
-.st-player-settings {
-    margin: 10px 0;
-    border: 1px solid #444;
-    border-radius: 6px;
+.st-settings-panel {
+    position: fixed;
+    z-index: 1001;
+    width: 500px;
+    max-width: 90vw;
+    max-height: 80vh;
+    background: rgba(35, 35, 40, 0.98);
+    border: 1px solid #555;
+    border-radius: 8px;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
     overflow: hidden;
-    padding: 16px;
-    border-top: 1px solid #eee;
+    font-family: var(--st-font-family);
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(10px);
 }
 
-.settings-group {
-    margin: 15px 0;
-    padding: 10px;
-    background: rgba(40, 40, 40, 0.5);
-    border-radius: 4px;
+.settings-header {
+    padding: 12px 16px;
+    background: linear-gradient(to right, var(--st-primary-color), #2a6ba0);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.settings-row {
+.settings-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
     display: flex;
     align-items: center;
-    margin: 8px 0;
-    gap: 10px;
+    gap: 8px;
 }
 
-.settings-row label {
-    min-width: 160px;
+.settings-header .close-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.settings-header .close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: rotate(90deg);
+}
+
+.settings-content {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.settings-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(50, 50, 55, 0.6);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #ddd;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    margin: 10px 0;
+    gap: 12px;
+}
+
+.setting-item label {
+    min-width: 140px;
+    color: #ccc;
+    font-size: 13px;
+}
+
+.setting-item .setting-value {
+    flex: 1;
     color: #ddd;
     font-size: 13px;
+    word-break: break-all;
+}
+
+.setting-item input[type="text"],
+.setting-item input[type="number"],
+.setting-item select {
+    flex: 1;
+    padding: 6px 8px;
+    background: rgba(40, 40, 45, 0.8);
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #ddd;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.setting-item input:focus,
+.setting-item select:focus {
+    outline: none;
+    border-color: var(--st-primary-color);
+    box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.3);
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+}
+
+.checkbox-item label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    min-width: auto;
+    flex: 1;
+}
+
+.checkbox-item input[type="checkbox"] {
+    margin-right: 8px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--st-primary-color);
+    cursor: pointer;
+}
+
+.status-indicator {
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-indicator.success {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+}
+
+.status-indicator.error {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
+.setting-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background: #4a4a50;
+    color: #ddd;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     gap: 6px;
 }
 
-.settings-row input[type="text"],
-.settings-row input[type="number"],
-.settings-row select {
-    flex: 1;
-    padding: 4px 6px;
-    background: #2a2a2a;
-    border: 1px solid #555;
-    border-radius: 3px;
-    color: #ddd;
-    font-size: 13px;
+.btn:hover {
+    background: #5a5a60;
+    color: #fff;
+    transform: translateY(-2px);
 }
 
-.settings-row input[type="checkbox"] {
-    margin-right: 6px;
+.btn.save-settings {
+    background: var(--st-primary-color);
+    color: white;
 }
 
-.service-status {
-    color: #ddd;
-    font-size: 13px;
-    padding: 5px 0;
+.btn.save-settings:hover {
+    background: #2980b9;
+    box-shadow: 0 2px 8px rgba(41, 128, 185, 0.4);
 }
 
-.status-success {
-    color: #4cd964;
-}
-
-.status-error {
-    color: #ff3b30;
-}
-
-.settings-actions {
+.settings-footer {
+    padding: 12px 16px;
+    background: rgba(45, 45, 50, 0.8);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
+    justify-content: flex-end;
     gap: 10px;
-    margin-top: 15px;
-    padding-top: 10px;
-    border-top: 1px solid #444;
 }
 
-.hint {
+/* 扩展菜单按钮 */
+.extension-menu-item {
+    padding: 10px 12px;
+    margin: 6px 0;
+    background: rgba(50, 50, 55, 0.8);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+}
+
+.extension-menu-item:hover {
+    background: rgba(60, 60, 65, 0.9);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.extension-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    color: #ddd;
+    font-weight: 500;
+}
+
+.extension-toggle {
+    display: flex;
+    align-items: center;
+}
+
+.extension-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.extension-action {
+    padding: 6px 10px;
+    background: rgba(60, 60, 65, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: #ccc;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 12px;
-    color: #888;
-    margin-left: 5px;
 }
 
-/* 过渡动画（补充旧版本功能） */
+.extension-action:hover {
+    background: rgba(70, 70, 75, 0.9);
+    color: #fff;
+}
+
+/* 开关样式 */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #555;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked+.slider {
+    background-color: var(--st-primary-color);
+}
+
+input:checked+.slider:before {
+    transform: translateX(18px);
+}
+
+.slider.round {
+    border-radius: 22px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* 过渡动画 */
 .fade-transition {
     animation: fadeIn 0.5s ease-in-out;
 }
@@ -432,23 +730,84 @@
     }
 }
 
-/* 扩展菜单按钮 */
-#st_media_player-button,
-#ext_menu_st_image_player {
-    margin-left: 8px;
-    padding: 4px 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+/* 拖拽和调整大小状态 */
+.st-player-window.dragging {
+    opacity: 0.9;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+.st-player-window.resizing {
+    opacity: 0.95;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
 }
 
 /* 响应式调整 */
 @media (max-width: 768px) {
     .st-player-window {
         width: 95vw;
+        height: auto !important;
+        max-height: 70vh;
     }
 
     .st-player-controls {
         flex-wrap: wrap;
+        height: auto;
+        padding: 8px;
+        gap: 8px;
     }
+
+    .controls-group {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .media-filter-group {
+        margin-left: 0;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .st-settings-panel {
+        width: 95vw;
+        max-height: 85vh;
+    }
+
+    .setting-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .setting-item label {
+        min-width: auto;
+    }
+
+    .setting-item input[type="text"],
+    .setting-item input[type="number"],
+    .setting-item select {
+        width: 100%;
+    }
+
+    .setting-actions {
+        flex-direction: column;
+    }
+}
+
+/* 滚动条样式 */
+.settings-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+    background: rgba(40, 40, 45, 0.5);
+    border-radius: 3px;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 3px;
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+    background: var(--st-primary-color);
 }

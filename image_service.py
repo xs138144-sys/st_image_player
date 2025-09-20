@@ -15,8 +15,9 @@ import mimetypes
 import magic
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
-from pywsgi import WSGIServer
-
+from gevent.pywsgi import WSGIServer
+from typing import Dict, List, Tuple, Optional, Set, Any
+import fnmatch
 
 # ------------------------------
 # 基础配置与初始化
@@ -27,7 +28,6 @@ sys.stderr.reconfigure(encoding="utf-8")
 sys.getfilesystemencoding = lambda: "utf-8"
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": []}})  # 动态配置CORS
 
 # 日志配置
 logging.basicConfig(
@@ -39,6 +39,11 @@ logging.basicConfig(
     ],
 )
 
+# 添加额外的MIME类型映射
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("video/webm", ".webm")
+mimetypes.add_type("video/x-matroska", ".mkv")
+
 
 # ------------------------------
 # 核心状态与配置管理（封装全局变量）
@@ -49,7 +54,7 @@ class ConfigManager:
     def __init__(self):
         self.lock = threading.RLock()  # 可重入锁，支持嵌套调用
         self.config_file = "local_image_service_config.json"
-        self.config_version = "1.1"
+        self.config_version = "1.2"  # 更新版本号
         self.scan_directory = self._get_default_scan_dir()
         self.allowed_origins = ["http://localhost:8000", "http://127.0.0.1:8000"]
         # 媒体配置
@@ -63,11 +68,22 @@ class ConfigManager:
                     ".bmp",
                     ".webp",
                     ".apng",
+                    ".tiff",
+                    ".tif",
                 ),
                 "max_size": 5 * 1024 * 1024,  # 5MB
             },
             "video": {
-                "extensions": (".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"),
+                "extensions": (
+                    ".webm",
+                    ".mp4",
+                    ".ogv",
+                    ".mov",
+                    ".avi",
+                    ".mkv",
+                    ".m4v",
+                    ".wmv",
+                ),
                 "max_size": 100 * 1024 * 1024,  # 100MB
             },
         }
@@ -81,7 +97,13 @@ class ConfigManager:
             ".mov": "video/quicktime",
             ".avi": "video/x-msvideo",
             ".mkv": "video/x-matroska",
+            ".m4v": "video/x-m4v",
+            ".wmv": "video/x-ms-wmv",
+            ".tiff": "image/tiff",
+            ".tif": "image/tiff",
         }
+        # 忽略的文件模式
+        self.ignore_patterns = [".*", "~*", "Thumbs.db", "desktop.ini"]
 
     @staticmethod
     def _get_default_scan_dir():
@@ -100,6 +122,10 @@ class ConfigManager:
 
             with open(self.config_file, "r", encoding="utf-8") as f:
                 raw_config = json.load(f)
+                
+            # 保存原始配置用于比较
+            original_config = self.save()
+            
             self._migrate_config(raw_config)  # 处理旧版本配置
 
             # 更新配置
@@ -114,10 +140,10 @@ class ConfigManager:
                 if "media_config" in raw_config:
                     media_cfg = raw_config["media_config"]
                     self.media_config["image"]["max_size"] = int(
-                        media_cfg["image_max_size_mb"] * 1024 * 1024
+                        media_cfg.get("image_max_size_mb", 5) * 1024 * 1024
                     )
                     self.media_config["video"]["max_size"] = int(
-                        media_cfg["video_max_size_mb"] * 1024 * 1024
+                        media_cfg.get("video_max_size_mb", 100) * 1024 * 1024
                     )
                     if "image_extensions" in media_cfg:
                         self.media_config["image"]["extensions"] = tuple(
@@ -127,7 +153,14 @@ class ConfigManager:
                         self.media_config["video"]["extensions"] = tuple(
                             media_cfg["video_extensions"]
                         )
-            self.save()  # 保存迁移后的配置
+                # 更新忽略模式
+                if "ignore_patterns" in raw_config:
+                    self.ignore_patterns = raw_config["ignore_patterns"]
+            
+            # 只有在配置确实发生变化时才保存
+            new_config = self.save()
+            if new_config != original_config:
+                logging.info("配置已更新并保存")
             return True
         except Exception as e:
             logging.error(f"配置加载失败，使用默认值: {str(e)}", exc_info=True)
@@ -135,11 +168,15 @@ class ConfigManager:
 
     def _migrate_config(self, config):
         """配置版本迁移"""
-        if config.get("config_version") != self.config_version:
+        current_version = config.get("config_version")
+        if current_version != self.config_version:
             logging.info(
-                f"迁移配置 from {config.get('config_version') or '未知'} to {self.config_version}"
+                f"迁移配置 from {current_version or '未知'} to {self.config_version}"
             )
-            if "config_version" not in config:
+
+            # 版本迁移逻辑
+            if current_version is None:
+                # 从无版本迁移到1.2
                 config["config_version"] = self.config_version
                 config.setdefault("allowed_origins", self.allowed_origins)
                 if "media_config" not in config:
@@ -153,6 +190,27 @@ class ConfigManager:
                             self.media_config["video"]["extensions"]
                         ),
                     }
+                # 添加忽略模式
+                if "ignore_patterns" not in config:
+                    config["ignore_patterns"] = self.ignore_patterns
+            elif current_version == "1.1":
+                # 从1.1迁移到1.2
+                config["config_version"] = self.config_version
+                config.setdefault("allowed_origins", self.allowed_origins)
+                if "media_config" not in config:
+                    config["media_config"] = {
+                        "image_max_size_mb": 5,
+                        "video_max_size_mb": 100,
+                        "image_extensions": list(
+                            self.media_config["image"]["extensions"]
+                        ),
+                        "video_extensions": list(
+                            self.media_config["video"]["extensions"]
+                        ),
+                    }
+                # 添加忽略模式
+                if "ignore_patterns" not in config:
+                    config["ignore_patterns"] = self.ignore_patterns
 
     def save(self):
         """保存配置到文件"""
@@ -177,6 +235,7 @@ class ConfigManager:
                             self.media_config["video"]["extensions"]
                         ),
                     },
+                    "ignore_patterns": self.ignore_patterns,
                 }
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
@@ -199,7 +258,7 @@ class ConfigManager:
 
     def get_media_config(self, media_type):
         with self.lock:
-            return self.media_config.get(media_type, {})
+            return self.media_config.get(media_type, {}).copy()
 
     def update_media_size_limit(self, image_max_mb=None, video_max_mb=None):
         with self.lock:
@@ -212,6 +271,14 @@ class ConfigManager:
         with self.lock:
             return self.mime_map.get(file_ext.lower())
 
+    def should_ignore(self, filename):
+        """检查文件是否应该被忽略"""
+        with self.lock:
+            for pattern in self.ignore_patterns:
+                if fnmatch.fnmatch(filename, pattern):
+                    return True
+            return False
+
 
 class MediaState:
     """媒体库状态管理器（线程安全）"""
@@ -220,30 +287,44 @@ class MediaState:
         self.lock = threading.RLock()
         self.media_db = []  # 存储媒体文件信息
         self.last_scan_time = 0  # 上次扫描时间戳
+        self.scan_in_progress = False  # 扫描是否正在进行
 
-    def get_media_list(self, media_type="all"):
+    def get_media_list(self, media_type="all", limit=0, offset=0):
         """获取过滤后的媒体列表"""
         with self.lock:
             if media_type == "image":
-                return [m.copy() for m in self.media_db if m["media_type"] == "image"]
+                filtered = [
+                    m.copy() for m in self.media_db if m["media_type"] == "image"
+                ]
             elif media_type == "video":
-                return [m.copy() for m in self.media_db if m["media_type"] == "video"]
+                filtered = [
+                    m.copy() for m in self.media_db if m["media_type"] == "video"
+                ]
             else:
-                return [m.copy() for m in self.media_db]
+                filtered = [m.copy() for m in self.media_db]
+
+            # 应用分页
+            if limit > 0:
+                start = offset
+                end = offset + limit
+                filtered = filtered[start:end]
+
+            return filtered
 
     def update_media(self, new_media):
         """更新媒体库（去重+删除无效文件）"""
         with self.lock:
             # 移除已删除的文件
-            existing_paths = {m["path"] for m in self.media_db}
+            existing_paths = {os.path.normcase(os.path.normpath(m["path"])) for m in self.media_db}
             self.media_db = [m for m in self.media_db if os.path.exists(m["path"])]
 
-            # 添加新文件（去重）
-            current_paths = {m["path"] for m in self.media_db}
+            # 添加新文件（去重）- 使用规范化路径比较
+            current_paths = {os.path.normcase(os.path.normpath(m["path"])) for m in self.media_db}
             for m in new_media:
-                if m["path"] not in current_paths:
+                norm_path = os.path.normcase(os.path.normpath(m["path"]))
+                if norm_path not in current_paths:
                     self.media_db.append(m)
-                    current_paths.add(m["path"])
+                    current_paths.add(norm_path)
 
             # 按修改时间排序（最新的在前）
             self.media_db.sort(key=lambda x: x["last_modified"], reverse=True)
@@ -263,6 +344,14 @@ class MediaState:
     def get_last_scan_time(self):
         with self.lock:
             return self.last_scan_time
+
+    def set_scan_in_progress(self, status):
+        with self.lock:
+            self.scan_in_progress = status
+
+    def is_scan_in_progress(self):
+        with self.lock:
+            return self.scan_in_progress
 
     def get_counts(self):
         """获取媒体统计数量"""
@@ -345,87 +434,102 @@ class MediaManager:
     @staticmethod
     def scan_media(full_scan=False):
         """扫描媒体文件（支持增量扫描）"""
-        scan_dir = config_mgr.get_scan_dir()
-        if not scan_dir or not os.path.exists(scan_dir):
-            logging.warning(f"扫描目录无效: {scan_dir}")
+        if media_state.is_scan_in_progress():
+            logging.info("扫描正在进行中，跳过此次扫描")
             return
 
-        if not os.access(scan_dir, os.R_OK):
-            logging.error(f"无目录读权限: {scan_dir}")
-            return
+        media_state.set_scan_in_progress(True)
 
-        scan_start_time = time.time()
-        logging.info(f"开始{'全量' if full_scan else '增量'}扫描: {scan_dir}")
+        try:
+            scan_dir = config_mgr.get_scan_dir()
+            if not scan_dir or not os.path.exists(scan_dir):
+                logging.warning(f"扫描目录无效: {scan_dir}")
+                return
 
-        # 收集所有支持的扩展名
-        image_exts = config_mgr.get_media_config("image").get("extensions", ())
-        video_exts = config_mgr.get_media_config("video").get("extensions", ())
-        all_extensions = image_exts + video_exts
+            if not os.access(scan_dir, os.R_OK):
+                logging.error(f"无目录读权限: {scan_dir}")
+                return
 
-        new_media = []
-        last_scan_time = media_state.get_last_scan_time() if not full_scan else 0
+            scan_start_time = time.time()
+            logging.info(f"开始{'全量' if full_scan else '增量'}扫描: {scan_dir}")
 
-        # 遍历目录
-        for root, _, files in os.walk(scan_dir):
-            for file in files:
-                file_lower = file.lower()
-                if any(file_lower.endswith(ext) for ext in all_extensions):
-                    try:
-                        full_path = os.path.join(root, file)
-                        # 安全检查：确保文件在扫描目录内
-                        if not full_path.startswith(os.path.abspath(scan_dir)):
-                            logging.warning(f"跳过跨目录文件: {full_path}")
-                            continue
+            # 收集所有支持的扩展名
+            image_exts = config_mgr.get_media_config("image").get("extensions", ())
+            video_exts = config_mgr.get_media_config("video").get("extensions", ())
+            all_extensions = image_exts + video_exts
 
-                        rel_path = os.path.relpath(full_path, scan_dir).replace(
-                            "\\", "/"
-                        )
-                        file_size = os.path.getsize(full_path)
-                        last_modified = os.path.getmtime(full_path)
+            new_media = []
+            last_scan_time = media_state.get_last_scan_time() if not full_scan else 0
 
-                        # 增量扫描：只处理上次扫描后修改的文件
-                        if not full_scan and last_modified <= last_scan_time:
-                            continue
+            # 遍历目录
+            for root, _, files in os.walk(scan_dir):
+                for file in files:
+                    # 检查是否应该忽略该文件
+                    if config_mgr.should_ignore(file):
+                        continue
 
-                        # 检测媒体类型
-                        media_type = MediaManager.detect_media_type(full_path, file)
-                        if not media_type:
-                            continue
+                    file_lower = file.lower()
+                    if any(file_lower.endswith(ext) for ext in all_extensions):
+                        try:
+                            full_path = os.path.join(root, file)
+                            # 安全检查：确保文件在扫描目录内
+                            if not full_path.startswith(os.path.abspath(scan_dir)):
+                                logging.warning(f"跳过跨目录文件: {full_path}")
+                                continue
 
-                        # 检查大小限制
-                        max_size = config_mgr.get_media_config(media_type).get(
-                            "max_size", 0
-                        )
-                        if max_size > 0 and file_size > max_size:
-                            logging.debug(
-                                f"文件超大小限制 {file}: {file_size/1024/1024:.2f}MB > {max_size/1024/1024:.2f}MB"
+                            rel_path = os.path.relpath(full_path, scan_dir).replace(
+                                "\\", "/"
                             )
-                            continue
+                            file_size = os.path.getsize(full_path)
+                            last_modified = os.path.getmtime(full_path)
 
-                        new_media.append(
-                            {
-                                "path": full_path,
-                                "rel_path": rel_path,
-                                "name": file,
-                                "size": file_size,
-                                "media_type": media_type,
-                                "last_modified": last_modified,
-                            }
-                        )
-                    except Exception as e:
-                        logging.error(f"处理文件错误 {file}: {str(e)}", exc_info=True)
+                            # 增量扫描：只处理上次扫描后修改的文件
+                            if not full_scan and last_modified <= last_scan_time:
+                                continue
 
-        # 更新媒体库
-        media_state.update_media(new_media)
-        media_state.set_last_scan_time(scan_start_time)
-        counts = media_state.get_counts()
-        logging.info(
-            f"扫描完成: 总计{counts['total']}个（图片{counts['image']} | 视频{counts['video']}）"
-        )
+                            # 检测媒体类型
+                            media_type = MediaManager.detect_media_type(full_path, file)
+                            if not media_type:
+                                continue
 
-        # 保存配置并通知WebSocket客户端
-        config_mgr.save()
-        WebSocketManager.send_update_event()
+                            # 检查大小限制
+                            max_size = config_mgr.get_media_config(media_type).get(
+                                "max_size", 0
+                            )
+                            if max_size > 0 and file_size > max_size:
+                                logging.debug(
+                                    f"文件超大小限制 {file}: {file_size/1024/1024:.2f}MB > {max_size/1024/1024:.2f}MB"
+                                )
+                                continue
+
+                            new_media.append(
+                                {
+                                    "path": full_path,
+                                    "rel_path": rel_path,
+                                    "name": file,
+                                    "size": file_size,
+                                    "media_type": media_type,
+                                    "last_modified": last_modified,
+                                }
+                            )
+                        except Exception as e:
+                            logging.error(
+                                f"处理文件错误 {file}: {str(e)}", exc_info=True
+                            )
+
+            # 更新媒体库
+            media_state.update_media(new_media)
+            media_state.set_last_scan_time(scan_start_time)
+            counts = media_state.get_counts()
+            logging.info(
+                f"扫描完成: 总计{counts['total']}个（图片{counts['image']} | 视频{counts['video']}）"
+            )
+
+            # 保存配置并通知WebSocket客户端
+            config_mgr.save()
+            WebSocketManager.send_update_event()
+        finally:
+            media_state.set_scan_in_progress(False)
 
 
 class FileSystemMonitor(FileSystemEventHandler):
@@ -433,6 +537,9 @@ class FileSystemMonitor(FileSystemEventHandler):
 
     def __init__(self):
         self.observer = None
+        self._scan_timer = None
+        self._scan_delay = 2  # 默认扫描延迟（秒）
+        self._timer_lock = threading.Lock()  # 添加线程锁
 
     def start_monitoring(self, directory):
         """启动监控"""
@@ -454,7 +561,7 @@ class FileSystemMonitor(FileSystemEventHandler):
 
     def stop_monitoring(self):
         """停止监控（安全释放资源）"""
-        if self.observer and self.observer.is_alive():
+        if self.observer is not None and self.observer.is_alive():
             try:
                 self.observer.stop()
                 self.observer.join(timeout=5)  # 等待5秒超时
@@ -464,6 +571,23 @@ class FileSystemMonitor(FileSystemEventHandler):
                 logging.error(f"监控停止失败: {str(e)}", exc_info=True)
             finally:
                 self.observer = None
+                
+        # 取消任何待处理的扫描计时器（使用线程锁）
+        with self._timer_lock:
+            if self._scan_timer is not None and self._scan_timer.is_alive():
+                self._scan_timer.cancel()
+                self._scan_timer = None
+
+    def _schedule_scan(self, delay=None):
+        """安排扫描任务（合并多次事件）"""
+        with self._timer_lock:  # 添加线程安全保护
+            if self._scan_timer and self._scan_timer.is_alive():
+                self._scan_timer.cancel()
+
+            actual_delay = delay if delay is not None else self._scan_delay
+            self._scan_timer = threading.Timer(actual_delay, MediaManager.scan_media)
+            self._scan_timer.daemon = True
+            self._scan_timer.start()
 
     def on_created(self, event):
         """文件创建事件（延迟扫描，避免文件未写完）"""
@@ -478,7 +602,7 @@ class FileSystemMonitor(FileSystemEventHandler):
                 delay = min(
                     10, max(1.5, file_size / (100 * 1024 * 1024))
                 )  # 100MB/s的写入速度估算
-                threading.Timer(delay, MediaManager.scan_media).start()
+                self._schedule_scan(delay)
             except Exception as e:
                 logging.error(f"处理创建事件失败: {str(e)}")
 
@@ -503,7 +627,7 @@ class FileSystemMonitor(FileSystemEventHandler):
                     else 0
                 )
                 delay = min(5, max(1, file_size / (200 * 1024 * 1024)))  # 200MB/s估算
-                threading.Timer(delay, MediaManager.scan_media).start()
+                self._schedule_scan(delay)
             except Exception as e:
                 logging.error(f"处理修改事件失败: {str(e)}")
 
@@ -544,26 +668,37 @@ class WebSocketManager:
                 "total_count": counts["total"],
                 "image_count": counts["image"],
                 "video_count": counts["video"],
+                "timestamp": time.time()
             }
         )
 
         with cls._lock:
-            # 遍历副本，避免迭代中修改列表
-            for ws in list(cls._active_ws):
-                try:
-                    if ws.connected:
-                        ws.send(message)
-                    else:
-                        cls._active_ws.remove(ws)
-                except Exception as e:
-                    logging.error(f"WebSocket发送失败: {str(e)}")
-                    cls._active_ws.remove(ws)
+            # 创建完全独立的副本，避免迭代中修改列表
+            active_ws_copy = list(cls._active_ws)
+            
+        # 在锁外处理发送，避免阻塞
+        inactive_connections = []
+        for ws in active_ws_copy:
+            try:
+                # 添加超时和心跳检测
+                if not ws.closed and hasattr(ws, 'last_activity') and (time.time() - ws.last_activity < 60):
+                    ws.send(message)
+                else:
+                    inactive_connections.append(ws)
+            except Exception as e:
+                logging.error(f"WebSocket发送失败: {str(e)}")
+                inactive_connections.append(ws)
+        
+        # 清理不活跃连接
+        if inactive_connections:
+            with cls._lock:
+                cls._active_ws = [ws for ws in cls._active_ws if ws not in inactive_connections]
 
     @classmethod
     def cleanup_inactive(cls):
         """清理无效连接（心跳检测）"""
         with cls._lock:
-            cls._active_ws = [ws for ws in cls._active_ws if ws.connected]
+            cls._active_ws = [ws for ws in cls._active_ws if not ws.closed]
 
 
 # ------------------------------
@@ -615,8 +750,24 @@ def get_media():
     """获取媒体列表"""
     try:
         media_type = request.args.get("type", "all")
-        media_list = media_state.get_media_list(media_type)
+        limit = int(request.args.get("limit", 0))
+        offset = int(request.args.get("offset", 0))
+
+        media_list = media_state.get_media_list(media_type, limit, offset)
         counts = media_state.get_counts()
+
+        # 添加分页信息
+        pagination = {
+            "total": (
+                counts["total"]
+                if media_type == "all"
+                else len(media_state.get_media_list(media_type))
+            ),
+            "limit": limit,
+            "offset": offset,
+            "has_more": (offset + limit) < counts["total"] if limit > 0 else False,
+        }
+
         return jsonify(
             {
                 "media": media_list,
@@ -625,6 +776,7 @@ def get_media():
                 "image_count": counts["image"],
                 "video_count": counts["video"],
                 "last_updated": config_mgr.save().get("last_updated", ""),
+                "pagination": pagination,
             }
         )
     except Exception as e:
@@ -645,7 +797,7 @@ def get_random_media():
         media = random.choice(candidates)
         return jsonify(
             {
-                "url": f"/media/{media['rel_path']}",
+                "url": f"/media/{urllib.parse.quote(media['rel_path'])}",
                 "name": media["name"],
                 "size": media["size"],
                 "media_type": media["media_type"],
@@ -668,12 +820,19 @@ def get_media_file(rel_path):
         scan_dir = config_mgr.get_scan_dir()
         full_path = os.path.abspath(os.path.join(scan_dir, rel_path))
 
-        # 严格验证路径是否在扫描目录内
+        # 严格验证路径是否在扫描目录内（使用规范化路径比较）
         scan_dir_abs = os.path.abspath(scan_dir)
-        if not full_path.startswith(scan_dir_abs) or ".." in os.path.relpath(
-            full_path, scan_dir_abs
-        ):
-            logging.warning(f"路径越界尝试: {rel_path} -> {full_path}")
+        full_path_abs = os.path.abspath(full_path)
+        
+        # 使用os.path.commonpath检查路径是否在允许范围内
+        try:
+            common_path = os.path.commonpath([scan_dir_abs, full_path_abs])
+            if common_path != scan_dir_abs:
+                logging.warning(f"路径越界尝试: {rel_path} -> {full_path_abs}")
+                return jsonify({"error": "路径不合法"}), 403
+        except ValueError:
+            # 路径不在同一驱动器上
+            logging.warning(f"路径跨驱动器尝试: {rel_path} -> {full_path_abs}")
             return jsonify({"error": "路径不合法"}), 403
 
         if not os.path.exists(full_path) or not os.path.isfile(full_path):
@@ -685,20 +844,32 @@ def get_media_file(rel_path):
             config_mgr.get_mime_type(file_ext) or mimetypes.guess_type(full_path)[0]
         )
         if not mime_type:
-            mime_type = (
-                "image/" + file_ext[1:]
-                if file_ext
-                in config_mgr.get_media_config("image").get("extensions", ())
-                else "video/" + file_ext[1:]
-            )
+            # 更健壮的MIME类型回退逻辑
+            image_exts = config_mgr.get_media_config("image").get("extensions", ())
+            video_exts = config_mgr.get_media_config("video").get("extensions", ())
+            
+            if file_ext.lower() in image_exts:
+                mime_type = f"image/{file_ext[1:]}"
+            elif file_ext.lower() in video_exts:
+                mime_type = f"video/{file_ext[1:]}"
+            else:
+                # 使用更通用的MIME类型作为最后手段
+                mime_type = "application/octet-stream"
+                logging.warning(f"无法确定文件类型 {file_ext}，使用通用类型")
 
         # 视频断点续传处理
         range_header = request.headers.get("Range")
         if range_header and mime_type.startswith("video/"):
             file_size = os.path.getsize(full_path)
-            start, end = range_header.split("=")[1].split("-")
-            start = int(start)
-            end = int(end) if end else file_size - 1
+            range_val = range_header.split("=")[1]
+            if "-" in range_val:
+                start, end = range_val.split("-")
+                start = int(start) if start else 0
+                end = int(end) if end else file_size - 1
+            else:
+                start = int(range_val)
+                end = file_size - 1
+
             length = end - start + 1
 
             with open(full_path, "rb") as f:
@@ -708,7 +879,7 @@ def get_media_file(rel_path):
             headers = {
                 "Content-Range": f"bytes {start}-{end}/{file_size}",
                 "Accept-Ranges": "bytes",
-                "Content-Length": length,
+                "Content-Length": str(length),
                 "Content-Type": mime_type,
             }
             return data, 206, headers
@@ -760,8 +931,9 @@ def service_status():
             {
                 "active": True,
                 "observer_active": (
-                    file_monitor.observer.is_alive() if file_monitor.observer else False
+                    file_monitor.observer and file_monitor.observer.is_alive()
                 ),
+                "scan_in_progress": media_state.is_scan_in_progress(),
                 "directory": config_mgr.get_scan_dir(),
                 "total_count": counts["total"],
                 "image_count": counts["image"],
@@ -815,6 +987,9 @@ def websocket_endpoint():
             except json.JSONDecodeError:
                 logging.warning("收到无效的WebSocket消息")
                 ws.send(json.dumps({"type": "error", "message": "无效消息格式"}))
+            except Exception as e:
+                logging.error(f"处理WebSocket消息错误: {str(e)}")
+                break
 
     except Exception as e:
         logging.error(f"WebSocket错误: {str(e)}")
@@ -843,6 +1018,19 @@ def handle_config():
                     config_mgr.media_config["video"]["extensions"] = tuple(
                         media_cfg["video_extensions"]
                     )
+                # 更新大小限制
+                if "image_max_size_mb" in media_cfg:
+                    config_mgr.media_config["image"]["max_size"] = int(
+                        media_cfg["image_max_size_mb"] * 1024 * 1024
+                    )
+                if "video_max_size_mb" in media_cfg:
+                    config_mgr.media_config["video"]["max_size"] = int(
+                        media_cfg["video_max_size_mb"] * 1024 * 1024
+                    )
+            # 更新忽略模式
+            if "ignore_patterns" in data:
+                config_mgr.ignore_patterns = data["ignore_patterns"]
+
             config_mgr.save()
             return jsonify({"status": "配置已更新"})
         except Exception as e:
@@ -861,13 +1049,15 @@ def main():
     config_mgr.load()
     # 启动文件监控
     file_monitor.start_monitoring(config_mgr.get_scan_dir())
+
     # 启动WebSocket心跳清理线程
-    threading.Thread(
-        target=lambda: [
-            WebSocketManager.cleanup_inactive() or time.sleep(30) for _ in iter(int, 1)
-        ],
-        daemon=True,
-    ).start()
+    def ws_cleanup_loop():
+        while True:
+            WebSocketManager.cleanup_inactive()
+            time.sleep(30)
+
+    threading.Thread(target=ws_cleanup_loop, daemon=True).start()
+
     # 启动初始扫描
     threading.Thread(
         target=MediaManager.scan_media, kwargs={"full_scan": True}, daemon=True
