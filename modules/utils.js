@@ -175,3 +175,16 @@ export const registerModuleCleanup = (moduleId, cleanupFn) => {
 
   console.log(`[utils] 已注册清理函数: ${moduleId}`);
 };
+// 默认导出所有工具函数
+export default {
+  init,
+  cleanup,
+  getSafeToastr,
+  formatTime,
+  adjustVideoControlsLayout,
+  applyTransitionEffect,
+  getSafeGlobal,
+  isDirectoryValid,
+  safeJQuery,
+  registerModuleCleanup
+};

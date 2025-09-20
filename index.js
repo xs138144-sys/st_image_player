@@ -3,7 +3,7 @@ import { saveSettingsDebounced } from "../../../../script.js";
 import { deps } from "./core/deps.js";
 
 // 添加 utils 导入
-import { utils } from "./modules/utils.js"; // 添加这行
+import utils from "./modules/utils.js";
 
 const EXT_ID = "st_image_player";
 
