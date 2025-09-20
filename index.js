@@ -18,8 +18,8 @@ const MODULES = [
   "ui",
 ];
 
-// 动态加载单个模块
-const loadModule = async (moduleName) => {
+// 动态加载单个模块（添加重试机制）
+const loadModule = async (moduleName, retries = 3) => {
   try {
     const module = await import(`./modules/${moduleName}.js`);
 
@@ -54,6 +54,12 @@ const loadModule = async (moduleName) => {
 
     return true;
   } catch (e) {
+    if (retries > 0) {
+      console.warn(`[index] 模块 ${moduleName} 加载失败，正在重试（${retries}次剩余）`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return loadModule(moduleName, retries - 1);
+    }
+
     console.error(`[index] 模块加载失败: ${moduleName}`, e);
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`模块${moduleName}加载失败: ${e.message}`);
