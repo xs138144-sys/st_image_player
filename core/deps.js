@@ -4,6 +4,24 @@ import { EventBus } from './eventBus.js';
 // 创建 EventBus 实例
 const eventBusInstance = new EventBus();
 
+// 确保全局对象存在并提供后备方案
+window.extension_settings = window.extension_settings || {};
+window.saveSettingsDebounced = window.saveSettingsDebounced || (() => {
+  console.warn('saveSettingsDebounced 不可用，使用默认实现');
+  let timeout = null;
+  return () => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      try {
+        localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings || {}));
+        console.log('设置已保存到本地存储');
+      } catch (e) {
+        console.error('无法保存设置到本地存储', e);
+      }
+    }, 1000);
+  };
+})();
+
 const deps = {
   modules: {},
 
@@ -16,6 +34,7 @@ const deps = {
       return;
     }
     this.modules[name] = module;
+    console.log(`[deps] 模块已注册: ${name}`);
   },
 
   /**
@@ -26,7 +45,11 @@ const deps = {
       console.error('[deps] 模块名称无效', name);
       return null;
     }
-    return this.modules[name] || null;
+    const module = this.modules[name];
+    if (!module) {
+      console.warn(`[deps] 模块未找到: ${name}`);
+    }
+    return module || null;
   },
 
   /**
@@ -62,7 +85,7 @@ const deps = {
     return this.getModule('utils') || {};
   },
 
-  // deps.js - 修复设置获取方法
+  // 修复设置获取方法
   get settings() {
     const settingsModule = this.getModule('settings');
     if (!settingsModule || typeof settingsModule.get !== 'function') {
@@ -82,6 +105,29 @@ const deps = {
 
   get jQuery() {
     return window.jQuery || null;
+  },
+
+  /**
+   * 获取SillyTavern的扩展设置
+   */
+  get extension_settings() {
+    return window.extension_settings || {};
+  },
+
+  /**
+   * 获取SillyTavern的设置保存函数
+   */
+  get saveSettingsDebounced() {
+    return window.saveSettingsDebounced || (() => {
+      console.warn('saveSettingsDebounced 不可用，使用默认实现');
+      return () => {
+        try {
+          localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings || {}));
+        } catch (e) {
+          console.error('无法保存设置到本地存储', e);
+        }
+      };
+    });
   }
 };
 

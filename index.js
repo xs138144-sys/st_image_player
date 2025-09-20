@@ -1,9 +1,7 @@
-import { extension_settings } from "../../../extensions.js";
-import { saveSettingsDebounced } from "../../../../script.js";
 import { deps } from "./core/deps.js";
 
-// 添加 utils 导入
-import utils from "./modules/utils.js";
+// 使用deps提供的核心功能
+const { extension_settings, saveSettingsDebounced } = deps;
 
 const EXT_ID = "st_image_player";
 
@@ -161,7 +159,7 @@ const waitForSTAndInit = () => {
       mediaFilter: "all",
       isPlaying: false,
       serviceDirectory: "",
-      serviceUrl: "http://127.0.0.1:9000", // 添加默认服务URL
+      serviceUrl: "http://127.0.0.1:9000",
       mediaConfig: {
         image_max_size_mb: 5,
         video_max_size_mb: 100,

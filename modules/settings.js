@@ -1,42 +1,7 @@
-const extension_settings = window.extension_settings || {};
-const saveSettingsDebounced = window.saveSettingsDebounced || (() => { });
+import { deps } from "../core/deps.js";
 
-// 如果全局变量不存在，尝试从常见路径导入
-if (!window.extension_settings) {
-  try {
-    // 尝试从 GitHub 仓库安装路径导入
-    const extModule = await import('../../../../../extensions.js');
-    extension_settings = extModule.extension_settings || {};
-  } catch (e) {
-    console.warn('无法从 GitHub 路径导入 extensions.js，尝试本地路径');
-    try {
-      // 尝试从本地安装路径导入
-      const extModule = await import('../../../../extensions.js');
-      extension_settings = extModule.extension_settings || {};
-    } catch (e2) {
-      console.error('无法导入 extensions.js，使用空对象作为后备');
-      extension_settings = {};
-    }
-  }
-}
-
-if (!window.saveSettingsDebounced) {
-  try {
-    // 尝试从 GitHub 仓库安装路径导入
-    const scriptModule = await import('../../../../../../script.js');
-    saveSettingsDebounced = scriptModule.saveSettingsDebounced || (() => { });
-  } catch (e) {
-    console.warn('无法从 GitHub 路径导入 script.js，尝试本地路径');
-    try {
-      // 尝试从本地安装路径导入
-      const scriptModule = await import('../../../../../script.js');
-      saveSettingsDebounced = scriptModule.saveSettingsDebounced || (() => { });
-    } catch (e2) {
-      console.error('无法导入 script.js，使用空函数作为后备');
-      saveSettingsDebounced = () => { };
-    }
-  }
-}
+// 使用deps提供的核心功能
+const { extension_settings, saveSettingsDebounced } = deps;
 
 const EXTENSION_ID = "st_image_player";
 const CONFIG_VERSION = "1.4.2";
@@ -58,7 +23,6 @@ if (!extension_settings[EXTENSION_ID]) {
       showLoop: true,
       showTime: true
     },
-    serviceUrl: "http://127.0.0.1:9000",
     videoVolume: 0.8,
     videoLoop: false,
     hideBorder: false,
@@ -67,6 +31,7 @@ if (!extension_settings[EXTENSION_ID]) {
     mediaFilter: "all",
     isPlaying: false,
     serviceDirectory: "",
+    serviceUrl: "http://127.0.0.1:9000",
     mediaConfig: {
       image_max_size_mb: 5,
       video_max_size_mb: 100,
