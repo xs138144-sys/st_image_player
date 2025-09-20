@@ -197,7 +197,19 @@ const waitForSTAndInit = () => {
     if (settings.randomPlayedIndices === undefined) {
       settings.randomPlayedIndices = [];
     }
-    if (settings.mediaConfig.preload_strategy === undefined) {
+
+    // 确保 mediaConfig 对象存在
+    if (!settings.mediaConfig) {
+      settings.mediaConfig = {
+        image_max_size_mb: 5,
+        video_max_size_mb: 100,
+        preload_strategy: {
+          image: true,
+          video: false
+        }
+      };
+    } else if (settings.mediaConfig.preload_strategy === undefined) {
+      // 如果 mediaConfig 存在但没有 preload_strategy，则添加
       settings.mediaConfig.preload_strategy = {
         image: true,
         video: false
