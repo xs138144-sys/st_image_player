@@ -1,6 +1,6 @@
 import { deps } from "../core/deps.js";
 
-// 模块私有变量
+const { EventBus, toastr } = deps;
 const eventSource = deps.utils.getSafeGlobal("eventSource", null);
 const event_types = deps.utils.getSafeGlobal("event_types", {});
 let eventListeners = []; // 事件监听器集合
@@ -11,32 +11,27 @@ const winSelector = "#st-image-player-window"; // 播放器窗口选择器
  */
 export const init = () => {
   try {
-    // 修正：使用settings模块统一的get()方法获取配置
-    const settings = deps.settings.get();
-
-    // 已注册或未启用则跳过初始化
-    if (
-      settings.aiEventRegistered ||
-      !settings.masterEnabled ||
-      !settings.enabled
-    ) {
-      console.log(`[aiEvents] 无需初始化（已注册/未启用）`);
+    if (!checkDependencies()) {
+      toastr.warning("[aiEvents] 依赖未就绪，延迟初始化");
+      // 延迟重试
+      setTimeout(init, 2000);
       return;
     }
 
-    // 注册扩展禁用事件（用于清理监听）
-    const removeDisableListener = deps.EventBus.on(
-      "extensionDisable",
-      cleanupEventListeners
-    );
-    eventListeners.push(removeDisableListener);
+    // 注册AI回复事件监听
+    const removeReplyListener = eventSource.on(event_types.MESSAGE_RECEIVED, () => {
+      EventBus.emit("aiReplyReceived");
+    });
 
-    // 启动注册流程（带重试机制）
-    registerAIEventListeners();
+    // 注册玩家消息事件监听
+    const removeSendListener = eventSource.on(event_types.MESSAGE_SENT, () => {
+      EventBus.emit("playerMessageSent");
+    });
 
-    console.log(`[aiEvents] AI事件模块初始化完成`);
+    window.aiEventListeners = [removeReplyListener, removeSendListener];
+    console.log(`[aiEvents] 初始化完成，已注册事件监听`);
   } catch (e) {
-    deps.toastr.error(`[aiEvents] 初始化失败: ${e.message}`);
+    toastr.error(`[aiEvents] 初始化失败: ${e.message}`);
     console.error(`[aiEvents] 初始化错误:`, e);
   }
 };
@@ -61,14 +56,16 @@ const cleanupEventListeners = () => {
  */
 export const cleanup = () => {
   try {
-    cleanupEventListeners();
-    console.log(`[aiEvents] AI事件模块已清理`);
+    if (window.aiEventListeners) {
+      window.aiEventListeners.forEach(removeListener => removeListener());
+      window.aiEventListeners = null;
+    }
+    console.log(`[aiEvents] 资源清理完成`);
   } catch (e) {
-    deps.toastr.error(`[aiEvents] 清理失败: ${e.message}`);
+    toastr.error(`[aiEvents] 清理失败: ${e.message}`);
     console.error(`[aiEvents] 清理错误:`, e);
   }
 };
-
 /**
  * 检查AI事件依赖是否就绪
  */
@@ -117,24 +114,21 @@ const bindEvent = (eventName, callback) => {
   }
 };
 
-/**
- * AI回复触发媒体切换
- */
 const onAIResponse = () => {
-  // 修正：使用settings模块统一的get()方法
   const settings = deps.settings.get();
   const $ = deps.jQuery;
   if (!$) return;
 
-  const win = $(winSelector);
-  const video = win.find(".image-player-video")[0];
+  // 使用window.media状态判断（替代直接读settings）
+  if (!window.media) return;
 
-  // 前置检查（禁用/加载中/视频循环 → 跳过）
-  if (!settings.enabled || settings.isMediaLoading) return;
-  if (video && video.style.display !== "none" && settings.videoLoop) {
+  // 前置检查：加载中/视频循环/非图片状态 → 跳过
+  if (window.media.state.isLoading) return;
+  if (window.media.meta.type === "video" && window.media.state.isLooping) {
     console.log(`[aiEvents] 视频循环中，跳过切换`);
     return;
   }
+
   if (
     settings.autoSwitchMode !== "detect" ||
     !settings.aiDetectEnabled ||
@@ -147,27 +141,22 @@ const onAIResponse = () => {
   const now = performance.now();
   if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) return;
 
-  // 触发切换（通过事件总线）
+  // 触发切换
   deps.settings.save({ lastAISwitchTime: now });
   deps.EventBus.emit("requestMediaPlay", { direction: "next" });
   console.log(`[aiEvents] AI回复触发媒体切换`);
 };
 
-/**
- * 玩家消息触发媒体切换
- */
+// onPlayerMessage函数做同样修改（判断window.media状态）
 const onPlayerMessage = () => {
-  // 修正：使用settings模块统一的get()方法
   const settings = deps.settings.get();
   const $ = deps.jQuery;
   if (!$) return;
 
-  const win = $(winSelector);
-  const video = win.find(".image-player-video")[0];
+  if (!window.media) return;
 
-  // 前置检查（同AI回复逻辑）
-  if (!settings.enabled || settings.isMediaLoading) return;
-  if (video && video.style.display !== "none" && settings.videoLoop) {
+  if (window.media.state.isLoading) return;
+  if (window.media.meta.type === "video" && window.media.state.isLooping) {
     console.log(`[aiEvents] 视频循环中，跳过切换`);
     return;
   }

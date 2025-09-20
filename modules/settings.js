@@ -79,20 +79,14 @@ const migrateSettings = () => {
 
       settings.config_version = CONFIG_VERSION;
     }
-    if (settings.mediaConfig.video_extensions) {
-      [".mov", ".avi", ".mkv"].forEach(ext => {
-        if (!settings.mediaConfig.video_extensions.includes(ext)) {
-          settings.mediaConfig.video_extensions.push(ext);
-        }
-      });
-    }
+
+    // 移除重复的视频扩展名处理逻辑（已在1.4.0→1.4.2迁移中处理）
     settings.config_version = CONFIG_VERSION;
   }
 
   // 保存迁移后的配置
   save();
   toastr.info(`媒体播放器配置已更新到最新版本`);
-
 };
 
 const cleanup = () => {
@@ -111,12 +105,11 @@ const cleanup = () => {
 
 
 
-// 修复：save函数引用
 export const save = () => {
   const settings = get();
   const saveFn = window.saveSettingsDebounced || saveSettingsDebounced; // 兼容两种保存函数
 
-  window.media
+  // 移除无效代码 window.media
   window.extension_settings[EXTENSION_ID] = settings;
 
   // 优先使用核心保存函数
@@ -135,7 +128,7 @@ export const save = () => {
     localStorage.setItem("extension_settings", JSON.stringify(window.extension_settings));
     console.log(`[settings] localStorage保存成功`);
   } catch (e) {
-    deps.toastr.error("设置保存失败，请 请检查存储权限");
+    deps.toastr.error("设置保存失败，请检查存储权限"); // 修复：移除多余空格
     console.error(`[settings] localStorage保存失败:`, e);
   }
 };

@@ -24,7 +24,26 @@ let currentMediaType = "image";
 export const init = () => {
   console.log(`[mediaPlayer] 播放模块初始化`);
   // 初始化定时器（示例）
-
+  // 初始化window.media状态容器
+  window.media = {
+    // 媒体元数据
+    meta: {
+      type: null, // 'image' | 'video'
+      url: null,
+      name: null,
+      path: null, // 原始路径
+      size: null, // 尺寸信息
+    },
+    // 播放状态
+    state: {
+      isPlaying: false,
+      currentTime: 0, // 视频当前时间
+      duration: 0, // 总时长
+      isLooping: false,
+      isLoading: false,
+      isError: false
+    }
+  };
   try {
     // 注册事件监听（接收外部请求）
     const removePlayListener = EventBus.on("requestMediaPlay", (data) => {
@@ -342,35 +361,123 @@ export const showMedia = async (direction) => {
           img.src = mediaUrl;
         });
       }
+      // 更新window.media元数据
+      window.media.meta = {
+        type: "image",
+        url: mediaUrl,
+        name: mediaName,
+        path: media.rel_path,
+        size: `${media.width || '?'}x${media.height || '?'}`
+      };
+      // 更新播放状态
+      window.media.state = {
+        ...window.media.state,
+        isPlaying: true, // 图片默认视为"播放中"状态
+        isLoading: false,
+        isError: false
+      };
 
-      $(videoElement).hide();
-      stopProgressUpdate(); // 停止视频进度更新
+      if (preloadedMedia && preloadedMedia.src === mediaUrl) {
+        $(imgElement).attr("src", mediaUrl).show();
+      } else {
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            $(imgElement).attr("src", mediaUrl).show();
+            // 图片加载完成后更新尺寸信息
+            window.media.meta.size = `${img.width}x${img.height}`;
+            resolve();
+          };
+          img.onerror = () => {
+            window.media.state.isError = true;
+            reject(new Error("图片加载失败"));
+          };
+          img.src = mediaUrl;
+        });
+      }
     } else if (mediaType === "video") {
-      // 显示视频
-      videoElement.currentTime = 0;
-      videoElement.loop = settings.videoLoop;
-      $(videoElement).attr("src", mediaUrl).show();
+      // 视频处理逻辑
+      // 更新window.media元数据
+      window.media.meta = {
+        type: "video",
+        url: mediaUrl,
+        name: mediaName,
+        path: media.rel_path,
+        size: `${media.width || '?'}x${media.height || '?'}`
+      };
+      // 更新播放状态
+      window.media.state = {
+        ...window.media.state,
+        isPlaying: false, // 视频需手动播放
+        isLooping: settings.videoLoop,
+        isLoading: true,
+        isError: false,
+        duration: 0,
+        currentTime: 0
+      };
 
-      // 等待视频元数据加载
-      await new Promise((resolve) => {
-        videoElement.onloadedmetadata = resolve;
-      });
-      videoElement.play();
-      startProgressUpdate(videoElement);
+      // 视频加载逻辑（原有代码）
+      videoElement.src = mediaUrl;
+      videoElement.onloadedmetadata = () => {
+        window.media.state.duration = videoElement.duration;
+        window.media.state.isLoading = false;
+        $(videoElement).show();
+        // 尝试自动播放（受浏览器政策限制）
+        videoElement.play().then(() => {
+          window.media.state.isPlaying = true;
+        }).catch(e => {
+          console.warn("视频自动播放失败，需手动触发", e);
+          window.media.state.isPlaying = false;
+        });
+      };
+      videoElement.onerror = () => {
+        window.media.state.isError = true;
+        window.media.state.isLoading = false;
+        toastr.error("视频加载失败");
+      };
+      // 监听视频时间更新
+      videoElement.ontimeupdate = () => {
+        window.media.state.currentTime = videoElement.currentTime;
+      };
+      // 监听播放状态变化
+      videoElement.onplay = () => {
+        window.media.state.isPlaying = true;
+      };
+      videoElement.onpause = () => {
+        window.media.state.isPlaying = false;
+      };
     }
 
-    // 更新信息显示
-    $(infoElement).text(mediaName);
-    settings.isMediaLoading = false;
-    save();
-    startAutoSwitch(); // 启动自动切换
+    // 更新信息显示（通知UI模块）
+    EventBus.emit("mediaStateUpdated", window.media);
+    $(videoElement).hide();
+    stopProgressUpdate(); // 停止视频进度更新
+  } else if (mediaType === "video") {
+    // 显示视频
+    videoElement.currentTime = 0;
+    videoElement.loop = settings.videoLoop;
+    $(videoElement).attr("src", mediaUrl).show();
 
-  } catch (e) {
-    console.error(`[mediaPlayer] 显示媒体失败:`, e);
-    toastr.error(`显示媒体失败: ${e.message}`);
-    settings.isMediaLoading = false;
-    save();
+    // 等待视频元数据加载
+    await new Promise((resolve) => {
+      videoElement.onloadedmetadata = resolve;
+    });
+    videoElement.play();
+    startProgressUpdate(videoElement);
   }
+
+  // 更新信息显示
+  $(infoElement).text(mediaName);
+  settings.isMediaLoading = false;
+  save();
+  startAutoSwitch(); // 启动自动切换
+
+} catch (e) {
+  console.error(`[mediaPlayer] 显示媒体失败:`, e);
+  toastr.error(`显示媒体失败: ${e.message}`);
+  settings.isMediaLoading = false;
+  save();
+}
 };
 
 /**

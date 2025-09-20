@@ -1,4 +1,3 @@
-
 import {
   getSafeToastr,
   formatTime,
@@ -6,28 +5,22 @@ import {
   applyTransitionEffect,
   getSafeGlobal,
   isDirectoryValid,
-  registerModuleCleanup, // 新增：导入utils中缺失的清理注册方法
-  safeJQuery // 新增：导入安全获取jQuery的方法
+  registerModuleCleanup,
+  safeJQuery
 } from "../modules/utils.js";
 import {
-  getSettings,
-  saveSafeSettings,
-  disableExtension,
-  DEFAULT_SETTINGS,
-  migrateSettings, // 新增：导入配置迁移方法
-  cleanup as cleanupSettings // 新增：导入设置模块清理方法
+  migrateSettings,
+  cleanup as cleanupSettings,
+  save as saveSettings // 与settings.js导出保持一致
 } from "../modules/settings.js";
 import { EventBus } from "./eventBus.js";
 
 export const deps = {
   // 模块存储
   modules: {},
-  registerModule(name, module) {
-    this.modules[name] = module;
-  },
 
   /**
-   * 注册模块
+   * 注册模块（保留唯一实现）
    * @param {string} name - 模块名称
    * @param {object} module - 模块对象
    */
@@ -48,14 +41,15 @@ export const deps = {
   getModule(name) {
     return this.modules[name] || {};
   },
+
   get utils() {
-    return this.modules.utils; // 仅在需要时获取
+    return this.modules.utils;
   },
+
   /**
    * 安全获取toastr（兼容缺失场景）
    */
   get toastr() {
-    // 修复：直接使用utils模块的getSafeToastr方法，避免循环依赖
     const safeToastr = this.utils.getSafeToastr ? this.utils.getSafeToastr() : null;
     if (safeToastr) return safeToastr;
 
@@ -69,7 +63,7 @@ export const deps = {
   },
 
   /**
-   * 获取jQuery（兼容SillyTavern环境，保留旧版本的警告提示）
+   * 获取jQuery（兼容SillyTavern环境）
    */
   get jQuery() {
     const $ = window.jQuery || window.$ || null;
@@ -77,32 +71,28 @@ export const deps = {
     return $;
   },
 
-
-
   /**
-   * 获取事件总线（确保为实例化对象）
+   * 获取事件总线
    */
   get EventBus() {
     return this.getModule('EventBus');
   },
 
   /**
-   * 获取设置模块（统一接口命名）
+   * 获取设置模块（与settings.js导出对齐）
    */
   get settings() {
     const settingsModule = this.getModule('settings');
-    // 标准化接口，避免调用方出错
     return {
       ...settingsModule,
-      get: settingsModule.get || getSettings,
-      save: settingsModule.save || saveSafeSettings,
+      save: settingsModule.save || saveSettings,
       migrate: settingsModule.migrate || migrateSettings,
       cleanup: settingsModule.cleanup || cleanupSettings
     };
   }
 };
-export { deps };
-// 自动注册核心模块（融合旧版本的默认依赖，无需手动注册）
+
+// 自动注册核心模块
 deps.registerModule('utils', {
   getSafeToastr,
   formatTime,
@@ -110,22 +100,17 @@ deps.registerModule('utils', {
   applyTransitionEffect,
   getSafeGlobal,
   isDirectoryValid,
-  registerModuleCleanup, // 补充注册缺失的工具方法
-  safeJQuery // 补充注册安全jQuery方法
+  registerModuleCleanup,
+  safeJQuery
 });
 
 deps.registerModule('settings', {
-  get: getSettings,
-  save: saveSafeSettings,
-  disable: disableExtension,
-  DEFAULT: DEFAULT_SETTINGS,
-  migrate: migrateSettings, // 补充注册配置迁移方法
-  cleanup: cleanupSettings // 补充注册清理方法
+  save: saveSettings,
+  migrate: migrateSettings,
+  cleanup: cleanupSettings
 });
 
-// 注册EventBus实例（确保全局唯一实例，避免重复实例化）
+// 注册EventBus实例
 const eventBusInstance = new EventBus();
 deps.registerModule('EventBus', eventBusInstance);
-
-// 防止外部重复实例化EventBus
 Object.freeze(eventBusInstance);

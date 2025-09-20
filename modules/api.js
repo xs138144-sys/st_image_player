@@ -4,10 +4,10 @@ import { deps } from "../core/deps.js";
 const {
   EventBus,
   toastr,
-  settings: { get, save },
+  // 移除冲突的settings解构：避免与导入的get/save冲突
 } = deps;
+const MEDIA_REQUEST_THROTTLE = 3000;
 let lastMediaRequestTime = 0;
-const MEDIA_REQUEST_THROTTLE = 5000; // 5秒节流
 let pollingTimer = null; // 轮询定时器
 
 /**
@@ -157,7 +157,7 @@ export const checkServiceStatus = async () => {
 /**
  * 获取媒体列表（支持筛选）
  */
-export const fetchMediaList = async (filterType = "all") => {
+export const fetchMediaList = async (filterType = "all") => { // 添加export关键字
   const settings = get();
   try {
     const res = await fetch(`${settings.serviceUrl}/media?type=${filterType}`);
@@ -169,6 +169,17 @@ export const fetchMediaList = async (filterType = "all") => {
     toastr.error("获取媒体列表失败，请检查服务连接");
     return [];
   }
+};
+
+// 导出所有公共函数（确保其他模块可调用）
+export {
+  init,
+  cleanup,
+  checkServiceStatus,
+  updateScanDirectory,
+  updateMediaSizeLimit,
+  cleanupInvalidMedia,
+  refreshMediaList
 };
 
 
@@ -295,7 +306,7 @@ export const refreshMediaList = async (filterType) => {
   }
 
   lastMediaRequestTime = now;
-  // 拉取最新列表
+  // 拉取最新列表（假设fetchMediaList已实现）
   window.mediaList = await fetchMediaList(targetFilter);
   settings.randomMediaList = [...window.mediaList];
   const oldLength = window.oldMediaListLength || 0;
