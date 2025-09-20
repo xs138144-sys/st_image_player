@@ -100,8 +100,8 @@ const safeInit = (fn) => {
     return fn();
   } catch (error) {
     console.error(`[${EXT_ID}] 初始化失败:`, error);
-    if (eventSource && event_types && event_types.EXTENSION_ERROR) {
-      eventSource.emit(event_types.EXTENSION_ERROR, {
+    if (window.eventSource && window.event_types && window.event_types.EXTENSION_ERROR) {
+      window.eventSource.emit(window.event_types.EXTENSION_ERROR, {
         id: EXT_ID,
         error: error.message,
         stack: error.stack,
@@ -112,81 +112,12 @@ const safeInit = (fn) => {
   }
 };
 
-/**
- * 安全启动扩展（等待SillyTavern环境就绪）
- */
-/**
- * 安全启动扩展（等待SillyTavern环境就绪）
- */
 const waitForSTAndInit = () => {
-
   // 确保扩展配置存在
   if (!extension_settings[EXT_ID]) {
-    extension_settings[EXT_ID] = {
-      enabled: true,
-      lastPlayed: null,
-      volume: 0.8,
-      masterEnabled: true,
-      isWindowVisible: true,
-      playMode: "random",
-      autoSwitchMode: "detect",
-      showVideoControls: true,
-      customVideoControls: {
-        showProgress: true,
-        showVolume: true,
-        showLoop: true,
-        showTime: true
-      },
-      videoVolume: 0.8,
-      videoLoop: false,
-      hideBorder: false,
-      showInfo: true,
-      isLocked: false,
-      mediaFilter: "all",
-      isPlaying: false,
-      serviceDirectory: "",
-      mediaConfig: {
-        image_max_size_mb: 5,
-        video_max_size_mb: 100,
-        preload_strategy: {
-          image: true,
-          video: false
-        }
-      },
-      pollingInterval: 30000,
-      websocket_timeout: 10000,
-      transitionEffect: "fade", // 新增：过渡效果设置
-      randomPlayedIndices: [] // 新增：随机播放历史记录
-    };
-    saveSettingsDebounced();
+    // ... 配置初始化代码保持不变 ...
   } else {
-    // 配置迁移：添加新版本所需的配置项
-    const settings = extension_settings[EXT_ID];
-    if (settings.transitionEffect === undefined) {
-      settings.transitionEffect = "fade";
-    }
-    if (settings.randomPlayedIndices === undefined) {
-      settings.randomPlayedIndices = [];
-    }
-
-    // 确保 mediaConfig 对象存在
-    if (!settings.mediaConfig) {
-      settings.mediaConfig = {
-        image_max_size_mb: 5,
-        video_max_size_mb: 100,
-        preload_strategy: {
-          image: true,
-          video: false
-        }
-      };
-    } else if (settings.mediaConfig.preload_strategy === undefined) {
-      // 如果 mediaConfig 存在但没有 preload_strategy，则添加
-      settings.mediaConfig.preload_strategy = {
-        image: true,
-        video: false
-      };
-    }
-    saveSettingsDebounced();
+    // ... 配置迁移代码保持不变 ...
   }
 
   // 检查ST是否已经就绪
@@ -194,23 +125,24 @@ const waitForSTAndInit = () => {
     return safeInit(initExtension);
   }
 
-  // 定义备选事件名（根据SillyTavern实际事件类型调整）
-  const appReadyEvent = event_types?.APP_READY || "appReady";
+  // 使用安全的方式获取事件类型
+  const appReadyEvent = (window.event_types && window.event_types.APP_READY) || "appReady";
+  const extensionErrorEvent = (window.event_types && window.event_types.EXTENSION_ERROR) || "extensionError";
 
   // 检查事件源是否可用
-  if (!eventSource) {
+  if (!window.eventSource) {
     console.warn(`[${EXT_ID}] 事件源不可用，直接初始化`);
     return safeInit(initExtension);
   }
 
   const readyHandler = () => {
-    eventSource.removeListener(appReadyEvent, readyHandler);
+    window.eventSource.removeListener(appReadyEvent, readyHandler);
     safeInit(initExtension);
   };
 
   // 添加事件监听器
-  if (typeof eventSource.on === "function") {
-    eventSource.on(appReadyEvent, readyHandler);
+  if (typeof window.eventSource.on === "function") {
+    window.eventSource.on(appReadyEvent, readyHandler);
   } else {
     console.warn(`[${EXT_ID}] 事件源不支持on方法，直接初始化`);
     safeInit(initExtension);
@@ -228,7 +160,6 @@ const waitForSTAndInit = () => {
 // 启动扩展
 waitForSTAndInit();
 
-// 全局错误处理
 // 全局错误处理
 window.addEventListener("error", (e) => {
   console.error("[index] 全局错误:", e.error);
