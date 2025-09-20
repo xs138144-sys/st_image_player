@@ -2,11 +2,9 @@ import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 import { deps } from "./core/deps.js";
 import * as utils from "./modules/utils.js";
-import { EventBus } from "./core/eventBus.js";
 
 // 注册utils到deps
 deps.registerModule('utils', utils);
-deps.registerModule('EventBus', EventBus);
 
 const eventSource = deps.utils.getSafeGlobal("eventSource", null);
 const event_types = deps.utils.getSafeGlobal("event_types", {});
@@ -78,7 +76,7 @@ const loadModule = async (moduleName) => {
     deps.registerModule(moduleName, module);
 
     // 注册模块清理事件（扩展禁用时触发）
-    const removeCleanupListener = EventBus.on(
+    const removeCleanupListener = deps.EventBus.on(
       "extensionDisable",
       module.cleanup
     );
@@ -115,7 +113,7 @@ const initExtension = async () => {
     // 初始化完成通知
     console.log(`[index] 所有模块加载完成`);
     deps.toastr.success("媒体播放器扩展已加载就绪");
-    EventBus.emit("extensionInitialized");
+    deps.EventBus.emit("extensionInitialized");
   } catch (e) {
     console.error(`[index] 扩展初始化全局错误:`, e);
     deps.toastr.error(`扩展加载失败: ${e.message}`);
@@ -269,7 +267,7 @@ window.addEventListener("error", (e) => {
 
 // 扩展卸载时清理资源
 window.addEventListener("beforeunload", () => {
-  EventBus.emit("extensionDisable");
+  deps.EventBus.emit("extensionDisable");
   if (window.moduleCleanupListeners) {
     window.moduleCleanupListeners.forEach((removeListener) => {
       if (typeof removeListener === "function") {
@@ -283,7 +281,7 @@ window.addEventListener("beforeunload", () => {
 // 注册清理函数
 utils.registerModuleCleanup(EXT_ID, () => {
   console.log(`[${EXT_ID}] 执行全局清理`);
-  EventBus.emit("extensionDisable");
+  deps.EventBus.emit("extensionDisable");
   if (window.moduleCleanupListeners) {
     window.moduleCleanupListeners.forEach((removeListener) => {
       if (typeof removeListener === "function") {

@@ -1,3 +1,9 @@
+// deps.js
+import { EventBus } from './eventBus.js';
+
+// 创建 EventBus 实例
+const eventBusInstance = new EventBus();
+
 const deps = {
   modules: {},
 
@@ -61,7 +67,7 @@ const deps = {
   },
 
   get EventBus() {
-    return this.getModule('EventBus') || new EventBus();
+    return eventBusInstance; // 返回实例而不是类
   },
 
   get jQuery() {
