@@ -1,11 +1,7 @@
 import { get, save } from "./settings.js";
 import { deps } from "../core/deps.js";
 
-const {
-  EventBus,
-  toastr,
-  // 移除冲突的settings解构：避免与导入的get/save冲突
-} = deps;
+const { EventBus, toastr } = deps;
 const MEDIA_REQUEST_THROTTLE = 3000;
 let lastMediaRequestTime = 0;
 let pollingTimer = null; // 轮询定时器
@@ -13,7 +9,7 @@ let pollingTimer = null; // 轮询定时器
 /**
  * 初始化API模块（注册事件监听）
  */
-export const init = () => {
+const init = () => {
   try {
     // 注册事件监听（接收其他模块的API调用请求）
     const removeRefreshListener = EventBus.on(
@@ -87,6 +83,7 @@ export const init = () => {
     console.error(`[api] 初始化错误:`, e);
   }
 };
+
 
 /**
  * 清理API模块资源（定时器、事件监听）
@@ -184,13 +181,12 @@ export {
 
 
 
-// 修复：更新扫描目录函数
 export const updateScanDirectory = async (newPath) => {
   const settings = get();
   const { isDirectoryValid } = deps.utils;
 
   if (!newPath || !isDirectoryValid(newPath)) {
-    deps.toastr.warning("请 输入有效且有读权限的目录路径"); // 修正：使用deps.toastr
+    deps.toastr.warning("请输入有效且有读权限的目录路径");
     return false;
   }
 
@@ -205,7 +201,7 @@ export const updateScanDirectory = async (newPath) => {
 
     settings.serviceDirectory = newPath;
     save();
-    deps.toastr.success(`目录已更新: ${newPath}`); // 修正：使用deps.toastr
+    deps.toastr.success(`目录已更新: ${newPath}`);
 
     // 刷新媒体列表（调用补全的函数）
     await refreshMediaList();
@@ -216,6 +212,7 @@ export const updateScanDirectory = async (newPath) => {
     return false;
   }
 };
+
 
 /**
  * 更新媒体大小限制

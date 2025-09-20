@@ -1,5 +1,6 @@
 import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
+import { deps } from "../core/deps.js"; // 新增依赖导入
 
 const EXTENSION_ID = "st_image_player";
 const CONFIG_VERSION = "1.4.2";
@@ -80,39 +81,38 @@ const migrateSettings = () => {
       settings.config_version = CONFIG_VERSION;
     }
 
-    // 移除重复的视频扩展名处理逻辑（已在1.4.0→1.4.2迁移中处理）
     settings.config_version = CONFIG_VERSION;
   }
 
   // 保存迁移后的配置
   save();
-  toastr.info(`媒体播放器配置已更新到最新版本`);
+  deps.toastr.info(`媒体播放器配置已更新到最新版本`); // 修复toastr引用
 };
 
 const cleanup = () => {
   try {
-    const settings = getExtensionSettings();
+    const settings = get();
     // 重置临时状态
     settings.isMediaLoading = false;
     settings.retryCount = 0;
     save();
     console.log(`[settings] 资源清理完成`);
   } catch (e) {
-    toastr.error(`[settings] 清理失败: ${e.message}`);
+    deps.toastr.error(`[settings] 清理失败: ${e.message}`); // 修复toastr引用
   }
 };
 
-
-
+// 新增get方法定义（之前缺失）
+export const get = () => {
+  return extension_settings[EXTENSION_ID] || {};
+};
 
 export const save = () => {
   const settings = get();
-  const saveFn = window.saveSettingsDebounced || saveSettingsDebounced; // 兼容两种保存函数
+  const saveFn = window.saveSettingsDebounced || saveSettingsDebounced;
 
-  // 移除无效代码 window.media
   window.extension_settings[EXTENSION_ID] = settings;
 
-  // 优先使用核心保存函数
   if (saveFn && typeof saveFn === "function") {
     try {
       saveFn();
@@ -128,11 +128,10 @@ export const save = () => {
     localStorage.setItem("extension_settings", JSON.stringify(window.extension_settings));
     console.log(`[settings] localStorage保存成功`);
   } catch (e) {
-    deps.toastr.error("设置保存失败，请检查存储权限"); // 修复：移除多余空格
+    deps.toastr.error("设置保存失败，请检查存储权限");
     console.error(`[settings] localStorage保存失败:`, e);
   }
 };
 
-
 // 导出必要的函数
-export { migrateSettings, cleanup, save };
+export { migrateSettings, cleanup, save, get };

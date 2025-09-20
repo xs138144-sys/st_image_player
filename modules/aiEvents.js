@@ -7,34 +7,34 @@ let eventListeners = []; // 事件监听器集合
 const winSelector = "#st-image-player-window"; // 播放器窗口选择器
 
 /**
- * 初始化AI事件模块
+ * 初始化AI事件监听
  */
 export const init = () => {
-  try {
-    if (!checkDependencies()) {
-      toastr.warning("[aiEvents] 依赖未就绪，延迟初始化");
-      // 延迟重试
-      setTimeout(init, 2000);
-      return;
+  const { get } = deps.settings;
+  const settings = get();
+
+  // 监听AI回复事件
+  const removeAiReplyListener = deps.EventBus.on('aiReply', () => {
+    if (settings.autoSwitchMode === 'detect' && settings.masterEnabled) {
+      deps.EventBus.emit('requestMediaSwitch', { trigger: 'ai_reply' });
     }
+  });
 
-    // 注册AI回复事件监听
-    const removeReplyListener = eventSource.on(event_types.MESSAGE_RECEIVED, () => {
-      EventBus.emit("aiReplyReceived");
-    });
+  // 监听玩家消息事件
+  const removeUserMessageListener = deps.EventBus.on('userMessage', () => {
+    if (settings.autoSwitchMode === 'detect' && settings.masterEnabled) {
+      deps.EventBus.emit('requestMediaSwitch', { trigger: 'user_message' });
+    }
+  });
 
-    // 注册玩家消息事件监听
-    const removeSendListener = eventSource.on(event_types.MESSAGE_SENT, () => {
-      EventBus.emit("playerMessageSent");
-    });
+  window.aiEventListeners = [
+    removeAiReplyListener,
+    removeUserMessageListener
+  ];
 
-    window.aiEventListeners = [removeReplyListener, removeSendListener];
-    console.log(`[aiEvents] 初始化完成，已注册事件监听`);
-  } catch (e) {
-    toastr.error(`[aiEvents] 初始化失败: ${e.message}`);
-    console.error(`[aiEvents] 初始化错误:`, e);
-  }
+  console.log(`[aiEvents] 模块初始化完成`);
 };
+
 
 /**
  * 清理所有事件监听
@@ -62,7 +62,7 @@ export const cleanup = () => {
     }
     console.log(`[aiEvents] 资源清理完成`);
   } catch (e) {
-    toastr.error(`[aiEvents] 清理失败: ${e.message}`);
+    deps.toastr.error(`[aiEvents] 清理失败: ${e.message}`); // 修复toastr引用
     console.error(`[aiEvents] 清理错误:`, e);
   }
 };

@@ -1,9 +1,6 @@
-/**
- * 事件总线 - 模块间通信核心
- */
 export class EventBus {
   constructor() {
-    this.events = new Map();
+    this.events = new Map(); // 存储事件与回调的映射
   }
 
   /**
@@ -31,26 +28,29 @@ export class EventBus {
   /**
    * 触发事件
    * @param {string} eventName 事件名称
-   * @param {any} data 传递的数据
+   * @param  {...any} args 传递给回调的参数
    */
-  emit(eventName, data) {
+  emit(eventName, ...args) {
     if (this.events.has(eventName)) {
-      // 创建回调副本，防止执行中修改原集合
+      // 复制一份回调集合防止执行中修改
       const callbacks = new Set(this.events.get(eventName));
-      callbacks.forEach((callback) => {
+      callbacks.forEach(callback => {
         try {
-          callback(data);
-        } catch (error) {
-          console.error(`[EventBus] 事件${eventName}执行错误:`, error);
+          callback(...args);
+        } catch (e) {
+          console.error(`[EventBus] 执行${eventName}回调失败:`, e);
         }
       });
     }
   }
 
   /**
-   * 清除所有事件监听
+   * 移除特定事件的所有监听
+   * @param {string} eventName 事件名称
    */
-  clear() {
-    this.events.clear();
+  offAll(eventName) {
+    if (this.events.has(eventName)) {
+      this.events.delete(eventName);
+    }
   }
 }
