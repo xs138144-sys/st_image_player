@@ -1,4 +1,3 @@
-// api.js - 完全重写以避免重复导出
 import { deps } from "../core/deps.js";
 
 const MEDIA_REQUEST_THROTTLE = 3000;
@@ -357,7 +356,7 @@ const cleanup = () => {
   }
 };
 
-// 单一导出语句
+// 单一导出语句 - 确保导出 init 和 cleanup 方法
 export default {
   init,
   cleanup,
