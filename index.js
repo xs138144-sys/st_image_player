@@ -119,7 +119,6 @@ const safeInit = (fn) => {
  * 安全启动扩展（等待SillyTavern环境就绪）
  */
 const waitForSTAndInit = () => {
-  verifyPaths();
 
   // 确保扩展配置存在
   if (!extension_settings[EXT_ID]) {
