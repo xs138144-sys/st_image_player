@@ -1,9 +1,8 @@
-/**
- * 迁移配置到最新版本
- */
+import { extension_settings } from "../../../extensions.js";
+import { saveSettingsDebounced } from "../../../../script.js";
 
 const EXTENSION_ID = "st_image_player";
-const CONFIG_VERSION = "1.4.2"; // 与扩展版本一致
+const CONFIG_VERSION = "1.4.2";
 const migrateSettings = () => {
   const settings = get();
 
@@ -109,17 +108,18 @@ const cleanup = () => {
   }
 };
 
-/**
- * 安全保存设置（兼容SillyTavern核心函数）
- */
-export const save = () => {
-  const settings = getExtensionSettings();
-  const saveFn = window.saveSettingsDebounced || null;
 
-  // 更新全局配置
+
+
+// 修复：save函数引用
+export const save = () => {
+  const settings = get();
+  const saveFn = window.saveSettingsDebounced || saveSettingsDebounced; // 兼容两种保存函数
+
+  window.media
   window.extension_settings[EXTENSION_ID] = settings;
 
-  // 1. 优先使用SillyTavern核心保存函数
+  // 优先使用核心保存函数
   if (saveFn && typeof saveFn === "function") {
     try {
       saveFn();
@@ -130,18 +130,16 @@ export const save = () => {
     }
   }
 
-  // 2. localStorage备用
+  // localStorage备用方案
   try {
-    localStorage.setItem(
-      "extension_settings",
-      JSON.stringify(window.extension_settings)
-    );
+    localStorage.setItem("extension_settings", JSON.stringify(window.extension_settings));
     console.log(`[settings] localStorage保存成功`);
   } catch (e) {
-    toastr.error("设置保存失败，请请检查存储权限");
+    deps.toastr.error("设置保存失败，请 请检查存储权限");
     console.error(`[settings] localStorage保存失败:`, e);
   }
 };
+
 
 // 导出必要的函数
 export { migrateSettings, cleanup, save };

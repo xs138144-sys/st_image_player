@@ -16,13 +16,13 @@ const EXT_ID = "st_image_player";
 
 // 需加载的模块列表（按依赖顺序排列）
 const MODULES = [
-  "settings", // 配置模块（最先加载）
-  "utils", // 工具模块（基础依赖）
+  "utils", // 工具模块提前，供settings依赖
+  "settings", // 配置模块（依赖utils）
   "api", // API模块（依赖settings/utils）
   "websocket", // WebSocket模块（依赖settings/api）
   "mediaPlayer", // 播放模块（依赖所有基础模块）
   "aiEvents", // AI事件模块（依赖settings/utils）
-  "ui", // UI模块（最后加载，依赖所有模块）
+  "ui", // UI模块（最后加载）
 ];
 
 // 打印所有核心文件的实际请求路径

@@ -1,8 +1,4 @@
-/**
- * 依赖管理核心模块
- * 集中管理扩展所需的外部依赖和内部模块，自动集成核心模块
- */
-// 导入核心模块（保持与旧版本一致的基础依赖）
+
 import {
   getSafeToastr,
   formatTime,
@@ -26,6 +22,9 @@ import { EventBus } from "./eventBus.js";
 export const deps = {
   // 模块存储
   modules: {},
+  registerModule(name, module) {
+    this.modules[name] = module;
+  },
 
   /**
    * 注册模块
@@ -49,7 +48,9 @@ export const deps = {
   getModule(name) {
     return this.modules[name] || {};
   },
-
+  get utils() {
+    return this.modules.utils; // 仅在需要时获取
+  },
   /**
    * 安全获取toastr（兼容缺失场景）
    */
@@ -76,12 +77,7 @@ export const deps = {
     return $;
   },
 
-  /**
-   * 获取工具模块
-   */
-  get utils() {
-    return this.getModule('utils');
-  },
+
 
   /**
    * 获取事件总线（确保为实例化对象）
@@ -105,7 +101,7 @@ export const deps = {
     };
   }
 };
-
+export { deps };
 // 自动注册核心模块（融合旧版本的默认依赖，无需手动注册）
 deps.registerModule('utils', {
   getSafeToastr,

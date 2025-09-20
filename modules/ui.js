@@ -270,8 +270,7 @@ export const createPlayerWindow = async () => {
 
   // 播放器窗口HTML
   const html = `
-    <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? "no-border" : ""
-    }" style="${settings.windowPosition ? `left: ${settings.windowPosition.left}px; top: ${settings.windowPosition.top}px; width: ${settings.windowSize?.width || 640}px; height: ${settings.windowSize?.height || 480}px;` : ""}">
+    <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? "no-border" : ""}" style="${settings.windowPosition ? `left: ${settings.windowPosition.left}px; top: ${settings.windowPosition.top}px; width: ${settings.windowSize?.width || 640}px; height: ${settings.windowSize?.height || 480}px;` : ""}">
       <div class="image-player-header">
         <div class="title"><i class="fa-solid fa-film"></i> 媒体播放器</div>
         <div class="window-controls">
@@ -300,15 +299,12 @@ export const createPlayerWindow = async () => {
       </div>
       <div class="image-player-controls">
         <div class="controls-group">
-          <button class="control-btn play-pause"><i class="fa-solid ${settings.isPlaying ? "fa-pause" : "fa-play"
-    }"></i></button>
-          <button class="control-btn mode-switch" title="${settings.playMode === "random" ? "随机模式" : "顺序模式"
-    }">
-            <i class="fa-solid ${settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol"
-    }"></i>
+          <button class="control-btn play-pause"><i class="fa-solid ${settings.isPlaying ? "fa-pause" : "fa-play"}"></i></button>
+          <button class="control-btn mode-switch" title="${settings.playMode === "random" ? "随机模式" : "顺序模式"}">
+            <i class="fa-solid ${settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol"}"></i>
           </button>
           <button class="control-btn switch-mode-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""}">
-    <i class="fa-solid fa-exchange"></i>
+            <i class="fa-solid fa-exchange"></i>
           </button>
     }" title="${settings.autoSwitchMode === "detect" ? "检测播放" : "定时切换"
     }">

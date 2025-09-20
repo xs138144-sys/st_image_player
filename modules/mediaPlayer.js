@@ -11,8 +11,8 @@ const { formatTime, applyTransitionEffect } = utils;
 // 声明模块级变量
 let switchTimer = null;
 let progressUpdateInterval = null;
-const winSelector = "#st-image-player-window"; // 播放器窗口选择器
 let preloadedMedia = null;
+const winSelector = `#st-image-player-window`;
 
 // 模块内状态
 let mediaList = [];
@@ -21,10 +21,10 @@ let currentMediaType = "image";
 
 
 
-/**
- * 初始化媒体播放器
- */
 export const init = () => {
+  console.log(`[mediaPlayer] 播放模块初始化`);
+  // 初始化定时器（示例）
+
   try {
     // 注册事件监听（接收外部请求）
     const removePlayListener = EventBus.on("requestMediaPlay", (data) => {
@@ -77,11 +77,18 @@ export const init = () => {
     toastr.error(`[mediaPlayer] 初始化失败: ${e.message}`);
     console.error(`[mediaPlayer] 初始化错误:`, e);
   }
+  progressUpdateInterval = setInterval(updateProgress, 1000);
 };
 
-/**
- * 清理媒体播放器资源
- */
+// 新增：进度更新函数（示例）
+const updateProgress = () => {
+  const $ = deps.jQuery;
+  const video = $(winSelector).find(".image-player-video")[0];
+  if (video && !isNaN(video.duration)) {
+    $(winSelector).find(".current-time").text(deps.utils.formatTime(video.currentTime));
+  }
+};
+
 export const cleanup = () => {
   try {
     // 清除切换定时器
@@ -112,9 +119,9 @@ export const cleanup = () => {
     // 释放预加载资源
     preloadedMedia = null;
 
-    console.log(`[mediaPlayer] 资源清理理完成`);
+    console.log(`[mediaPlayer] 资源清理完成`);
   } catch (e) {
-    toastr.error(`[mediaPlayer] 清理失败: ${e.message}`);
+    deps.toastr.error(`[mediaPlayer] 清理失败: ${e.message}`);
     console.error(`[mediaPlayer] 清理错误:`, e);
   }
 };

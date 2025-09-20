@@ -1,3 +1,4 @@
+import { get, save } from "./settings.js";
 import { deps } from "../core/deps.js";
 
 const {
@@ -170,15 +171,15 @@ export const fetchMediaList = async (filterType = "all") => {
   }
 };
 
-/**
- * 更新扫描目录
- */
+
+
+// 修复：更新扫描目录函数
 export const updateScanDirectory = async (newPath) => {
   const settings = get();
   const { isDirectoryValid } = deps.utils;
 
   if (!newPath || !isDirectoryValid(newPath)) {
-    toastr.warning("请输入有效且有读权限的目录路径");
+    deps.toastr.warning("请 输入有效且有读权限的目录路径"); // 修正：使用deps.toastr
     return false;
   }
 
@@ -193,14 +194,14 @@ export const updateScanDirectory = async (newPath) => {
 
     settings.serviceDirectory = newPath;
     save();
-    toastr.success(`目录已更新: ${newPath}`);
+    deps.toastr.success(`目录已更新: ${newPath}`); // 修正：使用deps.toastr
 
-    // 刷新媒体列表
+    // 刷新媒体列表（调用补全的函数）
     await refreshMediaList();
     return true;
   } catch (e) {
     console.error(`[api] 更新目录失败:`, e);
-    toastr.error(`更新失败: ${e.message}`);
+    deps.toastr.error(`更新失败: ${e.message}`);
     return false;
   }
 };
