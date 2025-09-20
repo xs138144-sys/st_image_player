@@ -391,6 +391,8 @@ export const cleanup = () => {
 
 // 导出所有公共函数（确保其他模块可调用）
 export {
+  init,
+  cleanup,
   checkServiceStatus,
   fetchMediaList,
   updateScanDirectory,

@@ -62,8 +62,18 @@ const deps = {
     return this.getModule('utils') || {};
   },
 
+  // deps.js - 修复设置获取方法
   get settings() {
-    return this.getModule('settings') || {};
+    const settingsModule = this.getModule('settings');
+    if (!settingsModule || typeof settingsModule.get !== 'function') {
+      console.warn('[deps] settings模块未正确加载，使用回退方案');
+      return {
+        get: () => ({}), // 返回空对象的回退函数
+        save: () => console.warn('settings.save不可用'),
+        migrateSettings: () => console.warn('settings.migrateSettings不可用')
+      };
+    }
+    return settingsModule;
   },
 
   get EventBus() {

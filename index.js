@@ -13,13 +13,13 @@ const EXT_ID = "st_image_player";
 
 // 需加载的模块列表（按依赖顺序排列）
 const MODULES = [
-  "utils", // 工具模块提前，供settings依赖
-  "settings", // 配置模块（依赖utils）
-  "api", // API模块（依赖settings/utils）
-  "websocket", // WebSocket模块（依赖settings/api）
-  "mediaPlayer", // 播放模块（依赖所有基础模块）
-  "aiEvents", // AI事件模块（依赖settings/utils）
-  "ui", // UI模块（最后加载）
+  "utils",
+  "settings",
+  "api",
+  "websocket",
+  "mediaPlayer",
+  "aiEvents",
+  "ui"
 ];
 
 // 打印所有核心文件的实际请求路径
@@ -50,9 +50,13 @@ const verifyPaths = () => {
  */
 const loadModule = async (moduleName) => {
   try {
-    // 确保模块路径正确
-    const modulePath = `./modules/${moduleName}.js`;
-    const module = await import(modulePath);
+    console.log(`[index] 正在加载模块: ${moduleName}`);
+    const module = await import(`./modules/${moduleName}.js`);
+
+    // 检查模块是否包含必要的导出
+    if (moduleName === "settings" && typeof module.get !== "function") {
+      throw new Error("settings模块缺少get()方法");
+    }
 
     // 检查模块是否有效
     if (!module || typeof module !== 'object') {
@@ -86,9 +90,11 @@ const loadModule = async (moduleName) => {
     return true;
   } catch (e) {
     console.error(`[index] 模块加载失败: ${moduleName}`, e);
-    // 只有在toastr可用时才显示错误
+    // 使用安全的toastr调用
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`模块${moduleName}加载失败: ${e.message}`);
+    } else {
+      console.error(`无法显示错误提示: ${e.message}`);
     }
     return false;
   }
@@ -98,12 +104,17 @@ const loadModule = async (moduleName) => {
  * 批量加载所有模块
  */
 const initExtension = async () => {
-  console.log(`[index] 媒体播放器播放器扩展开始初始化（共${MODULES.length}个模块）`);
-  deps.toastr.info("媒体播放器扩展正在加载...");
+  console.log(`[index] 媒体播放器扩展开始初始化（共${MODULES.length}个模块）`);
+
+  // 使用安全的toastr调用
+  if (deps.toastr && typeof deps.toastr.info === "function") {
+    deps.toastr.info("媒体播放器扩展正在加载...");
+  }
 
   try {
     // 按顺序加载模块
     for (const moduleName of MODULES) {
+      console.log(`[index] 加载模块: ${moduleName}`);
       const success = await loadModule(moduleName);
       if (!success) {
         console.warn(`[index] 模块${moduleName}加载失败，继续加载其他模块`);
@@ -112,11 +123,15 @@ const initExtension = async () => {
 
     // 初始化完成通知
     console.log(`[index] 所有模块加载完成`);
-    deps.toastr.success("媒体播放器扩展已加载就绪");
+    if (deps.toastr && typeof deps.toastr.success === "function") {
+      deps.toastr.success("媒体播放器扩展已加载就绪");
+    }
     deps.EventBus.emit("extensionInitialized");
   } catch (e) {
     console.error(`[index] 扩展初始化全局错误:`, e);
-    deps.toastr.error(`扩展加载失败: ${e.message}`);
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`扩展加载失败: ${e.message}`);
+    }
   }
 };
 

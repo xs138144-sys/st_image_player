@@ -195,4 +195,10 @@ export const init = () => {
 };
 
 // 导出必要的函数
-export { migrateSettings, cleanup, save, get, init };
+export {
+  init,
+  migrateSettings,
+  cleanup,
+  save,
+  get
+};
