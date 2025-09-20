@@ -3,7 +3,6 @@ import { saveSettingsDebounced } from "../../../../script.js";
 import { deps } from "./core/deps.js";
 import * as utils from "./modules/utils.js";
 import { EventBus } from "./core/eventBus.js";
-import { registerModuleCleanup } from "./modules/utils.js";
 
 // 注册utils到deps
 deps.registerModule('utils', utils);
@@ -270,7 +269,7 @@ window.addEventListener("beforeunload", () => {
 });
 
 // 注册清理函数
-registerModuleCleanup(EXT_ID, () => {
+utils.registerModuleCleanup(EXT_ID, () => {
   console.log(`[${EXT_ID}] 执行全局清理`);
   EventBus.emit("extensionDisable");
   if (window.moduleCleanupListeners) {

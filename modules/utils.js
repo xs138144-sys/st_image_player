@@ -143,3 +143,35 @@ export const safeJQuery = (callback) => {
     retry++;
   }, 500);
 };
+// 在 utils.js 文件末尾添加以下函数
+
+/**
+ * 注册模块清理函数
+ */
+export const registerModuleCleanup = (moduleId, cleanupFn) => {
+  if (typeof cleanupFn !== "function") {
+    console.error(`[utils] 无效的清理函数: ${moduleId}`);
+    return;
+  }
+
+  // 确保全局清理监听器数组存在
+  window.moduleCleanupListeners = window.moduleCleanupListeners || [];
+
+  // 创建清理函数
+  const cleanupWrapper = () => {
+    try {
+      console.log(`[utils] 执行清理: ${moduleId}`);
+      cleanupFn();
+    } catch (e) {
+      console.error(`[utils] 清理函数执行失败 (${moduleId}):`, e);
+    }
+  };
+
+  // 监听扩展禁用事件
+  const removeListener = deps.EventBus.on("extensionDisable", cleanupWrapper);
+
+  // 保存取消监听函数
+  window.moduleCleanupListeners.push(removeListener);
+
+  console.log(`[utils] 已注册清理函数: ${moduleId}`);
+};
