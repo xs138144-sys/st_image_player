@@ -1,13 +1,6 @@
 import { extension_settings } from "../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../script.js";
 import { deps } from "./core/deps.js";
-import * as utils from "./modules/utils.js";
-
-// 注册utils到deps
-deps.registerModule('utils', utils);
-
-const eventSource = deps.utils.getSafeGlobal("eventSource", null);
-const event_types = deps.utils.getSafeGlobal("event_types", {});
 
 const EXT_ID = "st_image_player";
 
@@ -19,44 +12,13 @@ const MODULES = [
   "websocket",
   "mediaPlayer",
   "aiEvents",
-  "ui"
+  "ui",
 ];
 
-// 打印所有核心文件的实际请求路径
-const logResolvedPath = (relativePath) => {
-  try {
-    const resolvedUrl = new URL(relativePath, window.location.href).href;
-    console.log(`[${EXT_ID}] 验证路径: ${resolvedUrl}`);
-    return resolvedUrl;
-  } catch (e) {
-    console.error(`[${EXT_ID}] 路径验证失败: ${relativePath}`, e);
-    return relativePath;
-  }
-};
-
-// 初始化前强制检查所有路径
-const verifyPaths = () => {
-  console.log(`[${EXT_ID}] 开始验证子文件夹路径`);
-  logResolvedPath("../../../extensions.js");
-  logResolvedPath("../../../../script.js");
-  logResolvedPath("./modules/utils.js");
-};
-
-/**
- * 动态加载单个模块
- */
-/**
- * 动态加载单个模块
- */
+// 动态加载单个模块
 const loadModule = async (moduleName) => {
   try {
-    console.log(`[index] 正在加载模块: ${moduleName}`);
     const module = await import(`./modules/${moduleName}.js`);
-
-    // 检查模块是否包含必要的导出
-    if (moduleName === "settings" && typeof module.get !== "function") {
-      throw new Error("settings模块缺少get()方法");
-    }
 
     // 检查模块是否有效
     if (!module || typeof module !== 'object') {
@@ -77,9 +39,9 @@ const loadModule = async (moduleName) => {
     console.log(`[index] 模块加载完成: ${moduleName}`);
 
     // 注册模块到依赖管理器
-    deps.registerModule(moduleName, module);
+    deps.registerModule(moduleName, module.default || module);
 
-    // 注册模块清理事件（扩展禁用时触发）
+    // 注册模块清理事件
     const removeCleanupListener = deps.EventBus.on(
       "extensionDisable",
       module.cleanup
@@ -90,11 +52,8 @@ const loadModule = async (moduleName) => {
     return true;
   } catch (e) {
     console.error(`[index] 模块加载失败: ${moduleName}`, e);
-    // 使用安全的toastr调用
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`模块${moduleName}加载失败: ${e.message}`);
-    } else {
-      console.error(`无法显示错误提示: ${e.message}`);
     }
     return false;
   }

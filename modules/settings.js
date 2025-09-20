@@ -46,6 +46,7 @@ if (!extension_settings[EXTENSION_ID]) {
   };
 }
 
+// 配置迁移函数
 const migrateSettings = () => {
   const settings = get();
 
@@ -128,35 +129,34 @@ const migrateSettings = () => {
 
   // 保存迁移后的配置
   save();
-  // 使用安全的toastr调用
   if (deps.toastr && typeof deps.toastr.info === "function") {
     deps.toastr.info(`媒体播放器配置已更新到最新版本`);
   }
 };
 
+// 清理函数
 const cleanup = () => {
   try {
     const settings = get();
-    // 重置临时状态
     settings.isMediaLoading = false;
     settings.retryCount = 0;
     save();
     console.log(`[settings] 资源清理完成`);
   } catch (e) {
     console.error(`[settings] 清理失败:`, e);
-    // 使用安全的toastr调用
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`[settings] 清理失败: ${e.message}`);
     }
   }
 };
 
-// 新增get方法定义（之前缺失）
-export const get = () => {
+// 获取设置函数
+const get = () => {
   return extension_settings[EXTENSION_ID] || {};
 };
 
-export const save = () => {
+// 保存设置函数
+const save = () => {
   const settings = get();
   const saveFn = window.saveSettingsDebounced || saveSettingsDebounced;
 
@@ -178,27 +178,23 @@ export const save = () => {
     console.log(`[settings] localStorage保存成功`);
   } catch (e) {
     console.error(`[settings] localStorage保存失败:`, e);
-    // 使用安全的toastr调用
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error("设置保存失败，请检查存储权限");
     }
   }
 };
 
-/**
- * 初始化设置模块
- */
-export const init = () => {
-  // 执行配置迁移
+// 初始化函数
+const init = () => {
   migrateSettings();
   console.log(`[settings] 设置模块初始化完成`);
 };
 
-// 导出必要的函数
-export {
+// 单一导出语句
+export default {
   init,
-  migrateSettings,
   cleanup,
+  migrateSettings,
   save,
   get
 };
