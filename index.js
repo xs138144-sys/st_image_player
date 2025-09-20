@@ -27,28 +27,39 @@ const loadModule = async (moduleName, retries = 3) => {
       throw new Error(`模块加载失败: ${moduleName}`);
     }
 
-    // 每个模块必须实现init方法
-    if (typeof module.init !== "function") {
+    // 检查模块是否有init方法（支持默认导出和命名导出）
+    let initFunction = module.init || module.default?.init;
+    if (typeof initFunction !== "function") {
       throw new Error(`缺少init()方法`);
     }
 
     // 提供默认清理函数（如果模块没有提供）
-    if (typeof module.cleanup !== "function") {
+    let cleanupFunction = module.cleanup || module.default?.cleanup;
+    if (typeof cleanupFunction !== "function") {
       console.warn(`[index] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
-      module.cleanup = () => { console.log(`[${moduleName}] 默认清理完成`) };
+      cleanupFunction = () => { console.log(`[${moduleName}] 默认清理完成`) };
+    }
+
+    // 创建模块对象
+    const moduleObj = module.default || module;
+    if (typeof moduleObj.init !== "function") {
+      moduleObj.init = initFunction;
+    }
+    if (typeof moduleObj.cleanup !== "function") {
+      moduleObj.cleanup = cleanupFunction;
     }
 
     // 初始化模块
-    await module.init();
+    await moduleObj.init();
     console.log(`[index] 模块加载完成: ${moduleName}`);
 
     // 注册模块到依赖管理器
-    deps.registerModule(moduleName, module.default || module);
+    deps.registerModule(moduleName, moduleObj);
 
     // 注册模块清理事件
     const removeCleanupListener = deps.EventBus.on(
       "extensionDisable",
-      module.cleanup
+      moduleObj.cleanup
     );
     window.moduleCleanupListeners = window.moduleCleanupListeners || [];
     window.moduleCleanupListeners.push(removeCleanupListener);

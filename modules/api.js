@@ -356,8 +356,21 @@ const cleanup = () => {
   }
 };
 
-// 单一导出语句 - 确保导出 init 和 cleanup 方法
-export default {
+// 创建API模块对象
+const apiModule = {
+  init,
+  cleanup,
+  checkServiceStatus,
+  fetchMediaList,
+  updateScanDirectory,
+  updateMediaSizeLimit,
+  cleanupInvalidMedia,
+  refreshMediaList
+};
+
+// 明确导出所有方法
+export default apiModule;
+export {
   init,
   cleanup,
   checkServiceStatus,

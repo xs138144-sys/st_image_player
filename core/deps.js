@@ -33,6 +33,17 @@ const deps = {
       console.error('[deps] 模块名称无效', name);
       return;
     }
+
+    // 确保模块有必要的函数
+    if (typeof module.init !== 'function') {
+      console.warn(`[deps] 模块 ${name} 缺少init方法`);
+    }
+
+    if (typeof module.cleanup !== 'function') {
+      console.warn(`[deps] 模块 ${name} 缺少cleanup方法`);
+      module.cleanup = () => console.log(`[${name}] 默认清理完成`);
+    }
+
     this.modules[name] = module;
     console.log(`[deps] 模块已注册: ${name}`);
   },
@@ -97,6 +108,20 @@ const deps = {
       };
     }
     return settingsModule;
+  },
+
+  // 修复API获取方法
+  get api() {
+    const apiModule = this.getModule('api');
+    if (!apiModule || typeof apiModule.checkServiceStatus !== 'function') {
+      console.warn('[deps] api模块未正确加载，使用回退方案');
+      return {
+        checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }),
+        fetchMediaList: () => Promise.resolve([]),
+        refreshMediaList: () => Promise.resolve([])
+      };
+    }
+    return apiModule;
   },
 
   get EventBus() {

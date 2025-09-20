@@ -192,8 +192,18 @@ const init = () => {
   console.log(`[settings] 设置模块初始化完成`);
 };
 
-// 单一导出语句
-export default {
+// 确保导出对象包含所有必要的方法
+const settingsModule = {
+  init,
+  cleanup,
+  migrateSettings,
+  save,
+  get
+};
+
+// 明确导出所有方法
+export default settingsModule;
+export {
   init,
   cleanup,
   migrateSettings,
