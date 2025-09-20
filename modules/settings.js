@@ -1,6 +1,42 @@
-import { extension_settings } from "./../../../extensions.js";
-import { saveSettingsDebounced } from "./../../../../script.js";
-import { deps } from "../core/deps.js";
+const extension_settings = window.extension_settings || {};
+const saveSettingsDebounced = window.saveSettingsDebounced || (() => { });
+
+// 如果全局变量不存在，尝试从常见路径导入
+if (!window.extension_settings) {
+  try {
+    // 尝试从 GitHub 仓库安装路径导入
+    const extModule = await import('../../../../../extensions.js');
+    extension_settings = extModule.extension_settings || {};
+  } catch (e) {
+    console.warn('无法从 GitHub 路径导入 extensions.js，尝试本地路径');
+    try {
+      // 尝试从本地安装路径导入
+      const extModule = await import('../../../../extensions.js');
+      extension_settings = extModule.extension_settings || {};
+    } catch (e2) {
+      console.error('无法导入 extensions.js，使用空对象作为后备');
+      extension_settings = {};
+    }
+  }
+}
+
+if (!window.saveSettingsDebounced) {
+  try {
+    // 尝试从 GitHub 仓库安装路径导入
+    const scriptModule = await import('../../../../../../script.js');
+    saveSettingsDebounced = scriptModule.saveSettingsDebounced || (() => { });
+  } catch (e) {
+    console.warn('无法从 GitHub 路径导入 script.js，尝试本地路径');
+    try {
+      // 尝试从本地安装路径导入
+      const scriptModule = await import('../../../../../script.js');
+      saveSettingsDebounced = scriptModule.saveSettingsDebounced || (() => { });
+    } catch (e2) {
+      console.error('无法导入 script.js，使用空函数作为后备');
+      saveSettingsDebounced = () => { };
+    }
+  }
+}
 
 const EXTENSION_ID = "st_image_player";
 const CONFIG_VERSION = "1.4.2";
