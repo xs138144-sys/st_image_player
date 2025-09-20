@@ -10,7 +10,15 @@ let isManualClose = false; // 添加手动关闭标志
 export const init = () => {
   const settings = deps.settings.get();
   if (!settings.serviceUrl) {
-    deps.toastr.warning("未配置服务地址，无法初始化WebSocket");
+    console.warn(`[websocket] 未配置服务地址，无法初始化WebSocket`);
+    // 设置一个定时器，定期检查服务地址是否配置
+    const checkInterval = setInterval(() => {
+      const updatedSettings = deps.settings.get();
+      if (updatedSettings.serviceUrl) {
+        clearInterval(checkInterval);
+        init(); // 重新初始化
+      }
+    }, 5000);
     return;
   }
 

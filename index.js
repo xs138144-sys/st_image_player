@@ -21,6 +21,7 @@ const MODULES = [
 // 动态加载单个模块（添加重试机制）
 const loadModule = async (moduleName, retries = 3) => {
   try {
+    console.log(`[index] 加载模块: ${moduleName}`);
     const module = await import(`./modules/${moduleName}.js`);
 
     // 检查模块是否有效
@@ -28,13 +29,15 @@ const loadModule = async (moduleName, retries = 3) => {
       throw new Error(`模块加载失败: ${moduleName}`);
     }
 
-    // 每个模块必须实现init和cleanup方法
+    // 每个模块必须实现init方法
     if (typeof module.init !== "function") {
       throw new Error(`缺少init()方法`);
     }
+
+    // 提供默认清理函数（如果模块没有提供）
     if (typeof module.cleanup !== "function") {
       console.warn(`[index] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
-      module.cleanup = () => { }; // 提供默认清理函数
+      module.cleanup = () => { console.log(`[${moduleName}] 默认清理完成`) };
     }
 
     // 初始化模块
@@ -55,7 +58,7 @@ const loadModule = async (moduleName, retries = 3) => {
     return true;
   } catch (e) {
     if (retries > 0) {
-      console.warn(`[index] 模块 ${moduleName} 加载失败，正在重试（${retries}次剩余）`);
+      console.warn(`[index] 模块 ${moduleName} 加载失败，正在重试（${retries}次剩余）:`, e.message);
       await new Promise(resolve => setTimeout(resolve, 1000));
       return loadModule(moduleName, retries - 1);
     }
@@ -80,13 +83,24 @@ const initExtension = async () => {
   }
 
   try {
+    const loadResults = {};
+
     // 按顺序加载模块
     for (const moduleName of MODULES) {
-      console.log(`[index] 加载模块: ${moduleName}`);
       const success = await loadModule(moduleName);
+      loadResults[moduleName] = success;
+
       if (!success) {
         console.warn(`[index] 模块${moduleName}加载失败，继续加载其他模块`);
       }
+    }
+
+    // 检查关键模块加载状态
+    const criticalModules = ["settings", "api", "utils"];
+    const failedCritical = criticalModules.filter(m => !loadResults[m]);
+
+    if (failedCritical.length > 0) {
+      throw new Error(`关键模块加载失败: ${failedCritical.join(", ")}`);
     }
 
     // 初始化完成通知
@@ -124,9 +138,58 @@ const safeInit = (fn) => {
 const waitForSTAndInit = () => {
   // 确保扩展配置存在
   if (!extension_settings[EXT_ID]) {
-    // ... 配置初始化代码保持不变 ...
+    extension_settings[EXT_ID] = {
+      enabled: true,
+      lastPlayed: null,
+      volume: 0.8,
+      masterEnabled: true,
+      isWindowVisible: true,
+      playMode: "random",
+      autoSwitchMode: "detect",
+      showVideoControls: true,
+      customVideoControls: {
+        showProgress: true,
+        showVolume: true,
+        showLoop: true,
+        showTime: true
+      },
+      videoVolume: 0.8,
+      videoLoop: false,
+      hideBorder: false,
+      showInfo: true,
+      isLocked: false,
+      mediaFilter: "all",
+      isPlaying: false,
+      serviceDirectory: "",
+      serviceUrl: "http://127.0.0.1:9000", // 添加默认服务URL
+      mediaConfig: {
+        image_max_size_mb: 5,
+        video_max_size_mb: 100,
+        preload_strategy: {
+          image: true,
+          video: false
+        }
+      },
+      pollingInterval: 30000,
+      websocket_timeout: 10000,
+      transitionEffect: "fade",
+      randomPlayedIndices: [],
+      config_version: "1.4.2"
+    };
   } else {
-    // ... 配置迁移代码保持不变 ...
+    // 配置迁移
+    const settings = extension_settings[EXT_ID];
+    if (!settings.config_version || settings.config_version !== "1.4.2") {
+      console.log(`[${EXT_ID}] 迁移配置从 ${settings.config_version || '未知'} 到 1.4.2`);
+
+      // 添加缺失的配置项
+      if (!settings.serviceUrl) settings.serviceUrl = "http://127.0.0.1:9000";
+      if (!settings.websocket_timeout) settings.websocket_timeout = 10000;
+      if (!settings.randomPlayedIndices) settings.randomPlayedIndices = [];
+
+      settings.config_version = "1.4.2";
+      saveSettingsDebounced();
+    }
   }
 
   // 检查ST是否已经就绪
@@ -189,4 +252,3 @@ window.addEventListener("beforeunload", () => {
   }
   console.log(`[index] 扩展资源已清理`);
 });
-

@@ -22,6 +22,7 @@ if (!extension_settings[EXTENSION_ID]) {
       showLoop: true,
       showTime: true
     },
+    serviceUrl: "http://127.0.0.1:9000",
     videoVolume: 0.8,
     videoLoop: false,
     hideBorder: false,
