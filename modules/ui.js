@@ -157,85 +157,62 @@ const createExtensionButton = () => {
 
   const settings = get();
   const buttonHtml = `
-    <div id="ext_menu_${EXTENSION_ID}" class="extension-menu-item">
-      <div class="extension-title">
-        <i class="fa-solid fa-film"></i> 媒体播放器
-        <div class="extension-toggle">
-          <label class="switch">
-            <input type="checkbox" ${settings.masterEnabled ? "checked" : ""} id="${EXTENSION_ID}_toggle">
-            <span class="slider round"></span>
-          </label>
-        </div>
-      </div>
-      <div class="extension-actions">
-        <button class="extension-action ${EXTENSION_ID}_settings" title="设置">
-          <i class="fa-solid fa-cog"></i>
-        </button>
-        <button class="extension-action ${EXTENSION_ID}_showhide" title="${settings.isWindowVisible ? "隐藏" : "显示"}">
-          <i class="fa-solid ${settings.isWindowVisible ? "fa-eye-slash" : "fa-eye"}"></i>
-        </button>
-      </div>
+    <div id="ext_menu_${EXTENSION_ID}" class="list-group-item flex-container flexGap5">
+      <div class="fa-solid fa-film"></div>
+      <span>${EXTENSION_NAME}</span>
+      <span class="media-info" style="margin-left:8px; font-size:10px; color:#a0a0a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        ${settings.showInfo ? "加载中..." : "隐藏信息"}
+      </span>
+      <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">${settings.isPlaying ? "播放中" : "已暂停"}</span>
+      <span class="mode-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${settings.playMode === "random" ? "随机" : "顺序"}</span>
+      <span class="filter-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${settings.mediaFilter === "all" ? "所有" : settings.mediaFilter === "image" ? "图片" : "视频"}</span>
     </div>
   `;
 
   // 添加到扩展菜单
-  if ($("#extensions_menu").length) {
-    $("#extensions_menu").append(buttonHtml);
+  if ($("#extensionsMenu").length) {
+    $("#extensionsMenu").append(buttonHtml);
   } else {
     // 备选位置
     $("body").append(`
-      <div id="extensions_menu" class="extensions-menu">
+      <div id="extensionsMenu" class="extensions-menu">
         ${buttonHtml}
       </div>
     `);
   }
 
   // 绑定按钮事件
-  $(`#${EXTENSION_ID}_toggle`).on("change", function () {
-    const enabled = $(this).is(":checked");
+  $(`#ext_menu_${EXTENSION_ID}`).on("click", () => {
+    $("#extensions-settings-button").trigger("click");
+    $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  });
+
+  // 增强菜单状态更新
+  setInterval(() => {
     const settings = get();
-    settings.masterEnabled = enabled;
+    const menuBtn = $(`#${menuBtnId}`);
+    const win = $(`#${PLAYER_WINDOW_ID}`);
+    const infoElement = win.find(".image-info");
 
-    if (enabled) {
-      // 启用扩展
-      createPlayerWindow();
-      createSettingsPanel();
-      EventBus.emit("requestCheckServiceStatus");
-      toastr.success("媒体播放器已启用");
+    // 同步播放状态
+    menuBtn.find(".play-status").text(settings.isPlaying ? "播放中" : "已暂停");
+    // 同步播放模式
+    menuBtn.find(".mode-text").text(settings.playMode === "random" ? "随机" : "顺序");
+    // 同步媒体筛选
+    menuBtn.find(".filter-text").text(
+      settings.mediaFilter === "all" ? "所有" :
+        settings.mediaFilter === "image" ? "图片" : "视频"
+    );
+    // 同步媒体信息
+    if (settings.showInfo && infoElement.is(":visible")) {
+      menuBtn.find(".media-info").text(infoElement.text()).show();
     } else {
-      // 禁用扩展
-      cleanup();
-      toastr.info("媒体播放器已禁用");
+      menuBtn.find(".media-info").text("隐藏信息").show();
     }
-
-    save();
-  });
-
-  $(`.${EXTENSION_ID}_settings`).on("click", () => {
-    const panel = $(`#${SETTINGS_PANEL_ID}`);
-    if (panel.is(":visible")) {
-      panel.hide();
-    } else {
-      panel.show();
-      positionSettingsPanel();
-    }
-  });
-
-  $(`.${EXTENSION_ID}_showhide`).on("click", () => {
-    const settings = get();
-    settings.isWindowVisible = !settings.isWindowVisible;
-    save();
-
-    const $btn = $(`.${EXTENSION_ID}_showhide i`);
-    $btn.toggleClass("fa-eye fa-eye-slash");
-
-    if (settings.isWindowVisible) {
-      $(`#${PLAYER_WINDOW_ID}`).show();
-      EventBus.emit("requestShowInitialMedia");
-    } else {
-      $(`#${PLAYER_WINDOW_ID}`).hide();
-    }
-  });
+  }, 1000);
 };
 
 /**
@@ -248,125 +225,113 @@ export const createPlayerWindow = async () => {
     const $ = deps.jQuery;
     if (!$ || !settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
-    // 视频控制栏HTML（根据设置动态生成）
-    const videoControlsHtml = settings.showVideoControls
-      ? `
-      <div class="video-controls">
-        ${settings.customVideoControls.showProgress
-        ? `
-          <div class="progress-container">
-            <div class="progress-bar">
-              <div class="progress-loaded"></div>
-              <div class="progress-played"></div>
-              <div class="progress-handle"></div>
-            </div>
-          </div>
-        `
-        : ""
-      }
-        <div class="video-control-group">
-          ${settings.customVideoControls.showVolume
-        ? `
-            <button class="video-control-btn volume-btn">
-              <i class="fa-solid ${settings.videoVolume > 0 ? "fa-volume-high" : "fa-volume-mute"
-        }"></i>
-            </button>
-            <div class="volume-slider-container">
-              <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="${settings.videoVolume
-        }" />
-            </div>
-          `
-        : ""
-      }
-          ${settings.customVideoControls.showLoop
-        ? `
-            <button class="video-control-btn loop-btn ${settings.videoLoop ? "active" : ""
-        }">
-              <i class="fa-solid fa-repeat"></i>
-            </button>
-          `
-        : ""
-      }
-          ${settings.customVideoControls.showTime
-        ? `
-            <div class="time-display">
-              <span class="current-time">00:00</span> / <span class="total-time">00:00</span>
-            </div>
-          `
-        : ""
-      }
-        </div>
-      </div>
-    `
-      : "";
-
-    // 完整闭合的播放器窗口HTML
     const html = `
-      <div id="${PLAYER_WINDOW_ID}" class="st-player-window ${settings.hideBorder ? "no-border" : ""}" style="${settings.windowPosition ? `left: ${settings.windowPosition.left}px; top: ${settings.windowPosition.top}px; width: ${settings.windowSize?.width || 640}px; height: ${settings.windowSize?.height || 480}px;` : ""}">
-        <div class="st-player-header">
-          <div class="title"><i class="fa-solid fa-film"></i> 媒体播放器</div>
+      <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? "no-border" : ""}">
+        <div class="image-player-header">
+          <div class="title"><i class="fa-solid fa-film"></i> ${EXTENSION_NAME}</div>
           <div class="window-controls">
             <button class="lock"><i class="fa-solid ${settings.isLocked ? "fa-lock" : "fa-lock-open"}"></i></button>
             <button class="toggle-info ${settings.showInfo ? "active" : ""}"><i class="fa-solid fa-circle-info"></i></button>
+            <button class="toggle-video-controls ${settings.showVideoControls ? "active" : ""}" title="${settings.showVideoControls ? "隐藏视频控制" : "显示视频控制"}">
+              <i class="fa-solid fa-video"></i>
+            </button>
+            <button class="hide"><i class="fa-solid fa-minus"></i></button>
           </div>
         </div>
-        <div class="st-player-content">
-          <div class="st-video-container">
-            <img class="st-player-img" src="" alt="媒体内容" />
-            <video class="st-player-video" controlsList="nodownload" preload="${settings.mediaConfig.preload_strategy.video ? "auto" : "none"}"></video>
+        <div class="image-player-body">
+          <div class="image-container">
             <div class="loading-animation">加载中...</div>
+            <img class="image-player-img" onerror="this.onerror=null;this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg=='" />
+            <video class="image-player-video" preload="metadata" ${settings.videoLoop ? "loop" : ""}>您的浏览器不支持HTML5视频</video>
+            ${settings.showVideoControls ? `
+              <div class="video-controls">
+                ${settings.customVideoControls.showProgress ? `
+                  <div class="progress-container">
+                    <div class="progress-bar">
+                      <div class="progress-loaded"></div>
+                      <div class="progress-played"></div>
+                      <div class="progress-handle"></div>
+                    </div>
+                  </div>
+                ` : ""}
+                <div class="video-control-group">
+                  ${settings.customVideoControls.showVolume ? `
+                    <button class="video-control-btn volume-btn">
+                      <i class="fa-solid ${settings.videoVolume > 0 ? "fa-volume-high" : "fa-volume-mute"}"></i>
+                    </button>
+                    <div class="volume-slider-container">
+                      <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="${settings.videoVolume}" />
+                    </div>
+                  ` : ""}
+                  ${settings.customVideoControls.showLoop ? `
+                    <button class="video-control-btn loop-btn ${settings.videoLoop ? "active" : ""}">
+                      <i class="fa-solid fa-repeat"></i>
+                    </button>
+                  ` : ""}
+                  ${settings.customVideoControls.showTime ? `
+                    <div class="time-display">
+                      <span class="current-time">00:00</span> / <span class="total-time">00:00</span>
+                    </div>
+                  ` : ""}
+                </div>
+              </div>
+            ` : ""}
           </div>
-          <div class="image-info"></div>
-          ${videoControlsHtml}
+          <div class="image-info" ${!settings.showInfo ? 'style="display:none;"' : ""}>加载中...</div>
         </div>
-        <div class="st-player-controls">
+        <div class="image-player-controls">
           <div class="controls-group">
-            <button class="control-btn prev"><i class="fa-solid fa-backward-step"></i></button>
             <button class="control-btn play-pause"><i class="fa-solid ${settings.isPlaying ? "fa-pause" : "fa-play"}"></i></button>
-            <button class="control-btn next"><i class="fa-solid fa-forward-step"></i></button>
+            <button class="control-btn mode-switch" title="${settings.playMode === "random" ? "随机模式" : "顺序模式"}">
+              <i class="fa-solid ${settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol"}"></i>
+            </button>
+            <button class="control-btn switch-mode-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""}" title="${settings.autoSwitchMode === "detect" ? "检测播放" : "定时切换"}">
+              <i class="fa-solid ${settings.autoSwitchMode === "detect" ? "fa-robot" : "fa-clock"}"></i>
+            </button>
           </div>
           <div class="controls-group">
-            <span class="control-text">${settings.playMode === "random" ? "随机播放" : "顺序播放"}</span>
-            <button class="control-btn mode-switch"><i class="fa-solid fa-shuffle"></i></button>
-          </div>
-          <div class="controls-group">
-            <span class="control-text">${settings.autoSwitchMode === "detect" ? "检测模式" : "定时模式"}</span>
-            <button class="control-btn switch-mode-toggle"><i class="fa-solid fa-clock"></i></button>
+            <button class="control-btn prev" title="上一个"><i class="fa-solid fa-backward-step"></i></button>
+            <div class="control-text">${settings.playMode === "random" ? "随机模式" : "顺序模式: 0/0"}</div>
+            <button class="control-btn next" title="下一个"><i class="fa-solid fa-forward-step"></i></button>
           </div>
           <div class="controls-group media-filter-group">
-            <button class="control-btn media-filter-btn ${settings.mediaFilter === "all" ? "active" : ""}" data-type="all"><i class="fa-solid fa-photo-film"></i></button>
-            <button class="control-btn media-filter-btn ${settings.mediaFilter === "image" ? "active" : ""}" data-type="image"><i class="fa-solid fa-image"></i></button>
-            <button class="control-btn media-filter-btn ${settings.mediaFilter === "video" ? "active" : ""}" data-type="video"><i class="fa-solid fa-video"></i></button>
+            <button class="control-btn media-filter-btn" data-type="all" title="所有媒体">
+              <i class="fa-solid fa-film"></i>
+            </button>
+            <button class="control-btn media-filter-btn" data-type="image" title="仅图片">
+              <i class="fa-solid fa-image"></i>
+            </button>
+            <button class="control-btn media-filter-btn" data-type="video" title="仅视频">
+              <i class="fa-solid fa-video"></i>
+            </button>
           </div>
+          <div class="resize-handle"></div>
         </div>
-        <div class="resize-handle"></div>
       </div>
     `;
 
     $("body").append(html);
-    adjustVideoControlsLayout($(`#${PLAYER_WINDOW_ID}`));
-    setupWindowEvents(); // 绑定窗口交互事件
-    positionWindow(); // 定位窗口
-    bindVideoControls(); // 绑定视频控制事件
+    setupWindowEvents();
+    positionWindow();
+    bindVideoControls();
 
-    // 初始化视频音量
-    const video = $(`#${PLAYER_WINDOW_ID} .st-player-video`)[0];
+    // 初始化筛选状态
+    const filterBtn = $(`#${PLAYER_WINDOW_ID} .media-filter-btn[data-type="${settings.mediaFilter}"]`);
+    filterBtn.addClass("active");
+
+    const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
     if (video) video.volume = settings.videoVolume;
-
     console.log(`[ui] 播放器窗口创建完成`);
   });
 };
 
-/**
- * 创建设置面板
- */
+// 替换 createSettingsPanel 函数
 export const createSettingsPanel = async () => {
   const settings = deps.settings.get();
   const $ = deps.jQuery;
-  if (!$ || !settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length)
-    return;
+  if (!$ || !settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
 
-  // 获取服务状态（通过EventBus异步获取）
+  // 获取服务状态
   const serviceStatus = await new Promise((resolve) => {
     const removeListener = EventBus.on("serviceStatusChecked", (status) => {
       removeListener();
@@ -378,172 +343,237 @@ export const createSettingsPanel = async () => {
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const serviceDir = serviceStatus.directory || settings.serviceDirectory || "未设置";
 
-  // 过渡效果选项
-  const transitionOptions = [
-    { value: "fade", label: "淡入淡出" },
-    { value: "slide", label: "滑动" },
-    { value: "zoom", label: "缩放" },
-    { value: "none", label: "无效果" }
-  ];
-
-  // 设置面板HTML
+  // 使用老版本的设置面板HTML结构
   const html = `
-<div id="${SETTINGS_PANEL_ID}" class="st-settings-panel">
-  <div class="settings-header">
-    <h3><i class="fa-solid fa-film"></i> 媒体播放器设置</h3>
-    <button class="close-btn"><i class="fa-solid fa-x"></i></button>
-  </div>
-  
-  <div class="settings-content">
-    <div class="settings-section">
-      <h4><i class="fa-solid fa-server"></i> 服务状态</h4>
-      <div class="setting-item">
-        <label>服务连接:</label>
-        <div class="setting-value status-indicator ${serviceStatus.active ? 'success' : 'error'}">${serviceActive}</div>
-      </div>
-      <div class="setting-item">
-        <label>媒体目录:</label>
-        <div class="setting-value">${serviceDir}</div>
-      </div>
-      <div class="setting-item">
-        <label>媒体统计:</label>
-        <div class="setting-value">
-          总计: ${serviceStatus.totalCount || 0} | 图片: ${serviceStatus.imageCount || 0} | 视频: ${serviceStatus.videoCount || 0}
+    <div id="${SETTINGS_PANEL_ID}" class="extension_settings inline-drawer">
+      <div class="inline-drawer-toggle inline-drawer-header">
+        <b><i class="fa-solid fa-cog"></i> ${EXTENSION_NAME}</b>
+        <div class="inline-drawer-icon">
+          <span class="glyphicon glyphicon-chevron-down"></span>
         </div>
       </div>
-      <div class="setting-actions">
-        <button class="btn refresh-service">刷新服务状态</button>
+      <div class="inline-drawer-content">
+        <div class="image-player-settings">
+          <!-- 总开关 -->
+          <div class="settings-row">
+            <label class="checkbox_label" style="min-width:auto;">
+              <input type="checkbox" id="master-enabled" ${settings.masterEnabled ? "checked" : ""} />
+              <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
+            </label>
+          </div>
+          
+          <!-- 服务状态 -->
+          <div class="settings-row">
+            <label class="service-status">
+              <i class="fa-solid ${serviceStatus.active ? "fa-plug-circle-check" : "fa-plug"}"></i>
+              服务状态: <span class="${serviceStatus.active ? "status-success" : "status-error"}">${serviceActive}（监控: ${serviceStatus.observerActive ? "已启用" : "已禁用"} | 总计: ${serviceStatus.totalCount || 0} | 图片: ${serviceStatus.imageCount || 0} | 视频: ${serviceStatus.videoCount || 0}）</span>
+            </label>
+          </div>
+          
+          <!-- 基础配置 -->
+          <div class="settings-row">
+            <label><i class="fa-solid fa-link"></i>服务地址</label>
+            <input type="text" id="player-service-url" value="${settings.serviceUrl}" placeholder="http://localhost:9000" />
+          </div>
+          
+          <div class="settings-row">
+            <label><i class="fa-solid fa-folder"></i>媒体目录</label>
+            <input type="text" id="player-scan-directory" value="${settings.serviceDirectory || serviceStatus.directory}" placeholder="输入完整路径" />
+            <button id="update-directory" class="menu-button">更新目录</button>
+          </div>
+          
+          <!-- 媒体大小限制 -->
+          <div class="settings-group">
+            <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
+              <i class="fa-solid fa-maximize"></i> 媒体大小限制
+            </h4>
+            <div class="settings-row">
+              <label><i class="fa-solid fa-image"></i>图片最大尺寸</label>
+              <input type="number" id="image-max-size" value="${settings.mediaConfig?.image_max_size_mb || 5}" min="1" max="50" step="1" />
+              <span>MB</span>
+              
+              <label><i class="fa-solid fa-video"></i>视频最大尺寸</label>
+              <input type="number" id="video-max-size" value="${settings.mediaConfig?.video_max_size_mb || 100}" min="10" max="500" step="10" />
+              <span>MB</span>
+              
+              <button id="update-size-limit" class="menu-button">应用限制</button>
+            </div>
+          </div>
+          
+          <!-- 媒体更新提示开关 -->
+          <div class="settings-row">
+            <label class="checkbox_label">
+              <input type="checkbox" id="show-media-update-toast" ${settings.showMediaUpdateToast ? "checked" : ""} />
+              <i class="fa-solid fa-bell"></i>显示媒体库更新提示
+            </label>
+          </div>
+          
+          <!-- 边框隐藏 -->
+          <div class="settings-row">
+            <label class="checkbox_label">
+              <input type="checkbox" id="player-hide-border" ${settings.hideBorder ? "checked" : ""} />
+              <i class="fa-solid fa-border-none"></i>隐藏播放器边框（仅显示内容）
+            </label>
+          </div>
+          
+          <!-- 视频控制自定义 -->
+          <div class="settings-group">
+            <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
+              <i class="fa-solid fa-sliders"></i> 视频控制栏自定义
+            </h4>
+            <div class="settings-row">
+              <label class="checkbox_label">
+                <input type="checkbox" id="custom-show-progress" ${settings.customVideoControls.showProgress ? "checked" : ""} />
+                显示进度条
+              </label>
+              <label class="checkbox_label">
+                <input type="checkbox" id="custom-show-volume" ${settings.customVideoControls.showVolume ? "checked" : ""} />
+                显示音量控制
+              </label>
+              <label class="checkbox_label">
+                <input type="checkbox" id="custom-show-loop" ${settings.customVideoControls.showLoop ? "checked" : ""} />
+                显示循环按钮
+              </label>
+              <label class="checkbox_label">
+                <input type="checkbox" id="custom-show-time" ${settings.customVideoControls.showTime ? "checked" : ""} />
+                显示时间戳
+              </label>
+            </div>
+          </div>
+          
+          <!-- 播放模式切换 -->
+          <div class="function-toggle-group">
+            <div class="function-toggle ${settings.autoSwitchMode === "timer" ? "active" : ""}" id="toggle-timer-mode">
+              <i class="fa-solid fa-clock"></i>
+              <span>定时播放</span>
+            </div>
+            <div class="function-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""}" id="toggle-detect-mode">
+              <i class="fa-solid fa-robot"></i>
+              <span>检测播放</span>
+            </div>
+          </div>
+          
+          <!-- 检测模式子选项 -->
+          <div class="settings-group" ${settings.autoSwitchMode !== "detect" ? 'style="display:none;"' : ""} id="detect-sub-options">
+            <div class="settings-row">
+              <label class="checkbox_label">
+                <input type="checkbox" id="player-ai-detect" ${settings.aiDetectEnabled ? "checked" : ""} />
+                <i class="fa-solid fa-comment-dots"></i>AI回复时切换
+              </label>
+              <label class="checkbox_label">
+                <input type="checkbox" id="player-player-detect" ${settings.playerDetectEnabled ? "checked" : ""} />
+                <i class="fa-solid fa-keyboard"></i>玩家发送时切换
+              </label>
+            </div>
+          </div>
+          
+          <!-- 核心配置 -->
+          <div class="settings-row">
+            <label><i class="fa-solid fa-clone"></i>播放模式</label>
+            <select id="player-play-mode">
+              <option value="random" ${settings.playMode === "random" ? "selected" : ""}>随机播放</option>
+              <option value="sequential" ${settings.playMode === "sequential" ? "selected" : ""}>顺序播放</option>
+            </select>
+            
+            <label><i class="fa-solid fa-filter"></i>媒体筛选</label>
+            <select id="player-media-filter">
+              <option value="all" ${settings.mediaFilter === "all" ? "selected" : ""}>所有媒体</option>
+              <option value="image" ${settings.mediaFilter === "image" ? "selected" : ""}>仅图片</option>
+              <option value="video" ${settings.mediaFilter === "video" ? "selected" : ""}>仅视频</option>
+            </select>
+          </div>
+          
+          <div class="settings-row">
+            <label class="checkbox_label">
+              <input type="checkbox" id="player-slideshow-mode" ${settings.slideshowMode ? "checked" : ""} ${settings.playMode === "random" ? "disabled" : ""} />
+              <i class="fa-solid fa-repeat"></i>图片循环播放
+            </label>
+            <label class="checkbox_label">
+              <input type="checkbox" id="player-video-loop" ${settings.videoLoop ? "checked" : ""} />
+              <i class="fa-solid fa-repeat"></i>视频循环播放
+            </label>
+            <label class="checkbox_label">
+              <input type="checkbox" id="player-show-info" ${settings.showInfo ? "checked" : ""} />
+              <i class="fa-solid fa-circle-info"></i>显示媒体信息
+            </label>
+          </div>
+          
+          <div class="settings-row">
+            <label class="checkbox_label">
+              <input type="checkbox" id="player-preload-images" ${settings.preloadImages ? "checked" : ""} />
+              <i class="fa-solid fa-bolt"></i>预加载图片
+            </label>
+            <label class="checkbox_label">
+              <input type="checkbox" id="player-preload-videos" ${settings.preloadVideos ? "checked" : ""} />
+              <i class="fa-solid fa-bolt"></i>预加载视频（耗流量）
+            </label>
+            <label class="checkbox_label">
+              <input type="checkbox" id="player-show-video-controls" ${settings.showVideoControls ? "checked" : ""} />
+              <i class="fa-solid fa-video"></i>显示视频控制栏
+            </label>
+          </div>
+          
+          <!-- 时间配置 -->
+          <div class="settings-row">
+            <label><i class="fa-solid fa-clock"></i>定时切换间隔</label>
+            <input type="number" id="player-interval" value="${settings.switchInterval}" min="1000" max="60000" step="500" />
+            <span>毫秒</span>
+          </div>
+          
+          <div class="settings-row">
+            <label><i class="fa-solid fa-sync"></i>服务轮询间隔</label>
+            <input type="number" id="player-polling-interval" value="${settings.pollingInterval}" min="5000" max="300000" step="5000" />
+            <span>毫秒</span>
+          </div>
+          
+          <!-- 图片过渡效果 -->
+          <div class="settings-row">
+            <label><i class="fa-solid fa-paint-brush"></i>图片过渡效果</label>
+            <select id="player-transition-effect">
+              <option value="none" ${settings.transitionEffect === "none" ? "selected" : ""}>无效果</option>
+              <option value="fade" ${settings.transitionEffect === "fade" ? "selected" : ""}>淡入淡出</option>
+              <option value="slide" ${settings.transitionEffect === "slide" ? "selected" : ""}>滑动</option>
+              <option value="zoom" ${settings.transitionEffect === "zoom" ? "selected" : ""}>缩放</option>
+            </select>
+          </div>
+          
+          <!-- 检测冷却时间 -->
+          <div class="settings-group">
+            <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
+              <i class="fa-solid fa-robot"></i> 检测设置
+            </h4>
+            <div class="settings-row">
+              <label><i class="fa-solid fa-hourglass-half"></i>切换冷却时间</label>
+              <input type="number" id="player-ai-cooldown" value="${settings.aiResponseCooldown}" min="1000" max="30000" step="500" />
+              <span>毫秒</span>
+            </div>
+          </div>
+          
+          <!-- 操作按钮 -->
+          <div class="settings-action-row">
+            <button id="show-player" class="menu-button">
+              <i class="fa-solid fa-eye"></i>显示播放器
+            </button>
+            <button id="player-refresh" class="menu-button">
+              <i class="fa-solid fa-rotate"></i>刷新服务
+            </button>
+            <button id="clear-random-history" class="menu-button">
+              <i class="fa-solid fa-trash"></i>清理随机记录
+            </button>
+            <button id="cleanup-media" class="menu-button">
+              <i class="fa-solid fa-broom"></i>清理无效媒体
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-    
-    <div class="settings-section">
-      <h4><i class="fa-solid fa-folder-open"></i> 媒体目录设置</h4>
-      <div class="setting-item">
-        <label for="scan-directory">扫描目录:</label>
-        <input type="text" id="scan-directory" value="${settings.serviceDirectory || ''}" placeholder="输入媒体文件目录">
-      </div>
-      <div class="setting-actions">
-        <button class="btn update-directory">更新目录</button>
-        <button class="btn cleanup-media">清理无效文件</button>
-      </div>
-    </div>
-    
-    <div class="settings-section">
-      <h4><i class="fa-solid fa-sliders"></i> 媒体大小限制</h4>
-      <div class="setting-item">
-        <label for="image-max-size">图片最大尺寸 (MB):</label>
-        <input type="number" id="image-max-size" min="1" max="50" value="${settings.mediaConfig.image_max_size_mb || 5}">
-      </div>
-      <div class="setting-item">
-        <label for="video-max-size">视频最大尺寸 (MB):</label>
-        <input type="number" id="video-max-size" min="10" max="500" value="${settings.mediaConfig.video_max_size_mb || 100}">
-      </div>
-      <div class="setting-actions">
-        <button class="btn update-size-limits">更新限制</button>
-      </div>
-    </div>
-    
-    <div class="settings-section">
-      <h4><i class="fa-solid fa-magic"></i> 播放设置</h4>
-      <div class="setting-item">
-        <label for="transition-effect">图片过渡效果:</label>
-        <select id="transition-effect">
-          ${transitionOptions.map(option =>
-    `<option value="${option.value}" ${settings.transitionEffect === option.value ? 'selected' : ''}>${option.label}</option>`
-  ).join('')}
-        </select>
-      </div>
-      <div class="setting-item">
-        <label for="auto-switch-interval">自动切换间隔 (秒):</label>
-        <input type="number" id="auto-switch-interval" min="1" max="60" value="${settings.autoSwitchInterval || 5}">
-      </div>
-      <div class="setting-item">
-        <label for="polling-interval">服务轮询间隔 (秒):</label>
-        <input type="number" id="polling-interval" min="5" max="300" value="${settings.pollingInterval / 1000 || 30}">
-      </div>
-    </div>
-    
-    <div class="settings-section">
-      <h4><i class="fa-solid fa-eye"></i> 显示设置</h4>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="hide-border" ${settings.hideBorder ? 'checked' : ''}>
-          隐藏窗口边框
-        </label>
-      </div>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="show-info" ${settings.showInfo ? 'checked' : ''}>
-          显示媒体信息
-        </label>
-      </div>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="show-video-controls" ${settings.showVideoControls ? 'checked' : ''}>
-          显示视频控制栏
-        </label>
-      </div>
-    </div>
-    
-    <div class="settings-section">
-      <h4><i class="fa-solid fa-video"></i> 视频控制设置</h4>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="show-progress" ${settings.customVideoControls.showProgress ? 'checked' : ''}>
-          显示进度条
-        </label>
-      </div>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="show-volume" ${settings.customVideoControls.showVolume ? 'checked' : ''}>
-          显示音量控制
-        </label>
-      </div>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="show-loop" ${settings.customVideoControls.showLoop ? 'checked' : ''}>
-          显示循环按钮
-        </label>
-      </div>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="show-time" ${settings.customVideoControls.showTime ? 'checked' : ''}>
-          显示时间戳
-        </label>
-      </div>
-    </div>
-    
-    <div class="settings-section">
-      <h4><i class="fa-solid fa-download"></i> 预加载设置</h4>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="preload-images" ${settings.mediaConfig.preload_strategy?.image !== false ? 'checked' : ''}>
-          预加载图片
-        </label>
-      </div>
-      <div class="setting-item checkbox-item">
-        <label>
-          <input type="checkbox" id="preload-videos" ${settings.mediaConfig.preload_strategy?.video === true ? 'checked' : ''}>
-          预加载视频 (可能占用较多资源)
-        </label>
-      </div>
-    </div>
-  </div>
-  
-  <div class="settings-footer">
-    <button class="btn save-settings">保存设置</button>
-    <button class="btn cancel-settings">取消</button>
-  </div>
-</div>
-`;
+  `;
 
-  $("body").append(html);
-  bindSettingsEvents();
-  positionSettingsPanel();
+  $("#extensions_settings").append(html);
+  setupSettingsEvents();
 
   console.log(`[ui] 设置面板创建完成`);
 };
-
 
 
 const setupWindowEvents = () => {
@@ -553,7 +583,7 @@ const setupWindowEvents = () => {
 
   const settings = get();
 
-  // 窗口拖动
+  // 窗口拖动 - 使用老版本的类名
   let isDragging = false;
   let offsetX, offsetY;
 
@@ -566,7 +596,6 @@ const setupWindowEvents = () => {
     offsetY = e.clientY - windowPos.top;
     $window.addClass("dragging");
   });
-
   $(document).mousemove(function (e) {
     if (!isDragging || settings.isLocked) return;
 

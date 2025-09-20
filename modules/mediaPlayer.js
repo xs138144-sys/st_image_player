@@ -18,6 +18,30 @@ let mediaList = [];
 let currentMediaIndex = 0;
 let currentMediaType = "image";
 
+// 添加老版本特有的AI检测功能
+const registerAIEventListeners = () => {
+  console.log(`[mediaPlayer] 注册AI事件监听器`);
+
+  // 监听AI回复事件
+  const removeAIResponseListener = EventBus.on("aiResponse", () => {
+    const settings = get();
+    if (settings.autoSwitchMode === "detect" && settings.aiDetectEnabled) {
+      showMedia("next");
+    }
+  });
+
+  // 监听玩家消息事件
+  const removePlayerMessageListener = EventBus.on("playerMessage", () => {
+    const settings = get();
+    if (settings.autoSwitchMode === "detect" && settings.playerDetectEnabled) {
+      showMedia("next");
+    }
+  });
+
+  // 保存取消监听方法
+  return [removeAIResponseListener, removePlayerMessageListener];
+};
+
 /**
  * 初始化媒体播放器模块
  */
@@ -46,10 +70,21 @@ export const init = () => {
       }
     };
 
+    const aiListeners = registerAIEventListeners();
+    // 保存到全局监听器列表
+    window.mediaPlayerListeners = [
+      ...window.mediaPlayerListeners,
+      ...aiListeners
+    ];
+
+
+
+
     // 注册事件监听（接收外部请求）
     const removePlayListener = EventBus.on("requestMediaPlay", (data) => {
       showMedia(data?.direction || "current");
     });
+
 
     const removeStartPlaybackListener = EventBus.on(
       "requestStartPlayback",
@@ -78,6 +113,9 @@ export const init = () => {
         );
       }
     );
+
+
+
 
     // 保存取消监听方法
     window.mediaPlayerListeners = [
@@ -112,7 +150,7 @@ const updateProgress = () => {
   const $ = deps.jQuery;
   if (!$) return;
 
-  const video = $(winSelector).find(".st-player-video")[0];
+  const video = $(winSelector).find(".image-player-video")[0];
   if (video && video.duration) {
     const $win = $(winSelector);
     $win.find(".current-time").text(formatTime(video.currentTime));
@@ -128,6 +166,7 @@ const updateProgress = () => {
     }
   }
 };
+;
 
 /**
  * 清理媒体播放器模块
@@ -264,8 +303,8 @@ export const showMedia = async (direction) => {
   }
 
   const win = $(winSelector);
-  const imgElement = win.find(".st-player-img")[0];
-  const videoElement = win.find(".st-player-video")[0];
+  const imgElement = win.find(".image-player-img")[0];
+  const videoElement = win.find(".image-player-video")[0];
   const loadingElement = win.find(".loading-animation")[0];
   const infoElement = win.find(".image-info")[0];
 

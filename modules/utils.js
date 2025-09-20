@@ -63,10 +63,10 @@ export const adjustVideoControlsLayout = (win) => {
   $controls.show();
 
   // 根据自定义设置调整控制元素
-  $controls.find(".volume-control").toggle(settings.customVideoControls.showVolume);
+  $controls.find(".volume-btn").toggle(settings.customVideoControls.showVolume);
   $controls.find(".time-display").toggle(settings.customVideoControls.showTime);
   $controls.find(".progress-container").toggle(settings.customVideoControls.showProgress);
-  $controls.find(".loop-control").toggle(settings.customVideoControls.showLoop);
+  $controls.find(".loop-btn").toggle(settings.customVideoControls.showLoop);
 
   // 调整容器高度
   if (win && win.find) {
