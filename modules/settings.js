@@ -116,24 +116,56 @@ const migrateSettings = () => {
       });
       settings.mediaConfig.image_extensions = imageExts;
 
-      const videoExts = settings.mediaConfig.video_extensions || [];
-      const requiredVideoExts = [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"];
-      requiredVideoExts.forEach(ext => {
-        if (!videoExts.includes(ext)) videoExts.push(ext);
-      });
-      settings.mediaConfig.video_extensions = videoExts;
+      if (settings.autoSwitchMode === undefined) {
+        settings.autoSwitchMode = "detect"; // 默认检测模式
+      }
+      // 补充自动切换触发配置
+      if (settings.switchTriggers === undefined) {
+        settings.switchTriggers = {
+          aiResponse: true,
+          userMessage: true
+        };
+      }
+
+      if (settings.config_version === "1.4.2") {
+        // 确保自动切换相关配置存在
+        if (settings.autoSwitchMode === undefined) {
+          settings.autoSwitchMode = "detect";
+        }
+        if (settings.switchTriggers === undefined) {
+          settings.switchTriggers = {
+            aiResponse: true,
+            userMessage: true
+          };
+        }
+        // 补充窗口锁定状态配置
+        if (settings.isLocked === undefined) {
+          settings.isLocked = false;
+        }
+      }
 
       settings.config_version = CONFIG_VERSION;
     }
 
+
+    const videoExts = settings.mediaConfig.video_extensions || [];
+    const requiredVideoExts = [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"];
+    requiredVideoExts.forEach(ext => {
+      if (!videoExts.includes(ext)) videoExts.push(ext);
+    });
+    settings.mediaConfig.video_extensions = videoExts;
+
     settings.config_version = CONFIG_VERSION;
   }
 
-  // 保存迁移后的配置
-  save();
-  if (deps.toastr && typeof deps.toastr.info === "function") {
-    deps.toastr.info(`媒体播放器配置已更新到最新版本`);
-  }
+  settings.config_version = CONFIG_VERSION;
+}
+
+// 保存迁移后的配置
+save();
+if (deps.toastr && typeof deps.toastr.info === "function") {
+  deps.toastr.info(`媒体播放器配置已更新到最新版本`);
+}
 };
 
 // 清理函数

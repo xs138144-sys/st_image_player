@@ -285,23 +285,25 @@ export const createPlayerWindow = async () => {
             <button class="control-btn mode-switch" title="${settings.playMode === "random" ? "随机模式" : "顺序模式"}">
               <i class="fa-solid ${settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol"}"></i>
             </button>
-            <button class="control-btn switch-mode-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""}" title="${settings.autoSwitchMode === "detect" ? "检测播放" : "定时切换"}">
+            <button class="control-btn switch-mode-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""}" title="${settings.autoSwitchMode === "detect" ? "检测播放" : "定时切换"
+      }">
               <i class="fa-solid ${settings.autoSwitchMode === "detect" ? "fa-robot" : "fa-clock"}"></i>
             </button>
           </div>
           <div class="controls-group">
             <button class="control-btn prev" title="上一个"><i class="fa-solid fa-backward-step"></i></button>
-            <div class="control-text">${settings.playMode === "random" ? "随机模式" : "顺序模式: 0/0"}</div>
+            <div class="control-text">${settings.playMode === "random" ? "随机模式" : "顺序模式: 0/0"
+      }</div>
             <button class="control-btn next" title="下一个"><i class="fa-solid fa-forward-step"></i></button>
           </div>
           <div class="controls-group media-filter-group">
-            <button class="control-btn media-filter-btn" data-type="all" title="所有媒体">
+            <button class="control-btn media-filter-btn ${settings.mediaFilter === "all" ? "active" : ""}" data-type="all" title="所有媒体">
               <i class="fa-solid fa-film"></i>
             </button>
-            <button class="control-btn media-filter-btn" data-type="image" title="仅图片">
+            <button class="control-btn media-filter-btn ${settings.mediaFilter === "image" ? "active" : ""}" data-type="image" title="仅图片">
               <i class="fa-solid fa-image"></i>
             </button>
-            <button class="control-btn media-filter-btn" data-type="video" title="仅视频">
+            <button class="control-btn media-filter-btn ${settings.mediaFilter === "video" ? "active" : ""}" data-type="video" title="仅视频">
               <i class="fa-solid fa-video"></i>
             </button>
           </div>
@@ -314,14 +316,56 @@ export const createPlayerWindow = async () => {
     setupWindowEvents();
     positionWindow();
     bindVideoControls();
+    bindPlayerControls(); // 绑定新增控制栏事件
 
-    // 初始化筛选状态
+    // 初始化筛选状态同步
     const filterBtn = $(`#${PLAYER_WINDOW_ID} .media-filter-btn[data-type="${settings.mediaFilter}"]`);
     filterBtn.addClass("active");
 
     const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
     if (video) video.volume = settings.videoVolume;
-    console.log(`[ui] 播放器窗口创建完成`);
+    console.log(`[ui] 播放器窗口创建完成（含完整控制栏）`);
+  });
+};
+
+// 新增控制栏事件绑定
+const bindPlayerControls = () => {
+  const $ = deps.jQuery;
+  const $win = $(`#${PLAYER_WINDOW_ID}`);
+
+  // 播放/暂停按钮
+  $win.find(".play-pause").on("click", () => {
+    EventBus.emit("togglePlayPause");
+  });
+
+  // 模式切换按钮
+  $win.find(".mode-switch").on("click", () => {
+    const settings = get();
+    const newMode = settings.playMode === "random" ? "sequence" : "random";
+    EventBus.emit("changePlayMode", newMode);
+  });
+
+  // 自动切换模式
+  $win.find(".switch-mode-toggle").on("click", () => {
+    const settings = get();
+    const newMode = settings.autoSwitchMode === "detect" ? "timer" : "detect";
+    EventBus.emit("changeAutoSwitchMode", newMode);
+  });
+
+  // 上一个/下一个按钮
+  $win.find(".prev").on("click", () => {
+    EventBus.emit("requestMediaPlay", { direction: "prev" });
+  });
+  $win.find(".next").on("click", () => {
+    EventBus.emit("requestMediaPlay", { direction: "next" });
+  });
+
+  // 媒体筛选按钮
+  $win.find(".media-filter-btn").on("click", function () {
+    const type = $(this).data("type");
+    $win.find(".media-filter-btn").removeClass("active");
+    $(this).addClass("active");
+    EventBus.emit("changeMediaFilter", type);
   });
 };
 

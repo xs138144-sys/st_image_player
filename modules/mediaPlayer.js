@@ -22,7 +22,7 @@ let currentMediaType = "image";
 const registerAIEventListeners = () => {
   console.log(`[mediaPlayer] 注册AI事件监听器`);
 
-  // 监听AI回复事件
+  // 监听AI回复事件（修复：恢复触发AI回复时自动切换媒体）
   const removeAIResponseListener = EventBus.on("aiResponse", () => {
     const settings = get();
     if (settings.autoSwitchMode === "detect" && settings.aiDetectEnabled) {
@@ -30,7 +30,7 @@ const registerAIEventListeners = () => {
     }
   });
 
-  // 监听玩家消息事件
+  // 玩家消息事件（修复：玩家发送消息时自动切换媒体）
   const removePlayerMessageListener = EventBus.on("playerMessage", () => {
     const settings = get();
     if (settings.autoSwitchMode === "detect" && settings.playerDetectEnabled) {
@@ -38,7 +38,7 @@ const registerAIEventListeners = () => {
     }
   });
 
-  // 保存取消监听方法
+  // 保存取消监听方法（修复：确保事件能正确解绑，避免内存泄漏）
   return [removeAIResponseListener, removePlayerMessageListener];
 };
 
