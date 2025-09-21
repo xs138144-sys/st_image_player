@@ -82,26 +82,29 @@ export const init = () => {
         return;
       }
 
-      // 创建扩展菜单按钮
-      createExtensionButton();
-
-      // 启用状态下创建UI
-      if (settings.masterEnabled) {
-        createPlayerWindow();
-        createSettingsPanel();
-
-        // 检查服务就绪后显示初始媒体
-        const statusListener = EventBus.on(
-          "serviceStatusChecked",
-          (status) => {
-            statusListener(); // 移除监听器
-            if (status.active && settings.isWindowVisible) {
-              EventBus.emit("requestShowInitialMedia");
+      // 等待DOM加载完成
+      $(document).ready(() => {
+        // 创建扩展菜单按钮
+        createExtensionButton();
+      
+        // 启用状态下创建UI
+        if (settings.masterEnabled) {
+          createPlayerWindow();
+          createSettingsPanel();
+      
+          // 检查服务就绪后显示初始媒体
+          const statusListener = EventBus.on(
+            "serviceStatusChecked",
+            (status) => {
+              statusListener(); // 移除监听器
+              if (status.active && settings.isWindowVisible) {
+                EventBus.emit("requestShowInitialMedia");
+              }
             }
-          }
-        );
-        EventBus.emit("requestCheckServiceStatus");
-      }
+          );
+          EventBus.emit("requestCheckServiceStatus");
+        }
+      });
     });
 
     console.log(`[ui] 初始化完成，已注册事件监听`);
