@@ -78,27 +78,14 @@ const loadModule = async (moduleName, options = {}) => {
   }
 };
 
-// UI模块特殊加载函数
+// UI模块特殊加载函数（简化版，直接加载）
 async function loadUIModule() {
   if (document.readyState === 'loading') {
     // DOM 未完全加载，等待
     await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
   }
   
-  // 确保所需的 DOM 元素存在
-  const maxRetries = 10;
-  let retries = 0;
-  
-  while (retries < maxRetries) {
-    if (document.querySelector('#extensionsMenu') && 
-        document.querySelector('#extensionsSettings')) {
-      break;
-    }
-    await new Promise(resolve => setTimeout(resolve, 500));
-    retries++;
-  }
-  
-  // 现在加载 UI 模块
+  // 直接加载 UI 模块，UI模块会自己创建所需的DOM元素
   return await loadModule('ui');
 }
 

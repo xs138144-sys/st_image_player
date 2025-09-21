@@ -177,8 +177,16 @@ const createExtensionButton = () => {
   `;
 
   // 添加到扩展菜单
-  const $menuContainer = $('#extensionsMenu').length ? $('#extensionsMenu') : $('body');
-  $menuContainer.append(buttonHtml);
+  if ($("#extensions_menu").length) {
+    $("#extensions_menu").append(buttonHtml);
+  } else {
+    // 备选位置
+    $("body").append(`
+      <div id="extensions_menu" class="extensions-menu">
+        ${buttonHtml}
+      </div>
+    `);
+  }
 
   // 添加菜单样式
   $('<style>').text(`
