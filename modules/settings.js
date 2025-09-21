@@ -32,7 +32,7 @@ if (!extension_settings[EXTENSION_ID]) {
     mediaFilter: "all",
     isPlaying: false,
     serviceDirectory: "",
-    serviceUrl: "http://127.0.0.1:9000",
+    serviceUrl: "http://127.0.0.1:9001",
     mediaConfig: {
       image_max_size_mb: 5,
       video_max_size_mb: 100,

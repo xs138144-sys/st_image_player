@@ -90,7 +90,7 @@ async function loadUIModule() {
   let retries = 0;
   
   while (retries < maxRetries) {
-    if (document.querySelector('#extensions-menu') && 
+    if (document.querySelector('#extensionsMenu') && 
         document.querySelector('#extensionsSettings')) {
       break;
     }
@@ -191,7 +191,7 @@ const waitForSTAndInit = () => {
       mediaFilter: "all",
       isPlaying: false,
       serviceDirectory: "",
-      serviceUrl: "http://127.0.0.1:9000",
+      serviceUrl: "http://127.0.0.1:9001",
       mediaConfig: {
         image_max_size_mb: 5,
         video_max_size_mb: 100,
@@ -213,7 +213,7 @@ const waitForSTAndInit = () => {
       console.log(`[${EXT_ID}] 迁移配置从 ${settings.config_version || '未知'} 到 1.4.2`);
 
       // 添加缺失的配置项
-      if (!settings.serviceUrl) settings.serviceUrl = "http://127.0.0.1:9000";
+      if (!settings.serviceUrl) settings.serviceUrl = "http://127.0.0.1:9001";
       if (!settings.websocket_timeout) settings.websocket_timeout = 10000;
       if (!settings.randomPlayedIndices) settings.randomPlayedIndices = [];
 

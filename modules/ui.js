@@ -159,6 +159,7 @@ export const cleanup = () => {
  */
 const createExtensionButton = () => {
   const $ = deps.jQuery;
+  console.log(`[ui] 创建扩展按钮: jQuery=${!!$}, 按钮已存在=${$(`#ext_menu_${EXTENSION_ID}`).length}`);
   if (!$ || $(`#ext_menu_${EXTENSION_ID}`).length) return;
 
   const settings = get();
@@ -475,7 +476,7 @@ export const createSettingsPanel = async () => {
           <!-- 基础配置 -->
           <div class="settings-row">
             <label><i class="fa-solid fa-link"></i>服务地址</label>
-            <input type="text" id="player-service-url" value="${settings.serviceUrl}" placeholder="http://localhost:9000" />
+            <input type="text" id="player-service-url" value="${settings.serviceUrl}" placeholder="http://localhost:9001" />
           </div>
           
           <div class="settings-row">
