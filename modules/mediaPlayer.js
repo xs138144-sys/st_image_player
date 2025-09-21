@@ -18,6 +18,9 @@ let mediaList = [];
 let currentMediaIndex = 0;
 let currentMediaType = "image";
 
+let retryCount = 0;
+const MAX_RETRIES = 3;
+
 // modules/mediaPlayer.js 补充完善
 export const initPlayer = () => {
   // 原有初始化逻辑...
@@ -412,9 +415,7 @@ export const showMedia = async (direction) => {
       // 索引安全检查
       randomIndex = Math.max(0, Math.min(randomIndex, list.length - 1));
       const media = list[randomIndex];
-      mediaUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-        media.rel_path
-      )}`;
+      mediaUrl = `${settings.serviceUrl}/media/${encodeURIComponent(media.rel_path)}`;
       mediaName = media.name;
       mediaType = media.media_type;
     } else {
@@ -539,6 +540,11 @@ export const showMedia = async (direction) => {
         window.media.state.isPlaying = false;
       }
 
+      retryCount = 0;
+      settings.isMediaLoading = false;
+      save();
+
+
       // 监听视频时间更新
       videoElement.ontimeupdate = () => {
         window.media.state.currentTime = videoElement.currentTime;
@@ -571,7 +577,27 @@ export const showMedia = async (direction) => {
     settings.isMediaLoading = false;
     save();
   }
-};
+  if (retryCount < MAX_RETRIES) {
+    retryCount++;
+    console.log(`[mediaPlayer] 加载失败，重试 ${retryCount}/${MAX_RETRIES}`);
+
+    // 延迟后重试
+    setTimeout(() => {
+      showMedia(direction);
+    }, 1000 * retryCount); // 指数退避
+  } else {
+    // 达到最大重试次数
+    console.error(`[mediaPlayer] 媒体加载失败，达到最大重试次数`);
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`媒体加载失败: ${e.message}`);
+    }
+
+    retryCount = 0;
+    settings.isMediaLoading = false;
+    save();
+  }
+}
+
 
 /**
  * 开始自动切换
