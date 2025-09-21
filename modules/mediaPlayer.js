@@ -148,8 +148,21 @@ export const init = () => {
       }
     );
 
+    const removeSettingsUpdateListener = EventBus.on("settingsUpdated", (newSettings) => {
+      // 更新视频循环状态
+      const video = $(winSelector).find(".image-player-video")[0];
+      if (video) video.loop = newSettings.videoLoop;
+      // 更新控制栏显示状态
+      $(winSelector).find(".video-controls").toggle(newSettings.showVideoControls);
+      $(winSelector).find(".toggle-video-controls").toggleClass("active", newSettings.showVideoControls);
 
+      // 更新信息显示状态
+      $(winSelector).find(".image-info").toggle(newSettings.showInfo);
+      $(winSelector).find(".toggle-info").toggleClass("active", newSettings.showInfo);
+    });
 
+    // 添加到监听器列表
+    window.mediaPlayerListeners.push(removeSettingsUpdateListener);
 
     // 保存取消监听方法
     window.mediaPlayerListeners = [
@@ -217,6 +230,12 @@ export const cleanup = () => {
       progressUpdateInterval = null;
     }
 
+    // 清除重连定时器
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+
     // 取消事件监听
     if (window.mediaPlayerListeners) {
       window.mediaPlayerListeners.forEach((removeListener) => {
@@ -227,20 +246,26 @@ export const cleanup = () => {
       window.mediaPlayerListeners = null;
     }
 
-    // 停止视频播放
+    // 停止视频播放并移除事件监听
     const $ = deps.jQuery;
     if ($) {
-      const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
-      if (video) video.pause();
+      const video = $(winSelector).find(".image-player-video")[0];
+      if (video) {
+        video.pause();
+        video.onended = null;
+        video.ontimeupdate = null;
+        video.onplay = null;
+        video.onpause = null;
+      }
     }
 
     // 释放预加载资源
     preloadedMedia = null;
+    reconnectAttempts = 0;
 
     console.log(`[mediaPlayer] 资源清理完成`);
   } catch (e) {
     console.error(`[mediaPlayer] 清理错误:`, e);
-    // 使用安全的toastr调用
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`[mediaPlayer] 清理失败: ${e.message}`);
     }
@@ -292,11 +317,10 @@ const getRandomMediaIndex = () => {
  */
 const preloadMediaItem = async (url, type) => {
   const settings = get();
-  // 跳过预加载的情况
-  if (
-    (type === "video" && !settings.mediaConfig.preload_strategy.video) ||
-    (type === "image" && !settings.mediaConfig.preload_strategy.image)
-  ) {
+
+  // 根据设置决定是否预加载
+  if ((type === "video" && !settings.preloadVideos) ||
+    (type === "image" && !settings.preloadImages)) {
     return null;
   }
 
@@ -531,6 +555,13 @@ export const showMedia = async (direction) => {
         };
       });
 
+      videoElement.onended = () => {
+        const settings = get();
+        if (!settings.videoLoop) {
+          EventBus.emit("requestMediaPlay", { direction: "next" });
+        }
+      };
+
       // 尝试自动播放（受浏览器政策限制）
       try {
         await videoElement.play();
@@ -606,9 +637,17 @@ const startAutoSwitch = () => {
   const settings = get();
   if (settings.autoSwitchMode !== "timer" || !settings.isPlaying) return;
 
+  // 检查视频是否正在播放且未结束
+  if (window.media?.meta?.type === "video" &&
+    window.media.state?.currentTime < window.media.state?.duration - 1) {
+    // 视频未结束，延迟检查
+    switchTimer = setTimeout(startAutoSwitch, 1000);
+    return;
+  }
+
   clearTimeout(switchTimer);
   switchTimer = setTimeout(() => {
-    const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
+    const video = $(winSelector).find(".image-player-video")[0];
     if (!video || !video.loop) {
       showMedia("next");
     } else {

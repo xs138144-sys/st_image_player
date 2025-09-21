@@ -193,8 +193,9 @@ const createExtensionButton = () => {
 
   // 增强菜单状态更新
   setInterval(() => {
-    const settings = get();
-    const menuBtn = $(`#ext_menu_${EXTENSION_ID}`); // 修复: 使用正确的ID选择器
+    const settings = get(); // 确保每次获取最新设置
+
+    const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
     const win = $(`#${PLAYER_WINDOW_ID}`);
     const infoElement = win.find(".image-info");
 
@@ -328,6 +329,19 @@ export const createPlayerWindow = async () => {
     console.log(`[ui] 播放器窗口创建完成（含完整控制栏）`);
   });
 };
+
+$("body").append(html);
+setupWindowEvents();
+
+// 设置默认尺寸
+$window.css({
+  width: settings.windowSize?.width || 800,
+  height: settings.windowSize?.height || 600
+});
+
+positionWindow();
+bindVideoControls();
+bindPlayerControls();
 
 // 新增控制栏事件绑定
 const bindPlayerControls = () => {
@@ -635,6 +649,10 @@ const setupSettingsEvents = () => {
   $panel.find("#master-enabled").change(function () {
     const enabled = $(this).is(":checked");
     deps.settings.update({ masterEnabled: enabled });
+
+    // 隐藏或显示其他设置项
+    $panel.find(".settings-row:not(:first)").toggle(enabled);
+    $panel.find(".settings-group").toggle(enabled);
 
     if (enabled) {
       createPlayerWindow();

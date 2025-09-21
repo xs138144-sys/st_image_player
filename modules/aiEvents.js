@@ -61,29 +61,33 @@ export const cleanup = () => {
   }
 };
 
+
+const shouldSkipSwitch = () => {
+  if (!window.media) return true;
+
+  // 加载中跳过
+  if (window.media.state && window.media.state.isLoading) return true;
+
+  // 视频未结束跳过
+  if (window.media.meta && window.media.meta.type === "video" &&
+    window.media.state &&
+    window.media.state.currentTime < window.media.state.duration - 1) {
+    console.log(`[aiEvents] 视频未播放完毕，跳过切换`);
+    return true;
+  }
+
+  return false;
+};
 /**
  * AI回复处理函数
  */
 const onAIResponse = () => {
   const settings = deps.settings.get();
-  const $ = deps.jQuery;
-  if (!$) return;
 
-  // 使用window.media状态判断（替代直接读settings）
-  if (!window.media) return;
-
-  // 前置检查：加载中/视频循环/非图片状态 → 跳过
-  if (window.media.state && window.media.state.isLoading) return;
-  if (window.media.meta && window.media.meta.type === "video" && window.media.state && window.media.state.isLooping) {
-    console.log(`[aiEvents] 视频循环中，跳过切换`);
-    return;
-  }
-
-  if (
+  if (shouldSkipSwitch() ||
     settings.autoSwitchMode !== "detect" ||
     !settings.aiDetectEnabled ||
-    !settings.isWindowVisible
-  ) {
+    !settings.isWindowVisible) {
     return;
   }
 
@@ -240,8 +244,8 @@ const registerAIEventListeners = () => {
       );
 
       // 3. 绑定事件
-      const removeAiListener = bindEvent(aiEvent, onAIResponse);
-      const removePlayerListener = bindEvent(playerEvent, onPlayerMessage);
+      const removeAiListener = EventBus.on("aiResponse", onAIResponse);
+      const removePlayerListener = EventBus.on("playerMessage", onPlayerMessage);
 
       if (!removeAiListener || !removePlayerListener) {
         throw new Error("事件绑定未成功");
@@ -250,13 +254,14 @@ const registerAIEventListeners = () => {
       // 保存取消监听方法
       eventListeners.push(removeAiListener, removePlayerListener);
 
-      // 4. 注册成功
-      deps.settings.save({ aiEventRegistered: true });
+      // 注册成功
+      deps.settings.update({ aiEventRegistered: true });
       console.log(`[aiEvents] 注册成功`);
-      // 使用安全的toastr调用
+
       if (deps.toastr && typeof deps.toastr.success === "function") {
         deps.toastr.success("AI检测功能已就绪");
       }
+
     } catch (e) {
       console.error(`[aiEvents] 注册失败:`, e);
       if (retryCount < maxRetries) {
