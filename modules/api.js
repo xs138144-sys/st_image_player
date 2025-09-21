@@ -4,6 +4,34 @@ const MEDIA_REQUEST_THROTTLE = 3000;
 let lastMediaRequestTime = 0;
 let pollingTimer = null;
 
+const validateDirectory = async (directoryPath) => {
+  const settings = deps.settings.get();
+
+  if (!settings.serviceUrl) {
+    console.warn(`[api] 服务地址未配置，无法验证目录`);
+    return { valid: false, error: "服务未配置" };
+  }
+
+  try {
+    const res = await fetch(`${settings.serviceUrl}/validate-directory`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: directoryPath }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${res.status}`);
+    }
+
+    return await res.json();
+  } catch (e) {
+    console.error(`[api] 目录验证失败:`, e);
+    return { valid: false, error: e.message };
+  }
+};
+
+
 // 检查服务状态
 const checkServiceStatus = async () => {
   const settings = deps.settings.get();
@@ -54,14 +82,21 @@ const fetchMediaList = async (filterType = "all") => {
   }
 };
 
-// 更新扫描目录
 const updateScanDirectory = async (newPath) => {
   const settings = deps.settings.get();
-  const { isDirectoryValid } = deps.utils;
 
-  if (!newPath || !isDirectoryValid(newPath)) {
+  if (!newPath) {
     if (deps.toastr && typeof deps.toastr.warning === "function") {
-      deps.toastr.warning("请输入有效且有读权限的目录路径");
+      deps.toastr.warning("请输入目录路径");
+    }
+    return false;
+  }
+
+  // 使用后端验证目录
+  const validation = await validateDirectory(newPath);
+  if (!validation.valid) {
+    if (deps.toastr && typeof deps.toastr.warning === "function") {
+      deps.toastr.warning(validation.error || "目录无效");
     }
     return false;
   }
@@ -78,10 +113,16 @@ const updateScanDirectory = async (newPath) => {
       body: JSON.stringify({ path: newPath }),
     });
 
-    if (!res.ok) throw new Error((await res.json()).message || "更新目录失败");
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || `HTTP ${res.status}`);
+    }
+
+    const result = await res.json();
 
     settings.serviceDirectory = newPath;
-    deps.settings.save();
+    deps.settings.save(settings);
+
     if (deps.toastr && typeof deps.toastr.success === "function") {
       deps.toastr.success(`目录已更新: ${newPath}`);
     }
@@ -97,6 +138,7 @@ const updateScanDirectory = async (newPath) => {
     return false;
   }
 };
+
 
 // 更新媒体大小限制
 const updateMediaSizeLimit = async (imageMaxMb, videoMaxMb) => {
@@ -369,7 +411,8 @@ const apiModule = {
   updateScanDirectory,
   updateMediaSizeLimit,
   cleanupInvalidMedia,
-  refreshMediaList
+  refreshMediaList,
+  validateDirectory
 };
 
 // 明确导出所有方法
@@ -382,5 +425,6 @@ export {
   updateScanDirectory,
   updateMediaSizeLimit,
   cleanupInvalidMedia,
-  refreshMediaList
+  refreshMediaList,
+  validateDirectory
 };

@@ -658,6 +658,7 @@ const setupSettingsEvents = () => {
   $panel.find("#update-directory").click(function () {
     const newPath = $panel.find("#player-scan-directory").val().trim();
     if (newPath) {
+      // 移除目录有效性检查（网页版无法进行）
       EventBus.emit("requestUpdateScanDirectory", { newPath });
       toastr.info("正在更新目录...");
     } else {

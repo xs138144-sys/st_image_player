@@ -399,7 +399,30 @@ class MediaState:
 config_mgr = ConfigManager()
 media_state = MediaState()
 
-
+@app.route("/validate-directory", methods=["POST"])
+def validate_directory():
+    """验证目录是否有效"""
+    try:
+        data = request.json or {}
+        directory = data.get("path", "")
+        
+        if not directory:
+            return jsonify({"valid": False, "error": "目录路径为空"})
+        
+        if not os.path.exists(directory):
+            return jsonify({"valid": False, "error": "目录不存在"})
+        
+        if not os.path.isdir(directory):
+            return jsonify({"valid": False, "error": "路径不是目录"})
+        
+        if not os.access(directory, os.R_OK):
+            return jsonify({"valid": False, "error": "无目录读权限"})
+        
+        return jsonify({"valid": True, "message": "目录有效"})
+        
+    except Exception as e:
+        logging.error(f"目录验证错误: {str(e)}", exc_info=True)
+        return jsonify({"valid": False, "error": str(e)})
 # ------------------------------
 # 媒体处理与监控
 # ------------------------------
@@ -730,7 +753,7 @@ def trigger_scan():
         threading.Thread(
             target=MediaManager.scan_media, kwargs={"full_scan": True}, daemon=True
         ).start()
-        return jsonify({"status": "扫描已启动"})
+        return jsonify({"status": "扫描已启动", "directory": new_dir})
     except Exception as e:
         logging.error(f"扫描接口错误: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
