@@ -14,83 +14,68 @@ const MODULES = [
 ];
 
 // 动态加载单个模块（添加重试机制）
-const loadModule = async (moduleName, options = {}) => {
-  const { maxRetries = 5, baseDelay = 1000 } = options;
+const loadModule = async (moduleName, retries = 3) => {
+  try {
+    console.log(`[index] 加载模块: ${moduleName}`);
+    const module = await import(`./modules/${moduleName}.js`);
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`[index] 加载模块: ${moduleName}`);
-      const module = await import(`./modules/${moduleName}.js`);
-
-      // 检查模块是否有效
-      if (!module || typeof module !== 'object') {
-        throw new Error(`模块加载失败: ${moduleName}`);
-      }
-
-      // 检查模块是否有init方法（支持默认导出和命名导出）
-      let initFunction = module.init || module.default?.init;
-      if (typeof initFunction !== "function") {
-        throw new Error(`缺少init()方法`);
-      }
-
-      // 提供默认清理函数（如果模块没有提供）
-      let cleanupFunction = module.cleanup || module.default?.cleanup;
-      if (typeof cleanupFunction !== "function") {
-        console.warn(`[index] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
-        cleanupFunction = () => { console.log(`[${moduleName}] 默认清理完成`) };
-      }
-
-      // 创建模块对象
-      const moduleObj = module.default || module;
-      if (typeof moduleObj.init !== "function") {
-        moduleObj.init = initFunction;
-      }
-      if (typeof moduleObj.cleanup !== "function") {
-        moduleObj.cleanup = cleanupFunction;
-      }
-
-      // 初始化模块
-      await moduleObj.init();
-      console.log(`[index] 模块加载完成: ${moduleName}`);
-
-      // 注册模块到依赖管理器
-      deps.registerModule(moduleName, moduleObj);
-
-      // 注册模块清理事件
-      const removeCleanupListener = deps.EventBus.on(
-        "extensionDisable",
-        moduleObj.cleanup
-      );
-      window.moduleCleanupListeners = window.moduleCleanupListeners || [];
-      window.moduleCleanupListeners.push(removeCleanupListener);
-
-      return true;
-    } catch (e) {
-      if (attempt < maxRetries) {
-        const delay = baseDelay * Math.pow(2, attempt);
-        console.warn(`[index] ${moduleName}加载失败，${delay}ms后重试 (${attempt + 1}/${maxRetries})`);
-        await new Promise(r => setTimeout(r, delay));
-      } else {
-        console.error(`[index] ${moduleName}加载失败，已达最大重试次数`, e);
-        return false;
-      }
+    // 检查模块是否有效
+    if (!module || typeof module !== 'object') {
+      throw new Error(`模块加载失败: ${moduleName}`);
     }
+
+    // 检查模块是否有init方法（支持默认导出和命名导出）
+    let initFunction = module.init || module.default?.init;
+    if (typeof initFunction !== "function") {
+      throw new Error(`缺少init()方法`);
+    }
+
+    // 提供默认清理函数（如果模块没有提供）
+    let cleanupFunction = module.cleanup || module.default?.cleanup;
+    if (typeof cleanupFunction !== "function") {
+      console.warn(`[index] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
+      cleanupFunction = () => { console.log(`[${moduleName}] 默认清理完成`) };
+    }
+
+    // 创建模块对象
+    const moduleObj = module.default || module;
+    if (typeof moduleObj.init !== "function") {
+      moduleObj.init = initFunction;
+    }
+    if (typeof moduleObj.cleanup !== "function") {
+      moduleObj.cleanup = cleanupFunction;
+    }
+
+    // 初始化模块
+    await moduleObj.init();
+    console.log(`[index] 模块加载完成: ${moduleName}`);
+
+    // 注册模块到依赖管理器
+    deps.registerModule(moduleName, moduleObj);
+
+    // 注册模块清理事件
+    const removeCleanupListener = deps.EventBus.on(
+      "extensionDisable",
+      moduleObj.cleanup
+    );
+    window.moduleCleanupListeners = window.moduleCleanupListeners || [];
+    window.moduleCleanupListeners.push(removeCleanupListener);
+
+    return true;
+  } catch (e) {
+    if (retries > 0) {
+      console.warn(`[index] 模块 ${moduleName} 加载失败，正在重试（${retries}次剩余）:`, e.message);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return loadModule(moduleName, retries - 1);
+    }
+
+    console.error(`[index] 模块加载失败: ${moduleName}`, e);
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`模块${moduleName}加载失败: ${e.message}`);
+    }
+    return false;
   }
 };
-
-// UI模块特殊加载函数（等待扩展菜单容器就绪）
-async function loadUIModule() {
-  if (document.readyState === 'loading') {
-    // DOM 未完全加载，等待
-    await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
-  }
-  
-  // 等待扩展菜单容器就绪
-  await checkExtensionMenuReady();
-  
-  // 加载 UI 模块
-  return await loadModule('ui');
-}
 
 // 更新初始化调用
 const initExtension = async () => {
@@ -104,17 +89,9 @@ const initExtension = async () => {
   try {
     const loadResults = {};
 
-    // 按顺序加载模块，UI模块使用特殊加载方式
+    // 按顺序加载模块
     for (const moduleName of MODULES) {
-      let success;
-      if (moduleName === 'ui') {
-        success = await loadUIModule();
-      } else {
-        success = await loadModule(moduleName, {
-          maxRetries: 5,
-          baseDelay: 1000
-        });
-      }
+      const success = await loadModule(moduleName);
       loadResults[moduleName] = success;
 
       if (!success) {
@@ -246,8 +223,14 @@ const checkExtensionMenuReady = () => {
       // 检查全局设置是否加载
       const globalSettingsReady = !!deps.extension_settings[EXT_ID] || Date.now() - startTime > 5000;
       
-      if (menuContainer && settingsContainer && globalSettingsReady) {
-        console.log(`[${EXT_ID}] 扩展菜单和设置容器已就绪`);
+      // 检查jQuery是否可用
+      const jQueryReady = !!window.jQuery || Date.now() - startTime > 5000;
+      
+      // 检查SillyTavern是否完全加载（通过检查扩展设置按钮）
+      const stFullyLoaded = !!document.getElementById("extensions-settings-button") || Date.now() - startTime > 5000;
+      
+      if ((menuContainer || stFullyLoaded) && globalSettingsReady && jQueryReady) {
+        console.log(`[${EXT_ID}] 扩展环境已就绪`);
         resolve(true);
         return;
       }

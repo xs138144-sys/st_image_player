@@ -60,7 +60,20 @@ export const init = () => {
 
     // 新增：监听媒体状态更新以同步UI
     const removeMediaStateListener = EventBus.on("mediaStateUpdated", (media) => {
-      updateMediaInfo(media);
+      const $ = deps.jQuery;
+      if (!$) return;
+
+      // 更新媒体信息显示
+      const infoElement = $(`#${PLAYER_WINDOW_ID} .image-info`);
+      if (infoElement.length) {
+        infoElement.text(`${media.meta.name} (${media.meta.type} · ${media.meta.size})`);
+      }
+
+      // 更新视频控制栏时间显示
+      if (media.meta.type === "video") {
+        $(`#${PLAYER_WINDOW_ID} .total-time`).text(formatTime(media.state.duration));
+        $(`#${PLAYER_WINDOW_ID} .current-time`).text(formatTime(media.state.currentTime));
+      }
     });
 
     // 保存取消监听方法（包含所有事件）
@@ -160,7 +173,19 @@ export const cleanup = () => {
 const createExtensionButton = () => {
   const $ = deps.jQuery;
   console.log(`[ui] 创建扩展按钮: jQuery=${!!$}, 按钮已存在=${$(`#ext_menu_${EXTENSION_ID}`).length}`);
-  if (!$ || $(`#ext_menu_${EXTENSION_ID}`).length) return;
+  
+  // 如果jQuery不可用，等待并重试
+  if (!$) {
+    console.warn(`[ui] jQuery不可用，延迟重试创建扩展按钮`);
+    setTimeout(createExtensionButton, 1000);
+    return;
+  }
+  
+  // 如果按钮已存在，跳过创建
+  if ($(`#ext_menu_${EXTENSION_ID}`).length) {
+    console.log(`[ui] 扩展按钮已存在，跳过创建`);
+    return;
+  }
 
   const settings = get();
   const buttonHtml = `
@@ -186,9 +211,11 @@ const createExtensionButton = () => {
   // 添加到扩展菜单 - 使用SillyTavern标准的扩展菜单容器
   if ($("#extensionsMenu").length) {
     $("#extensionsMenu").append(buttonHtml);
+    console.log(`[ui] 添加到标准扩展菜单容器`);
   } else if ($("#extensions_menu").length) {
     // 备选容器名称
     $("#extensions_menu").append(buttonHtml);
+    console.log(`[ui] 添加到备选扩展菜单容器`);
   } else {
     // 如果标准扩展菜单不存在，创建备选菜单
     $("body").append(`
@@ -196,6 +223,7 @@ const createExtensionButton = () => {
         ${buttonHtml}
       </div>
     `);
+    console.log(`[ui] 创建新的扩展菜单容器`);
   }
 
   // 添加菜单样式
