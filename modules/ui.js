@@ -171,50 +171,40 @@ const createExtensionButton = () => {
   `;
 
   // 添加到扩展菜单
-  if ($("#extensionsMenu").length) {
-    $("#extensionsMenu").append(buttonHtml);
-  } else {
-    // 备选位置
-    $("body").append(`
-      <div id="extensionsMenu" class="extensions-menu">
-        ${buttonHtml}
-      </div>
-    `);
-  }
+  const $menuContainer = $('#extensionsMenu').length ? $('#extensionsMenu') : $('body');
+  $menuContainer.append(buttonHtml);
+
+  // 添加菜单样式
+  $('<style>').text(`
+    #ext_menu_${EXTENSION_ID} {
+      cursor: pointer;
+      transition: all 0.3s ease;
+      padding: 8px 12px !important;
+    }
+    #ext_menu_${EXTENSION_ID}:hover {
+      background: rgba(255,255,255,0.1) !important;
+    }
+    #ext_menu_${EXTENSION_ID} .fa-film {
+      margin-right: 6px;
+    }
+  `).appendTo('head');
 
   // 绑定按钮事件
-  $(`#ext_menu_${EXTENSION_ID}`).on("click", () => {
-    $("#extensions-settings-button").trigger("click");
-    $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
-      behavior: "smooth",
-      block: "center",
+  $(`#ext_menu_${EXTENSION_ID}`).on('click', () => {
+    $(`#${SETTINGS_PANEL_ID}`).fadeIn(300).css({
+      display: 'flex',
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)'
     });
   });
 
-  // 增强菜单状态更新
-  setInterval(() => {
-    const settings = get(); // 确保每次获取最新设置
-
-    const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
-    const win = $(`#${PLAYER_WINDOW_ID}`);
-    const infoElement = win.find(".image-info");
-
-    // 同步播放状态
-    menuBtn.find(".play-status").text(settings.isPlaying ? "播放中" : "已暂停");
-    // 同步播放模式
-    menuBtn.find(".mode-text").text(settings.playMode === "random" ? "随机" : "顺序");
-    // 同步媒体筛选
-    menuBtn.find(".filter-text").text(
-      settings.mediaFilter === "all" ? "所有" :
-        settings.mediaFilter === "image" ? "图片" : "视频"
-    );
-    // 同步媒体信息
-    if (settings.showInfo && infoElement.is(":visible")) {
-      menuBtn.find(".media-info").text(infoElement.text()).show();
-    } else {
-      menuBtn.find(".media-info").text("隐藏信息").show();
-    }
-  }, 1000);
+  $(`#extensions-settings-button`).trigger("click");
+  $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
+    behavior: "smooth",
+    block: "center",
+  });
 };
 
 /**
