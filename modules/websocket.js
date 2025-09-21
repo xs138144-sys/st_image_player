@@ -81,7 +81,8 @@ export const init = () => {
       // 如果不是手动关闭，则尝试重连
       if (!isManualClose && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++;
-        const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000); // 指数退避
+        // 指数退避算法
+        const delay = 2000 * Math.pow(1.5, reconnectAttempts);
         console.log(`[websocket] 将在${delay / 1000}秒后重试 (尝试 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
         deps.toastr.info(`媒体同步已断开，${delay / 1000}秒后重连...`);
 
@@ -173,3 +174,25 @@ export const getStatus = () => {
     reconnectAttempts: reconnectAttempts
   };
 };
+
+// 优化后的重连机制
+const RECONNECT_CONFIG = {
+  baseDelay: 2000,
+  maxRetries: 5,
+  backoffFactor: 1.5
+};
+
+function reconnect() {
+  if (reconnectAttempts >= RECONNECT_CONFIG.maxRetries) {
+    console.warn('[websocket] 超过最大重试次数');
+    return;
+  }
+  
+  const delay = RECONNECT_CONFIG.baseDelay * Math.pow(RECONNECT_CONFIG.backoffFactor, reconnectAttempts);
+  console.log(`[websocket] ${delay.toFixed(0)}ms后第${reconnectAttempts + 1}次重试`);
+  
+  reconnectTimer = setTimeout(() => {
+    initWebSocket();
+    reconnectAttempts++;
+  }, delay);
+}

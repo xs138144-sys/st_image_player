@@ -211,6 +211,11 @@ const registerAIEventListeners = () => {
     return;
   }
 
+  // 提取为配置常量
+  const EVENT_CONFIG = {
+    MAX_RETRIES: 5,
+    BASE_DELAY: 2000 
+  };
   const maxRetries = 15; // 最多重试15次
   const retryDelay = 2000; // 2秒重试间隔
 

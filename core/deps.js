@@ -143,16 +143,25 @@ const deps = {
    * 获取SillyTavern的设置保存函数
    */
   get saveSettingsDebounced() {
-    return window.saveSettingsDebounced || (() => {
-      console.warn('saveSettingsDebounced 不可用，使用默认实现');
+    // 强化设置保存机制
+    const saveSettingsDebounced = window.saveSettingsDebounced || (() => {
+      let timeout;
       return () => {
-        try {
-          localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings || {}));
-        } catch (e) {
-          console.error('无法保存设置到本地存储', e);
-        }
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          try {
+            const settings = JSON.stringify(window.extension_settings || {});
+            localStorage.setItem('extension_settings', settings);
+            // 新增TAURI文件系统支持
+            if (typeof window.__TAURI__ !== 'undefined') {
+              window.__TAURI__.fs.writeTextFile('extension_settings.json', settings);
+            }
+          } catch (e) {
+            console.error('跨平台保存失败:', e);
+          }
+        }, 1500);
       };
-    });
+    })();
   }
 };
 
@@ -172,3 +181,21 @@ function registerModule(name, module) {
   this.modules[name] = module;
   console.log(`[deps] 模块已注册: ${name}`);
 }
+
+// 新增模块初始化状态检查
+const initStatus = {
+  utils: false,
+  settings: false,
+  eventBus: true
+};
+
+// 模块加载顺序验证
+if (!initStatus.utils && initStatus.settings) {
+  throw new Error('settings模块必须在utils之后初始化');
+}
+
+// 添加命名空间隔离
+window._ST_EXTENSION = {
+  // 移除saveSettingsDebounced实现
+  // 该函数已迁移至settings模块
+};

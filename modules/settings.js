@@ -261,12 +261,6 @@ const settingsModule = {
 };
 
 // 明确导出所有方法
+// 统一导出方式
 export default settingsModule;
-export {
-  init,
-  cleanup,
-  migrateSettings,
-  save,
-  get,
-  update // 添加update方法
-};
+export { init, cleanup };

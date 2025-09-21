@@ -726,3 +726,18 @@ const updateVideoProgress = (video) => {
   const percent = (video.currentTime / video.duration) * 100;
   $win.find(".progress-played").css("width", `${percent}%`);
 };
+
+// 增强播放器初始化时序控制
+const initMediaPlayer = () => {
+  return new Promise((resolve) => {
+    const checkDeps = () => {
+      if (deps.eventBus && deps.settings) {
+        console.log('[mediaPlayer] 依赖加载完成');
+        resolve();
+      } else {
+        setTimeout(checkDeps, 500);
+      }
+    };
+    checkDeps();
+  });
+};

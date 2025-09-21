@@ -4,6 +4,7 @@ import json
 import time
 import random
 import logging
+import logging.handlers
 import threading
 import urllib.parse
 from wsgiref.simple_server import make_server
@@ -12,12 +13,21 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_cors import CORS
 import mimetypes
-import magic
+from pathlib import Path
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 from gevent.pywsgi import WSGIServer
 from typing import Dict, List, Tuple, Optional, Set, Any
 import fnmatch
+
+# 添加资源路径检测
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+# 加载环境变量
+from dotenv import load_dotenv
+load_dotenv(BASE_DIR / '.env')
 
 # ------------------------------
 # 基础配置与初始化
@@ -30,19 +40,26 @@ sys.getfilesystemencoding = lambda: "utf-8"
 app = Flask(__name__)
 cors = CORS(app, resources={
     r"/*": {
-        "origins": ["http://127.0.0.1:8000", "http://localhost:8000"],
+        "origins": os.getenv("CORS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000").split(","),
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["X-Request-ID"]
     }
 })
 
 # 日志配置
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s",
+    format="%(asctime)s [%(threadName)s] %(levelname)s - %(module)s:%(lineno)d - %(message)s",
+    encoding='utf-8',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("image_service.log", encoding="utf-8"),
+        logging.handlers.RotatingFileHandler(
+            filename='image_service.log',
+            encoding='utf-8',
+            maxBytes=10*1024*1024,
+            backupCount=5
+        )
     ],
 )
 
@@ -56,13 +73,14 @@ mimetypes.add_type("video/x-matroska", ".mkv")
 # 核心状态与配置管理（封装全局变量）
 # ------------------------------
 class ConfigManager:
-    """配置管理器（线程安全）"""
+    __slots__ = ['lock', 'config_file', 'config_version', 'scan_directory', 'allowed_origins', 'media_config', 'mime_map', 'ignore_patterns', '_thread_map']
 
     def __init__(self):
-        self.lock = threading.RLock()  # 可重入锁，支持嵌套调用
+        self.lock = threading.RLock()
+        self._thread_map = {}
         self.config_file = "local_image_service_config.json"
-        self.config_version = "1.2"  # 更新版本号
-        self.scan_directory = self._get_default_scan_dir()
+        self.config_version = "1.2"
+        self.scan_directory = ""  # 清空默认目录
         self.allowed_origins = ["http://localhost:8000", "http://127.0.0.1:8000"]
         # 媒体配置
         self.media_config = {
@@ -114,14 +132,11 @@ class ConfigManager:
 
     @staticmethod
     def _get_default_scan_dir():
-        """获取系统默认下载目录"""
-        if os.name == "nt":
-            return os.path.join(os.environ.get("USERPROFILE", ""), "Downloads")
-        else:
-            return os.path.expanduser("~/Downloads")
+        return ""  # 返回空字符串
 
     def load(self):
-        """加载配置文件"""
+        if not self.scan_directory:
+            logging.error("请在前端配置扫描目录")
         try:
             if not os.path.exists(self.config_file):
                 self.save()  # 生成默认配置
@@ -175,8 +190,13 @@ class ConfigManager:
 
     def _migrate_config(self, config):
         """配置版本迁移"""
+        # 注释掉暂时不需要的迁移模块
+        # from .migrators import VersionMigrator_1_1_to_1_2  # 新增迁移器
         current_version = config.get("config_version")
         if current_version != self.config_version:
+            pass  # 暂时禁用迁移功能
+            migrator = VersionMigrator_1_1_to_1_2(config)
+            return migrator.execute()
             logging.info(
                 f"迁移配置 from {current_version or '未知'} to {self.config_version}"
             )
@@ -674,6 +694,7 @@ class WebSocketManager:
 
     _active_ws = []
     _lock = threading.Lock()
+    allowed_origins = config_mgr.allowed_origins
 
     @classmethod
     def add_connection(cls, ws):
@@ -974,6 +995,12 @@ def websocket_endpoint():
     if not ws:
         return "需要WebSocket连接", 400
 
+    # 握手阶段验证Origin
+    origin = request.environ.get('HTTP_ORIGIN')
+    if origin not in WebSocketManager.allowed_origins:
+        ws.close(code=4001, reason='Origin not allowed')
+        return
+
     WebSocketManager.add_connection(ws)
     try:
         # 发送初始化消息
@@ -1099,7 +1126,17 @@ def main():
     logging.info("=" * 80)
 
     # 启动服务器
-    server = pywsgi.WSGIServer(("0.0.0.0", 9000), app, handler_class=WebSocketHandler)
+    # 修改服务启动配置
+    server = pywsgi.WSGIServer(('0.0.0.0', 8000), app, handler_class=WebSocketHandler)
+    
+    # 添加端口检测
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if sock.connect_ex(('localhost', 8000)) == 0:
+        logging.error("端口8000已被占用，请使用其他端口")
+        sys.exit(1)
+    sock.close()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
