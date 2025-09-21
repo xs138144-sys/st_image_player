@@ -213,9 +213,9 @@ const createExtensionButton = () => {
     $("#extensionsMenu").append(buttonHtml);
     console.log(`[ui] 添加到标准扩展菜单容器`);
   } else {
-    // 备选位置 - 直接添加到body
+    // 备选位置 - 直接添加到body（保持与有BUG版本完全一致）
     $("body").append(`
-      <div id="extensions_menu" class="extensions-menu">
+      <div id="extensionsMenu" class="extensions-menu">
         ${buttonHtml}
       </div>
     `);
