@@ -32,24 +32,31 @@ export const cleanup = () => {
     // 清理全局事件监听器
     if (window.aiEventListeners) {
       window.aiEventListeners.forEach(removeListener => {
-        if (typeof removeListener === "function") {
-          removeListener();
+        try {
+          if (typeof removeListener === "function") removeListener();
+        } catch (e) {
+          console.error('[aiEvents] 清理全局监听器异常:', e);
         }
       });
-      window.aiEventListeners = null;
+      window.aiEventListeners = [];
     }
-
+    
     // 清理本地事件监听器
-    eventListeners.forEach((removeListener) => {
-      try {
-        if (typeof removeListener === "function") {
-          removeListener();
-        }
-      } catch (cleanupErr) {
-        console.error(`[aiEvents] 清理监听器失败:`, cleanupErr);
-      }
-    });
+    try {
+      eventListeners.forEach(remove => remove?.());
+    } catch (e) {
+      console.error('[aiEvents] 清理本地监听器异常:', e);
+    }
     eventListeners = [];
+    
+    // 新增二次清理检查
+    setTimeout(() => {
+      const remaining = eventListeners.filter(l => l);
+      if (remaining.length > 0) {
+        console.warn('[aiEvents] 二次清理发现残留监听器:', remaining.length);
+        remaining.forEach(remove => remove?.());
+      }
+    }, 1000);
 
     console.log(`[aiEvents] 资源清理完成`);
   } catch (e) {

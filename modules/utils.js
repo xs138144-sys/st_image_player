@@ -101,29 +101,29 @@ export const getSafeGlobal = (name, defaultValue) => {
 /**
  * 检查目录是否有效
  */
+// 改进后的Electron环境检测
+const isElectron = !!window.require?.('electron');
+
+// 更新目录有效性检查
 export const isDirectoryValid = (path) => {
   if (!path) return false;
-  // 检查是否为Electron环境
-  if (!window.require || !window.require("fs")) {
-    deps.toastr.error(
-      "目录检查功能仅支持Electron版SillyTavern，网页版无法使用"
-    );
-    console.error("[utils] 非Electron环境，不支持目录检查");
-    return false;
-  }
-  const fs = window.require("fs");
+  
   try {
-    return (
-      fs.existsSync(path) &&
-      fs.statSync(path).isDirectory() &&
-      fs.accessSync(path, fs.constants.R_OK)
-    );
+    if (!isElectron) {
+      deps.toastr.error('目录检查仅支持Electron桌面版');
+      return false;
+    }
+    
+    const fs = window.require('fs');
+    return fs.existsSync(path) 
+      && fs.statSync(path).isDirectory()
+      && fs.accessSync(path, fs.constants.R_OK);
   } catch (e) {
-    console.error(`[utils] 目录检查失败:`, e);
-    deps.toastr.error(`目录检查失败: ${e.message}`);
+    console.error('目录检查失败:', e);
+    deps.toastr.error(`目录检查错误: ${e.message}`);
     return false;
   }
-};
+}
 
 /**
  * 安全等待jQuery就绪

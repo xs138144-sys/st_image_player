@@ -157,3 +157,18 @@ const deps = {
 };
 
 export { deps };
+
+// 新增版本校验
+const MIN_MODULE_VERSION = {
+  settings: '1.4.2',
+  utils: '1.2.0'
+};
+
+function registerModule(name, module) {
+  if (MIN_MODULE_VERSION[name] && 
+    semver.lt(module.version, MIN_MODULE_VERSION[name])) {
+    throw new Error(`模块 ${name} 版本过低`);
+  }
+  this.modules[name] = module;
+  console.log(`[deps] 模块已注册: ${name}`);
+}

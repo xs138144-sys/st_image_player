@@ -826,28 +826,31 @@ def get_random_media():
 
 
 @app.route("/media/<path:rel_path>", methods=["GET"])
+# 增强路径校验
 def get_media_file(rel_path):
-    """获取媒体文件（支持断点续传）"""
     try:
-        # 解码URL编码的路径
+        # 解码并规范化路径
         rel_path = urllib.parse.unquote(rel_path)
-        scan_dir = config_mgr.get_scan_dir()
-        full_path = os.path.abspath(os.path.join(scan_dir, rel_path))
+        scan_dir = os.path.realpath(config_mgr.get_scan_dir())
+        full_path = os.path.normpath(os.path.join(scan_dir, rel_path))
 
-        # 严格验证路径是否在扫描目录内（使用规范化路径比较）
-        scan_dir_abs = os.path.abspath(scan_dir)
-        full_path_abs = os.path.abspath(full_path)
-        
-        # 使用os.path.commonpath检查路径是否在允许范围内
-        try:
-            common_path = os.path.commonpath([scan_dir_abs, full_path_abs])
-            if common_path != scan_dir_abs:
-                logging.warning(f"路径越界尝试: {rel_path} -> {full_path_abs}")
-                return jsonify({"error": "路径不合法"}), 403
-        except ValueError:
-            # 路径不在同一驱动器上
-            logging.warning(f"路径跨驱动器尝试: {rel_path} -> {full_path_abs}")
-            return jsonify({"error": "路径不合法"}), 403
+        # 多重安全检查
+        if not os.path.exists(full_path):
+            logging.warning(f'文件不存在: {rel_path}')
+            return jsonify({'error': '文件不存在'}), 404
+
+        if not os.path.isfile(full_path):
+            logging.warning(f'非法文件类型: {rel_path}')
+            return jsonify({'error': '路径不合法'}), 403
+
+        if not full_path.startswith(os.path.normcase(scan_dir)):
+            logging.warning(f'路径越界尝试: {rel_path} → {full_path}')
+            return jsonify({'error': '路径不合法'}), 403
+
+        # 新增符号链接检查
+        if os.path.islink(full_path):
+            logging.warning(f'拒绝符号链接访问: {rel_path}')
+            return jsonify({'error': '非法文件类型'}), 403
 
         if not os.path.exists(full_path) or not os.path.isfile(full_path):
             return jsonify({"error": "文件不存在"}), 404
