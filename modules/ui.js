@@ -196,13 +196,18 @@ const createExtensionButton = () => {
 
   // 绑定按钮事件
   $(`#ext_menu_${EXTENSION_ID}`).on('click', () => {
-    $(`#${SETTINGS_PANEL_ID}`).fadeIn(300).css({
-      display: 'flex',
-      position: 'fixed',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)'
-    });
+    const $panel = $(`#${SETTINGS_PANEL_ID}`);
+    if ($panel.length) {
+      // 如果面板已存在，确保它是展开状态并显示
+      $panel.addClass("is-open");
+      $panel.find(".inline-drawer-content").slideDown();
+      
+      // 定位面板到合适的位置（如果需要）
+      positionSettingsPanel();
+    } else {
+      // 如果面板不存在，创建它
+      createSettingsPanel();
+    }
   });
 };
 
@@ -421,7 +426,12 @@ export const createSettingsPanel = async () => {
 
   const settings = get();
   const $ = deps.jQuery;
-  if (!$ || !settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
+  if (!$ || !settings.masterEnabled) return;
+  
+  // 如果面板已存在，先移除它（允许重新创建）
+  if ($(`#${SETTINGS_PANEL_ID}`).length) {
+    $(`#${SETTINGS_PANEL_ID}`).remove();
+  }
 
   try {
     // 获取服务状态
@@ -661,7 +671,9 @@ export const createSettingsPanel = async () => {
     </div>
   `;
 
-    $("#extensions_settings").append(html);
+    // 简化设置面板插入逻辑 - 直接添加到body（像老版本一样）
+    $("body").append(html);
+    
     setupSettingsEvents();
     settingsPanelCreated = true;
 
