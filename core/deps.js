@@ -20,7 +20,7 @@ window.saveSettingsDebounced = window.saveSettingsDebounced || (() => {
       }
     }, 1000);
   };
-})();
+});
 
 const deps = {
   modules: {},
