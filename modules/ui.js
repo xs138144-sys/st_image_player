@@ -13,6 +13,7 @@ const {
   safeJQuery,
 } = utils;
 
+const EXTENSION_NAME = "媒体播放器";
 const EXTENSION_ID = "st_image_player";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings-panel";
@@ -193,7 +194,7 @@ const createExtensionButton = () => {
   // 增强菜单状态更新
   setInterval(() => {
     const settings = get();
-    const menuBtn = $(`#${menuBtnId}`);
+    const menuBtn = $(`#ext_menu_${EXTENSION_ID}`); // 修复: 使用正确的ID选择器
     const win = $(`#${PLAYER_WINDOW_ID}`);
     const infoElement = win.find(".image-info");
 
@@ -369,7 +370,7 @@ const bindPlayerControls = () => {
   });
 };
 
-// 替换 createSettingsPanel 函数
+// 修复后的 createSettingsPanel 函数
 export const createSettingsPanel = async () => {
   const settings = deps.settings.get();
   const $ = deps.jQuery;
@@ -387,7 +388,6 @@ export const createSettingsPanel = async () => {
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const serviceDir = serviceStatus.directory || settings.serviceDirectory || "未设置";
 
-  // 使用老版本的设置面板HTML结构
   const html = `
     <div id="${SETTINGS_PANEL_ID}" class="extension_settings inline-drawer">
       <div class="inline-drawer-toggle inline-drawer-header">
@@ -619,47 +619,274 @@ export const createSettingsPanel = async () => {
   console.log(`[ui] 设置面板创建完成`);
 };
 
-// modules/ui.js 补充设置面板事件
-export const createSettingsPanel = async () => {
-  // 原有HTML渲染逻辑...
+// 设置面板事件绑定
+const setupSettingsEvents = () => {
+  const $ = deps.jQuery;
+  const $panel = $(`#${SETTINGS_PANEL_ID}`);
+  if (!$panel.length) return;
 
-  // 补充检测模式子选项显示/隐藏逻辑
-  panel.find("#toggle-detect-mode").on("click", function () {
-    const isActive = $(this).hasClass("active");
-    panel.find("#detect-sub-options").toggle(isActive);
+  // 折叠面板切换
+  $panel.find(".inline-drawer-toggle").click(function () {
+    $panel.toggleClass("is-open");
+    $panel.find(".inline-drawer-content").slideToggle();
   });
 
-  // 补充播放模式切换时的联动（禁用/启用循环选项）
-  panel.find("#player-play-mode").on("change", function () {
-    const isRandom = $(this).val() === "random";
-    panel.find("#player-slideshow-mode").prop("disabled", isRandom);
-    if (isRandom) {
-      panel.find("#player-slideshow-mode").prop("checked", false);
-      // 同步到设置
-      const settings = deps.settings.get();
-      settings.slideshowMode = false;
-      deps.settings.save();
+  // 总开关
+  $panel.find("#master-enabled").change(function () {
+    const enabled = $(this).is(":checked");
+    deps.settings.update({ masterEnabled: enabled });
+
+    if (enabled) {
+      createPlayerWindow();
+      EventBus.emit("requestCheckServiceStatus");
+    } else {
+      $(`#${PLAYER_WINDOW_ID}`).remove();
     }
   });
 
-  // 补充所有设置项的保存逻辑（与老版index.js的saveCurrentSettings对应）
-  const saveSettings = () => {
-    const settings = deps.settings.get();
-    // 同步检测模式子选项
-    settings.aiDetectEnabled = panel.find("#player-ai-detect").prop("checked");
-    settings.playerDetectEnabled = panel.find("#player-player-detect").prop("checked");
-    // 同步预加载设置
-    settings.preloadImages = panel.find("#player-preload-images").prop("checked");
-    settings.preloadVideos = panel.find("#player-preload-videos").prop("checked");
-    // 同步切换间隔
-    settings.switchInterval = parseInt(panel.find("#player-interval").val()) || 5000;
-    // 保存
-    deps.settings.save();
-  };
+  // 服务地址更新
+  $panel.find("#player-service-url").change(function () {
+    const newUrl = $(this).val().trim();
+    if (newUrl) {
+      deps.settings.update({ serviceUrl: newUrl });
+      EventBus.emit("requestCheckServiceStatus");
+      toastr.info("服务地址已更新");
+    }
+  });
 
-  // 绑定设置项变更事件
-  panel.find("#player-ai-detect, #player-player-detect, #player-preload-images, #player-preload-videos, #player-interval")
-    .on("change input", saveSettings);
+  // 更新目录
+  $panel.find("#update-directory").click(function () {
+    const newPath = $panel.find("#player-scan-directory").val().trim();
+    if (newPath) {
+      EventBus.emit("requestUpdateScanDirectory", { newPath });
+      toastr.info("正在更新目录...");
+    } else {
+      toastr.warning("请输入有效的目录路径");
+    }
+  });
+
+  // 应用大小限制
+  $panel.find("#update-size-limit").click(function () {
+    const imageMaxMb = parseInt($panel.find("#image-max-size").val());
+    const videoMaxMb = parseInt($panel.find("#video-max-size").val());
+
+    if (isNaN(imageMaxMb) || isNaN(videoMaxMb)) {
+      toastr.warning("请输入有效的数值");
+      return;
+    }
+
+    EventBus.emit("requestUpdateMediaSizeLimit", { imageMaxMb, videoMaxMb });
+  });
+
+  // 媒体更新提示
+  $panel.find("#show-media-update-toast").change(function () {
+    deps.settings.update({ showMediaUpdateToast: $(this).is(":checked") });
+  });
+
+  // 边框隐藏
+  $panel.find("#player-hide-border").change(function () {
+    const hideBorder = $(this).is(":checked");
+    deps.settings.update({ hideBorder });
+
+    const $playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+    if ($playerWindow.length) {
+      $playerWindow.toggleClass("no-border", hideBorder);
+    }
+  });
+
+  // 视频控制自定义选项
+  $panel.find("#custom-show-progress").change(function () {
+    deps.settings.update({
+      customVideoControls: {
+        ...deps.settings.get().customVideoControls,
+        showProgress: $(this).is(":checked")
+      }
+    });
+    // 重新创建播放器窗口以应用设置
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+    createPlayerWindow();
+  });
+
+  $panel.find("#custom-show-volume").change(function () {
+    deps.settings.update({
+      customVideoControls: {
+        ...deps.settings.get().customVideoControls,
+        showVolume: $(this).is(":checked")
+      }
+    });
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+    createPlayerWindow();
+  });
+
+  $panel.find("#custom-show-loop").change(function () {
+    deps.settings.update({
+      customVideoControls: {
+        ...deps.settings.get().customVideoControls,
+        showLoop: $(this).is(":checked")
+      }
+    });
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+    createPlayerWindow();
+  });
+
+  $panel.find("#custom-show-time").change(function () {
+    deps.settings.update({
+      customVideoControls: {
+        ...deps.settings.get().customVideoControls,
+        showTime: $(this).is(":checked")
+      }
+    });
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+    createPlayerWindow();
+  });
+
+  // 功能切换按钮组
+  $panel.find("#toggle-timer-mode").click(function () {
+    deps.settings.update({ autoSwitchMode: "timer" });
+    $panel.find("#toggle-timer-mode").addClass("active");
+    $panel.find("#toggle-detect-mode").removeClass("active");
+    $panel.find("#detect-sub-options").hide();
+  });
+
+  $panel.find("#toggle-detect-mode").click(function () {
+    deps.settings.update({ autoSwitchMode: "detect" });
+    $panel.find("#toggle-detect-mode").addClass("active");
+    $panel.find("#toggle-timer-mode").removeClass("active");
+    $panel.find("#detect-sub-options").show();
+  });
+
+  // 检测模式子选项
+  $panel.find("#player-ai-detect").change(function () {
+    deps.settings.update({ aiDetectEnabled: $(this).is(":checked") });
+  });
+
+  $panel.find("#player-player-detect").change(function () {
+    deps.settings.update({ playerDetectEnabled: $(this).is(":checked") });
+  });
+
+  // 播放模式
+  $panel.find("#player-play-mode").change(function () {
+    const playMode = $(this).val();
+    deps.settings.update({ playMode });
+
+    // 随机模式下禁用幻灯片模式
+    if (playMode === "random") {
+      $panel.find("#player-slideshow-mode").prop("checked", false).prop("disabled", true);
+      deps.settings.update({ slideshowMode: false });
+    } else {
+      $panel.find("#player-slideshow-mode").prop("disabled", false);
+    }
+  });
+
+  // 媒体筛选
+  $panel.find("#player-media-filter").change(function () {
+    deps.settings.update({ mediaFilter: $(this).val() });
+    EventBus.emit("requestRefreshMediaList", { filterType: $(this).val() });
+  });
+
+  // 循环播放设置
+  $panel.find("#player-slideshow-mode").change(function () {
+    deps.settings.update({ slideshowMode: $(this).is(":checked") });
+  });
+
+  $panel.find("#player-video-loop").change(function () {
+    deps.settings.update({ videoLoop: $(this).is(":checked") });
+
+    const $playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+    if ($playerWindow.length) {
+      const video = $playerWindow.find(".image-player-video")[0];
+      if (video) video.loop = $(this).is(":checked");
+    }
+  });
+
+  $panel.find("#player-show-info").change(function () {
+    const showInfo = $(this).is(":checked");
+    deps.settings.update({ showInfo });
+
+    const $playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+    if ($playerWindow.length) {
+      $playerWindow.find(".image-info").toggle(showInfo);
+      $playerWindow.find(".toggle-info").toggleClass("active", showInfo);
+    }
+  });
+
+  // 预加载设置
+  $panel.find("#player-preload-images").change(function () {
+    deps.settings.update({ preloadImages: $(this).is(":checked") });
+  });
+
+  $panel.find("#player-preload-videos").change(function () {
+    deps.settings.update({ preloadVideos: $(this).is(":checked") });
+  });
+
+  $panel.find("#player-show-video-controls").change(function () {
+    const showVideoControls = $(this).is(":checked");
+    deps.settings.update({ showVideoControls });
+
+    const $playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+    if ($playerWindow.length) {
+      $playerWindow.find(".video-controls").toggle(showVideoControls);
+      $playerWindow.find(".toggle-video-controls").toggleClass("active", showVideoControls);
+      adjustVideoControlsLayout($playerWindow);
+    }
+  });
+
+  // 时间间隔设置
+  $panel.find("#player-interval").change(function () {
+    const interval = parseInt($(this).val());
+    if (!isNaN(interval) && interval >= 1000 && interval <= 60000) {
+      deps.settings.update({ switchInterval: interval });
+    }
+  });
+
+  $panel.find("#player-polling-interval").change(function () {
+    const interval = parseInt($(this).val());
+    if (!isNaN(interval) && interval >= 5000 && interval <= 300000) {
+      deps.settings.update({ pollingInterval: interval });
+    }
+  });
+
+  // 过渡效果
+  $panel.find("#player-transition-effect").change(function () {
+    deps.settings.update({ transitionEffect: $(this).val() });
+  });
+
+  // 检测冷却时间
+  $panel.find("#player-ai-cooldown").change(function () {
+    const cooldown = parseInt($(this).val());
+    if (!isNaN(cooldown) && cooldown >= 1000 && cooldown <= 30000) {
+      deps.settings.update({ aiResponseCooldown: cooldown });
+    }
+  });
+
+  // 操作按钮
+  $panel.find("#show-player").click(function () {
+    const $playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+    if (!$playerWindow.length) {
+      createPlayerWindow();
+    }
+    $playerWindow.show();
+    deps.settings.update({ isWindowVisible: true });
+  });
+
+  $panel.find("#player-refresh").click(function () {
+    EventBus.emit("requestCheckServiceStatus");
+    EventBus.emit("requestRefreshMediaList");
+    toastr.info("正在刷新服务状态...");
+  });
+
+  $panel.find("#clear-random-history").click(function () {
+    if (confirm("确定要清理随机播放历史记录吗？这将重置随机播放算法。")) {
+      EventBus.emit("requestClearRandomHistory");
+      toastr.info("随机播放历史已清理");
+    }
+  });
+
+  $panel.find("#cleanup-media").click(function () {
+    if (confirm("确定要清理无效的媒体文件吗？此操作不会删除实际文件，仅从媒体库中移除记录。")) {
+      EventBus.emit("requestCleanupInvalidMedia");
+    }
+  });
 };
 
 const setupWindowEvents = () => {
@@ -834,7 +1061,7 @@ const setupWindowEvents = () => {
     save();
     $window.hide();
 
-    $(`.${EXTENSION_ID}_showhide i`)
+    $(`#ext_menu_${EXTENSION_ID} .showhide i`)
       .removeClass("fa-eye fa-eye-slash")
       .addClass("fa-eye");
   });
@@ -886,104 +1113,6 @@ const bindVideoControls = () => {
     const pos = (e.clientX - rect.left) / rect.width;
     video.currentTime = pos * video.duration;
     $progressPlayed.css("width", `${pos * 100}%`);
-  });
-};
-
-/**
- * 绑定设置面板事件
- */
-const bindSettingsEvents = () => {
-  const $ = deps.jQuery;
-  const $panel = $(`#${SETTINGS_PANEL_ID}`);
-  if (!$panel.length) return;
-
-  // 关闭按钮
-  $panel.find(".close-btn, .cancel-settings").click(function () {
-    $panel.hide();
-  });
-
-  // 刷新服务状态
-  $panel.find(".refresh-service").click(function () {
-    EventBus.emit("requestCheckServiceStatus");
-    EventBus.emit("requestRefreshMediaList");
-    toastr.info("正在刷新服务状态...");
-  });
-
-  // 更新目录
-  $panel.find(".update-directory").click(function () {
-    const newPath = $panel.find("#scan-directory").val().trim();
-    if (newPath) {
-      EventBus.emit("requestUpdateScanDirectory", { newPath });
-    } else {
-      toastr.warning("请输入有效的目录路径");
-    }
-  });
-
-  // 清理无效文件
-  $panel.find(".cleanup-media").click(function () {
-    if (confirm("确定要清理无效的媒体文件吗？此操作不会删除实际文件，仅从媒体库中移除记录。")) {
-      EventBus.emit("requestCleanupInvalidMedia");
-    }
-  });
-
-  // 更新大小限制
-  $panel.find(".update-size-limits").click(function () {
-    const imageMaxMb = parseInt($panel.find("#image-max-size").val());
-    const videoMaxMb = parseInt($panel.find("#video-max-size").val());
-
-    if (isNaN(imageMaxMb) || isNaN(videoMaxMb)) {
-      toastr.warning("请输入有效的数值");
-      return;
-    }
-
-    EventBus.emit("requestUpdateMediaSizeLimit", { imageMaxMb, videoMaxMb });
-  });
-
-  // 保存设置
-  $panel.find(".save-settings").click(function () {
-    const settings = get();
-
-    // 保存过渡效果
-    settings.transitionEffect = $panel.find("#transition-effect").val();
-
-    // 保存自动切换间隔
-    const interval = parseInt($panel.find("#auto-switch-interval").val());
-    if (!isNaN(interval) && interval >= 1 && interval <= 60) {
-      settings.autoSwitchInterval = interval * 1000;
-    }
-
-    // 保存轮询间隔
-    const polling = parseInt($panel.find("#polling-interval").val());
-    if (!isNaN(polling) && polling >= 5 && polling <= 300) {
-      settings.pollingInterval = polling * 1000;
-    }
-
-    // 保存显示设置
-    settings.hideBorder = $panel.find("#hide-border").is(":checked");
-    settings.showInfo = $panel.find("#show-info").is(":checked");
-    settings.showVideoControls = $panel.find("#show-video-controls").is(":checked");
-
-    // 保存视频控制设置
-    settings.customVideoControls.showProgress = $panel.find("#show-progress").is(":checked");
-    settings.customVideoControls.showVolume = $panel.find("#show-volume").is(":checked");
-    settings.customVideoControls.showLoop = $panel.find("#show-loop").is(":checked");
-    settings.customVideoControls.showTime = $panel.find("#show-time").is(":checked");
-
-    // 保存预加载设置
-    if (!settings.mediaConfig.preload_strategy) {
-      settings.mediaConfig.preload_strategy = {};
-    }
-    settings.mediaConfig.preload_strategy.image = $panel.find("#preload-images").is(":checked");
-    settings.mediaConfig.preload_strategy.video = $panel.find("#preload-videos").is(":checked");
-
-    save();
-
-    // 重新创建播放器窗口以应用设置
-    $(`#${PLAYER_WINDOW_ID}`).remove();
-    createPlayerWindow();
-
-    toastr.success("设置已保存");
-    $panel.hide();
   });
 };
 

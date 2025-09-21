@@ -14,14 +14,14 @@ export const init = () => {
     // 监听AI回复事件
     const removeAiReplyListener = EventBus.on('aiReply', () => {
       if (settings.autoSwitchMode === 'detect' && settings.masterEnabled) {
-        EventBus.emit('requestMediaSwitch', { trigger: 'ai_reply' });
+        EventBus.emit('requestMediaPlay', { trigger: 'ai_reply' }); // 修复事件名称
       }
     });
 
     // 监听玩家消息事件
     const removeUserMessageListener = EventBus.on('userMessage', () => {
       if (settings.autoSwitchMode === 'detect' && settings.masterEnabled) {
-        EventBus.emit('requestMediaSwitch', { trigger: 'user_message' });
+        EventBus.emit('requestMediaPlay', { trigger: 'user_message' }); // 修复事件名称
       }
     });
 
@@ -169,6 +169,38 @@ const onAIResponse = () => {
   console.log(`[aiEvents] AI回复触发媒体切换`);
 };
 
+  const settings = deps.settings.get();
+  const $ = deps.jQuery;
+  if (!$) return;
+
+  // 使用window.media状态判断（替代直接读settings）
+  if (!window.media) return;
+
+  // 前置检查：加载中/视频循环/非图片状态 → 跳过
+  if (window.media.state && window.media.state.isLoading) return;
+  if (window.media.meta && window.media.meta.type === "video" && window.media.state && window.media.state.isLooping) {
+    console.log(`[aiEvents] 视频循环中，跳过切换`);
+    return;
+  }
+
+  if (
+    settings.autoSwitchMode !== "detect" ||
+    !settings.aiDetectEnabled ||
+    !settings.isWindowVisible
+  ) {
+    return;
+  }
+
+  // 冷却时间检查
+  const now = performance.now();
+  if (now - settings.lastAISwitchTime < (settings.aiResponseCooldown || 3000)) return;
+
+  // 触发切换
+  deps.settings.save({ lastAISwitchTime: now }); // 使用正确的保存方法
+  EventBus.emit("requestMediaPlay", { direction: "next" }); // 使用事件总线触发
+  console.log(`[aiEvents] AI回复触发媒体切换`);
+};
+
 // onPlayerMessage函数做同样修改（判断window.media状态）
 const onPlayerMessage = () => {
   const settings = deps.settings.get();
@@ -195,8 +227,8 @@ const onPlayerMessage = () => {
   if (now - settings.lastAISwitchTime < (settings.aiResponseCooldown || 3000)) return;
 
   // 触发切换（通过事件总线）
-  deps.settings.save({ lastAISwitchTime: now });
-  EventBus.emit("requestMediaPlay", { direction: "next" });
+  deps.settings.save({ lastAISwitchTime: now }); // 使用正确的保存方法
+  EventBus.emit("requestMediaPlay", { direction: "next" }); // 使用事件总线触发
   console.log(`[aiEvents] 玩家消息触发媒体切换`);
 };
 

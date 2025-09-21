@@ -42,7 +42,7 @@ export const formatTime = (seconds) => {
   const secs = Math.floor(seconds % 60)
     .toString()
     .padStart(2, "0");
-  return `${mins}:${secs}`; // 修复笔误 minsmins → mins
+  return `${mins}:${secs}`;
 };
 
 /**

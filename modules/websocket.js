@@ -2,6 +2,7 @@ import { deps } from '../core/deps.js';
 
 let websocket = null;
 let reconnectTimer = null;
+let checkServiceInterval = null; // 添加服务检查定时器
 let isManualClose = false; // 添加手动关闭标志
 
 /**
@@ -12,10 +13,11 @@ export const init = () => {
   if (!settings.serviceUrl) {
     console.warn(`[websocket] 未配置服务地址，无法初始化WebSocket`);
     // 设置一个定时器，定期检查服务地址是否配置
-    const checkInterval = setInterval(() => {
+    checkServiceInterval = setInterval(() => {
       const updatedSettings = deps.settings.get();
       if (updatedSettings.serviceUrl) {
-        clearInterval(checkInterval);
+        clearInterval(checkServiceInterval);
+        checkServiceInterval = null;
         init(); // 重新初始化
       }
     }, 5000);
@@ -84,6 +86,10 @@ export const closeWebSocket = () => {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
+  }
+  if (checkServiceInterval) {
+    clearInterval(checkServiceInterval);
+    checkServiceInterval = null;
   }
 };
 

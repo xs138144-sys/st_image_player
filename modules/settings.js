@@ -214,7 +214,8 @@ const save = () => {
   const settings = get();
   const saveFn = window.saveSettingsDebounced || saveSettingsDebounced;
 
-  window.extension_settings[EXTENSION_ID] = settings;
+  // 使用deps提供的extension_settings
+  deps.extension_settings[EXTENSION_ID] = settings;
 
   if (saveFn && typeof saveFn === "function") {
     try {
@@ -228,7 +229,7 @@ const save = () => {
 
   // localStorage备用方案
   try {
-    localStorage.setItem("extension_settings", JSON.stringify(window.extension_settings));
+    localStorage.setItem("extension_settings", JSON.stringify(deps.extension_settings));
     console.log(`[settings] localStorage保存成功`);
   } catch (e) {
     console.error(`[settings] localStorage保存失败:`, e);
@@ -237,6 +238,7 @@ const save = () => {
     }
   }
 };
+
 
 // 初始化函数
 const init = () => {

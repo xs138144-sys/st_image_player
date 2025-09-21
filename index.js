@@ -1,8 +1,5 @@
 import { deps } from "./core/deps.js";
 
-// 使用deps提供的核心功能
-const { extension_settings, saveSettingsDebounced } = deps;
-
 const EXT_ID = "st_image_player";
 
 // 需加载的模块列表（按依赖顺序排列）
@@ -132,13 +129,6 @@ const safeInit = (fn) => {
     return fn();
   } catch (error) {
     console.error(`[${EXT_ID}] 初始化失败:`, error);
-    if (window.eventSource && window.event_types && window.event_types.EXTENSION_ERROR) {
-      window.eventSource.emit(window.event_types.EXTENSION_ERROR, {
-        id: EXT_ID,
-        error: error.message,
-        stack: error.stack,
-      });
-    }
     // 确保错误不会阻止后续代码执行
     return null;
   }
@@ -146,8 +136,8 @@ const safeInit = (fn) => {
 
 const waitForSTAndInit = () => {
   // 确保扩展配置存在
-  if (!extension_settings[EXT_ID]) {
-    extension_settings[EXT_ID] = {
+  if (!deps.extension_settings[EXT_ID]) {
+    deps.extension_settings[EXT_ID] = {
       enabled: true,
       lastPlayed: null,
       volume: 0.8,
@@ -187,7 +177,7 @@ const waitForSTAndInit = () => {
     };
   } else {
     // 配置迁移
-    const settings = extension_settings[EXT_ID];
+    const settings = deps.extension_settings[EXT_ID];
     if (!settings.config_version || settings.config_version !== "1.4.2") {
       console.log(`[${EXT_ID}] 迁移配置从 ${settings.config_version || '未知'} 到 1.4.2`);
 
@@ -197,44 +187,18 @@ const waitForSTAndInit = () => {
       if (!settings.randomPlayedIndices) settings.randomPlayedIndices = [];
 
       settings.config_version = "1.4.2";
-      saveSettingsDebounced();
+      deps.saveSettingsDebounced();
     }
   }
 
-  // 检查ST是否已经就绪
-  if (window.appReady) {
+  // 检查ST是否已经就绪（使用更可靠的方法）
+  if (typeof window.jQuery !== 'undefined' && window.jQuery.fn) {
     return safeInit(initExtension);
-  }
-
-  // 使用安全的方式获取事件类型
-  const appReadyEvent = (window.event_types && window.event_types.APP_READY) || "appReady";
-  const extensionErrorEvent = (window.event_types && window.event_types.EXTENSION_ERROR) || "extensionError";
-
-  // 检查事件源是否可用
-  if (!window.eventSource) {
-    console.warn(`[${EXT_ID}] 事件源不可用，直接初始化`);
-    return safeInit(initExtension);
-  }
-
-  const readyHandler = () => {
-    window.eventSource.removeListener(appReadyEvent, readyHandler);
-    safeInit(initExtension);
-  };
-
-  // 添加事件监听器
-  if (typeof window.eventSource.on === "function") {
-    window.eventSource.on(appReadyEvent, readyHandler);
-  } else {
-    console.warn(`[${EXT_ID}] 事件源不支持on方法，直接初始化`);
-    safeInit(initExtension);
   }
 
   // 设置超时，防止永远等待
   setTimeout(() => {
-    if (!window.appReady) {
-      console.warn(`[${EXT_ID}] 等待ST就绪超时，尝试直接初始化`);
-      safeInit(initExtension);
-    }
+    safeInit(initExtension);
   }, 15000);
 };
 

@@ -195,8 +195,6 @@ const updateProgress = () => {
     }
   }
 };
-;
-
 /**
  * 清理媒体播放器模块
  */
@@ -227,7 +225,7 @@ export const cleanup = () => {
     // 停止视频播放
     const $ = deps.jQuery;
     if ($) {
-      const video = $(winSelector).find(".st-player-video")[0];
+      const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
       if (video) video.pause();
     }
 
@@ -561,6 +559,7 @@ export const showMedia = async (direction) => {
     save();
     startAutoSwitch(); // 启动自动切换
 
+
   } catch (e) {
     console.error(`[mediaPlayer] 显示媒体失败:`, e);
     // 使用安全的toastr调用
@@ -581,7 +580,7 @@ const startAutoSwitch = () => {
 
   clearTimeout(switchTimer);
   switchTimer = setTimeout(() => {
-    const video = $(winSelector).find(".st-player-video")[0];
+    const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
     if (!video || !video.loop) {
       showMedia("next");
     } else {
@@ -598,7 +597,7 @@ export const startPlayback = () => {
   settings.isPlaying = true;
   save();
   startAutoSwitch();
-  const video = $(winSelector).find(".st-player-video")[0];
+  const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
   if (video) video.play();
 };
 
@@ -610,7 +609,7 @@ export const stopPlayback = () => {
   settings.isPlaying = false;
   save();
   clearTimeout(switchTimer);
-  const video = $(winSelector).find(".st-player-video")[0];
+  const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
   if (video) video.pause();
 };
 
@@ -619,7 +618,7 @@ export const stopPlayback = () => {
  */
 const updateVolume = (volume) => {
   const $ = deps.jQuery;
-  const video = $(winSelector).find(".st-player-video")[0];
+  const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
   if (video) {
     video.volume = volume;
     // 更新设置

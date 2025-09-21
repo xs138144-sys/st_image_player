@@ -206,21 +206,26 @@ const refreshMediaList = async (filterType) => {
   lastMediaRequestTime = now;
   // 拉取最新列表
   window.mediaList = await fetchMediaList(targetFilter);
+
+  // 确保设置对象中的属性存在
+  if (!settings.randomMediaList) settings.randomMediaList = [];
+  if (!settings.randomPlayedIndices) settings.randomPlayedIndices = [];
+
   settings.randomMediaList = [...window.mediaList];
   const oldLength = window.oldMediaListLength || 0;
 
   // 列表状态处理
   if (window.mediaList.length === 0) {
     window.currentMediaIndex = 0;
-    settings.randomPlayedIndices = [];
-    settings.currentRandomIndex = -1;
+    if (settings.randomPlayedIndices) settings.randomPlayedIndices = [];
+    if (settings.currentRandomIndex !== undefined) settings.currentRandomIndex = -1;
     if (deps.toastr && typeof deps.toastr.warning === "function") {
       deps.toastr.warning(`当前筛选无可用${targetFilter}媒体，请检查目录或筛选条件`);
     }
   } else if (window.mediaList.length !== oldLength) {
     window.currentMediaIndex = 0;
-    settings.randomPlayedIndices = [];
-    settings.currentRandomIndex = -1;
+    if (settings.randomPlayedIndices) settings.randomPlayedIndices = [];
+    if (settings.currentRandomIndex !== undefined) settings.currentRandomIndex = -1;
   }
 
   window.oldMediaListLength = window.mediaList.length;
@@ -234,7 +239,6 @@ const refreshMediaList = async (filterType) => {
   console.log(`[api] 媒体列表刷新完成，共${window.mediaList.length}个媒体`);
   return window.mediaList;
 };
-
 // 启动服务状态轮询
 const startServicePolling = () => {
   const settings = deps.settings.get();
