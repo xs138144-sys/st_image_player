@@ -78,6 +78,9 @@ export const init = () => {
   console.log(`[mediaPlayer] 播放模块初始化`);
 
   try {
+    // 初始化window.mediaPlayerListeners
+    window.mediaPlayerListeners = window.mediaPlayerListeners || [];
+
     // 初始化window.media状态容器
     window.media = window.media || {
       // 媒体元数据
@@ -105,7 +108,6 @@ export const init = () => {
       ...window.mediaPlayerListeners,
       ...aiListeners
     ];
-
 
 
 

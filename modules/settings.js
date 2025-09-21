@@ -1,3 +1,4 @@
+// settings.js 修复版本
 import { deps } from "../core/deps.js";
 
 // 使用deps提供的核心功能
@@ -44,7 +45,7 @@ if (!extension_settings[EXTENSION_ID]) {
     websocket_timeout: 10000,
     transitionEffect: "fade",
     randomPlayedIndices: [],
-    config_version: CONFIG_VERSION
+    config_version: CONFIG_VERSION,
     aiDetectEnabled: true,
     playerDetectEnabled: true,
     preloadImages: true,
@@ -64,7 +65,7 @@ const migrateSettings = () => {
   const settings = get();
 
   // 如果是旧版本，执行迁移
-  if (settings.config_version !== CONFIG_VERSION) {
+  if (!settings.config_version || settings.config_version !== CONFIG_VERSION) {
     console.log(`[settings] 迁移配置从 ${settings.config_version || '未知版本'} 到 ${CONFIG_VERSION}`);
 
     // 版本迁移逻辑
@@ -118,7 +119,7 @@ const migrateSettings = () => {
       settings.config_version = "1.4.0";
     }
 
-    if (settings.config_version === "1.4.0") {
+    if (settings.config_version === "1.4.0" || settings.config_version === "1.4.1") {
       // 1.4.0 -> 1.4.2 迁移：确保所有支持的格式被添加
       const imageExts = settings.mediaConfig.image_extensions || [];
       const requiredImageExts = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".apng"];
@@ -127,34 +128,29 @@ const migrateSettings = () => {
       });
       settings.mediaConfig.image_extensions = imageExts;
 
+      const videoExts = settings.mediaConfig.video_extensions || [];
+      const requiredVideoExts = [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"];
+      requiredVideoExts.forEach(ext => {
+        if (!videoExts.includes(ext)) videoExts.push(ext);
+      });
+      settings.mediaConfig.video_extensions = videoExts;
+
+      // 确保自动切换相关配置存在
       if (settings.autoSwitchMode === undefined) {
-        settings.autoSwitchMode = "detect"; // 默认检测模式
+        settings.autoSwitchMode = "detect";
       }
-      // 补充自动切换触发配置
       if (settings.switchTriggers === undefined) {
         settings.switchTriggers = {
           aiResponse: true,
           userMessage: true
         };
       }
-
-      if (settings.config_version === "1.4.2") {
-        // 确保自动切换相关配置存在
-        if (settings.autoSwitchMode === undefined) {
-          settings.autoSwitchMode = "detect";
-        }
-        if (settings.switchTriggers === undefined) {
-          settings.switchTriggers = {
-            aiResponse: true,
-            userMessage: true
-          };
-        }
-        // 补充窗口锁定状态配置
-        if (settings.isLocked === undefined) {
-          settings.isLocked = false;
-        }
+      // 补充窗口锁定状态配置
+      if (settings.isLocked === undefined) {
+        settings.isLocked = false;
       }
 
+      // 补充AI检测相关配置
       if (settings.aiDetectEnabled === undefined) settings.aiDetectEnabled = true;
       if (settings.playerDetectEnabled === undefined) settings.playerDetectEnabled = true;
       if (settings.preloadImages === undefined) settings.preloadImages = true;
@@ -162,30 +158,16 @@ const migrateSettings = () => {
       if (settings.aiResponseCooldown === undefined) settings.aiResponseCooldown = 3000;
       if (settings.switchInterval === undefined) settings.switchInterval = 5000;
       if (settings.lastSwitchTime === undefined) settings.lastSwitchTime = 0;
+
+      settings.config_version = CONFIG_VERSION;
     }
 
-    settings.config_version = CONFIG_VERSION;
+    // 保存迁移后的配置
+    save();
+    if (deps.toastr && typeof deps.toastr.info === "function") {
+      deps.toastr.info(`媒体播放器配置已更新到最新版本`);
+    }
   }
-
-
-  const videoExts = settings.mediaConfig.video_extensions || [];
-  const requiredVideoExts = [".webm", ".mp4", ".ogv", ".mov", ".avi", ".mkv"];
-  requiredVideoExts.forEach(ext => {
-    if (!videoExts.includes(ext)) videoExts.push(ext);
-  });
-  settings.mediaConfig.video_extensions = videoExts;
-
-  settings.config_version = CONFIG_VERSION;
-}
-
-settings.config_version = CONFIG_VERSION;
-}
-
-// 保存迁移后的配置
-save();
-if (deps.toastr && typeof deps.toastr.info === "function") {
-  deps.toastr.info(`媒体播放器配置已更新到最新版本`);
-}
 };
 
 // 清理函数
@@ -238,7 +220,6 @@ const save = () => {
     }
   }
 };
-
 
 // 初始化函数
 const init = () => {
