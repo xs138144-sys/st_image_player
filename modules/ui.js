@@ -93,33 +93,29 @@ export const init = () => {
         return;
       }
 
-      // 等待DOM加载完成
-      $(document).ready(() => {
-        console.log('[UI] DOM就绪，开始创建元素');
-        // 创建扩展菜单按钮
-        createExtensionButton();
+      // 创建扩展菜单按钮（与有BUG版本完全一致，不使用document.ready）
+      createExtensionButton();
 
-        // 启用状态下创建UI
-        if (settings.masterEnabled) {
-          createPlayerWindow();
-          createSettingsPanel();
+      // 启用状态下创建UI
+      if (settings.masterEnabled) {
+        createPlayerWindow();
+        createSettingsPanel();
 
-          // 检查服务就绪后显示初始媒体
-          const statusListener = EventBus.on(
-            "serviceStatusChecked",
-            (status) => {
-              statusListener(); // 移除监听器
-              if (status.active && settings.isWindowVisible) {
-                EventBus.emit("requestShowInitialMedia");
-              }
+        // 检查服务就绪后显示初始媒体
+        const statusListener = EventBus.on(
+          "serviceStatusChecked",
+          (status) => {
+            statusListener(); // 移除监听器
+            if (status.active && settings.isWindowVisible) {
+              EventBus.emit("requestShowInitialMedia");
             }
-          );
-          EventBus.emit("requestCheckServiceStatus");
-        }
+          }
+        );
+        EventBus.emit("requestCheckServiceStatus");
+      }
 
-        uiInitialized = true;
-        console.log(`[ui] UI模块初始化完成`);
-      });
+      uiInitialized = true;
+      console.log(`[ui] UI模块初始化完成`);
     });
   } catch (e) {
     console.error(`[ui] 初始化错误:`, e);
