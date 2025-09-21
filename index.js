@@ -16,30 +16,30 @@ const MODULES = [
 // 动态加载单个模块（添加重试机制）
 const loadModule = async (moduleName, options = {}) => {
   const { maxRetries = 5, baseDelay = 1000 } = options;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[index] 加载模块: ${moduleName}`);
       const module = await import(`./modules/${moduleName}.js`);
-  
+
       // 检查模块是否有效
       if (!module || typeof module !== 'object') {
         throw new Error(`模块加载失败: ${moduleName}`);
       }
-  
+
       // 检查模块是否有init方法（支持默认导出和命名导出）
       let initFunction = module.init || module.default?.init;
       if (typeof initFunction !== "function") {
         throw new Error(`缺少init()方法`);
       }
-  
+
       // 提供默认清理函数（如果模块没有提供）
       let cleanupFunction = module.cleanup || module.default?.cleanup;
       if (typeof cleanupFunction !== "function") {
         console.warn(`[index] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
         cleanupFunction = () => { console.log(`[${moduleName}] 默认清理完成`) };
       }
-  
+
       // 创建模块对象
       const moduleObj = module.default || module;
       if (typeof moduleObj.init !== "function") {
@@ -48,14 +48,14 @@ const loadModule = async (moduleName, options = {}) => {
       if (typeof moduleObj.cleanup !== "function") {
         moduleObj.cleanup = cleanupFunction;
       }
-  
+
       // 初始化模块
       await moduleObj.init();
       console.log(`[index] 模块加载完成: ${moduleName}`);
-  
+
       // 注册模块到依赖管理器
       deps.registerModule(moduleName, moduleObj);
-  
+
       // 注册模块清理事件
       const removeCleanupListener = deps.EventBus.on(
         "extensionDisable",
@@ -63,7 +63,7 @@ const loadModule = async (moduleName, options = {}) => {
       );
       window.moduleCleanupListeners = window.moduleCleanupListeners || [];
       window.moduleCleanupListeners.push(removeCleanupListener);
-  
+
       return true;
     } catch (e) {
       if (attempt < maxRetries) {
@@ -71,7 +71,8 @@ const loadModule = async (moduleName, options = {}) => {
         console.warn(`[index] ${moduleName}加载失败，${delay}ms后重试 (${attempt + 1}/${maxRetries})`);
         await new Promise(r => setTimeout(r, delay));
       } else {
-        throw new Error(`[index] ${moduleName}加载失败，已达最大重试次数`);
+        console.error(`[index] ${moduleName}加载失败，已达最大重试次数`, e);
+        return false;
       }
     }
   }
@@ -192,14 +193,24 @@ const waitForSTAndInit = () => {
     }
   }
 
+  // 防止重复初始化
+  if (window[EXT_ID + '_initialized']) {
+    console.log(`[${EXT_ID}] 扩展已经初始化，跳过重复初始化`);
+    return;
+  }
+
   // 检查ST是否已经就绪（使用更可靠的方法）
   if (typeof window.jQuery !== 'undefined' && window.jQuery.fn) {
+    window[EXT_ID + '_initialized'] = true;
     return safeInit(initExtension);
   }
 
   // 设置超时，防止永远等待
   setTimeout(() => {
-    safeInit(initExtension);
+    if (!window[EXT_ID + '_initialized']) {
+      window[EXT_ID + '_initialized'] = true;
+      safeInit(initExtension);
+    }
   }, 15000);
 };
 
@@ -225,4 +236,5 @@ window.addEventListener("beforeunload", () => {
     });
   }
   console.log(`[index] 扩展资源已清理`);
+  window[EXT_ID + '_initialized'] = false;
 });

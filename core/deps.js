@@ -1,4 +1,4 @@
-// deps.js
+// deps.js - 依赖管理模块
 import { EventBus } from './eventBus.js';
 
 // 创建 EventBus 实例
@@ -59,8 +59,48 @@ const deps = {
     const module = this.modules[name];
     if (!module) {
       console.warn(`[deps] 模块未找到: ${name}`);
+      return this.createFallbackModule(name);
     }
-    return module || null;
+    return module;
+  },
+
+  /**
+   * 创建模块回退方案
+   */
+  createFallbackModule: function (name) {
+    console.warn(`[deps] 为模块 ${name} 创建回退方案`);
+
+    const fallbacks = {
+      utils: {
+        init: () => console.log(`[${name}] 使用回退初始化`),
+        cleanup: () => console.log(`[${name}] 使用回退清理`),
+        getSafeToastr: () => ({
+          success: (msg) => console.log(`SUCCESS: ${msg}`),
+          info: (msg) => console.info(`INFO: ${msg}`),
+          warning: (msg) => console.warn(`WARNING: ${msg}`),
+          error: (msg) => console.error(`ERROR: ${msg}`),
+        })
+      },
+      settings: {
+        init: () => console.log(`[${name}] 使用回退初始化`),
+        cleanup: () => console.log(`[${name}] 使用回退清理`),
+        get: () => (window.extension_settings?.st_image_player || {}),
+        save: () => console.warn('settings.save不可用'),
+        migrateSettings: () => console.warn('settings.migrateSettings不可用')
+      },
+      api: {
+        init: () => console.log(`[${name}] 使用回退初始化`),
+        cleanup: () => console.log(`[${name}] 使用回退清理`),
+        checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }),
+        fetchMediaList: () => Promise.resolve([]),
+        refreshMediaList: () => Promise.resolve([])
+      }
+    };
+
+    return fallbacks[name] || {
+      init: () => console.log(`[${name}] 使用默认回退初始化`),
+      cleanup: () => console.log(`[${name}] 使用默认回退清理`)
+    };
   },
 
   /**
@@ -74,7 +114,8 @@ const deps = {
       }
 
       // 然后尝试通过utils模块获取
-      const safeToastr = this.utils?.getSafeToastr ? this.utils.getSafeToastr() : null;
+      const utilsModule = this.getModule('utils');
+      const safeToastr = utilsModule?.getSafeToastr ? utilsModule.getSafeToastr() : null;
       if (safeToastr) return safeToastr;
     } catch (e) {
       console.error('[deps] 获取toastr失败', e);
@@ -93,34 +134,18 @@ const deps = {
    * 快捷访问常用模块
    */
   get utils() {
-    return this.getModule('utils') || {};
+    return this.getModule('utils');
   },
 
   // 修复设置获取方法
   get settings() {
     const settingsModule = this.getModule('settings');
-    if (!settingsModule || typeof settingsModule.get !== 'function') {
-      console.warn('[deps] settings模块未正确加载，使用回退方案');
-      return {
-        get: () => ({}), // 返回空对象的回退函数
-        save: () => console.warn('settings.save不可用'),
-        migrateSettings: () => console.warn('settings.migrateSettings不可用') // 修复拼写错误
-      };
-    }
     return settingsModule;
   },
 
   // 修复API获取方法
   get api() {
     const apiModule = this.getModule('api');
-    if (!apiModule || typeof apiModule.checkServiceStatus !== 'function') { // 修复拼写错误
-      console.warn('[deps] api模块未正确加载，使用回退方案');
-      return {
-        checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }), // 修复拼写错误
-        fetchMediaList: () => Promise.resolve([]),
-        refreshMediaList: () => Promise.resolve([])
-      };
-    }
     return apiModule;
   },
 
@@ -143,59 +168,8 @@ const deps = {
    * 获取SillyTavern的设置保存函数
    */
   get saveSettingsDebounced() {
-    // 强化设置保存机制
-    const saveSettingsDebounced = window.saveSettingsDebounced || (() => {
-      let timeout;
-      return () => {
-        if (timeout) clearTimeout(timeout);
-        timeout = setTimeout(() => {
-          try {
-            const settings = JSON.stringify(window.extension_settings || {});
-            localStorage.setItem('extension_settings', settings);
-            // 新增TAURI文件系统支持
-            if (typeof window.__TAURI__ !== 'undefined') {
-              window.__TAURI__.fs.writeTextFile('extension_settings.json', settings);
-            }
-          } catch (e) {
-            console.error('跨平台保存失败:', e);
-          }
-        }, 1500);
-      };
-    })();
+    return window.saveSettingsDebounced;
   }
 };
 
 export { deps };
-
-// 新增版本校验
-const MIN_MODULE_VERSION = {
-  settings: '1.4.2',
-  utils: '1.2.0'
-};
-
-function registerModule(name, module) {
-  if (MIN_MODULE_VERSION[name] && 
-    semver.lt(module.version, MIN_MODULE_VERSION[name])) {
-    throw new Error(`模块 ${name} 版本过低`);
-  }
-  this.modules[name] = module;
-  console.log(`[deps] 模块已注册: ${name}`);
-}
-
-// 新增模块初始化状态检查
-const initStatus = {
-  utils: false,
-  settings: false,
-  eventBus: true
-};
-
-// 模块加载顺序验证
-if (!initStatus.utils && initStatus.settings) {
-  throw new Error('settings模块必须在utils之后初始化');
-}
-
-// 添加命名空间隔离
-window._ST_EXTENSION = {
-  // 移除saveSettingsDebounced实现
-  // 该函数已迁移至settings模块
-};

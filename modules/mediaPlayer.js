@@ -230,11 +230,11 @@ export const cleanup = () => {
       progressUpdateInterval = null;
     }
 
-    // 清除重连定时器
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
+    // 清除重连定时器 - 移除对reconnectTimer的清理，因为它是websocket.js中的变量
+    // if (reconnectTimer) {
+    //   clearTimeout(reconnectTimer);
+    //   reconnectTimer = null;
+    // }
 
     // 取消事件监听
     if (window.mediaPlayerListeners) {
@@ -261,7 +261,7 @@ export const cleanup = () => {
 
     // 释放预加载资源
     preloadedMedia = null;
-    reconnectAttempts = 0;
+    retryCount = 0; // 重置重试计数
 
     console.log(`[mediaPlayer] 资源清理完成`);
   } catch (e) {
@@ -598,7 +598,6 @@ export const showMedia = async (direction) => {
     save();
     startAutoSwitch(); // 启动自动切换
 
-
   } catch (e) {
     console.error(`[mediaPlayer] 显示媒体失败:`, e);
     // 使用安全的toastr调用
@@ -607,28 +606,29 @@ export const showMedia = async (direction) => {
     }
     settings.isMediaLoading = false;
     save();
-  }
-  if (retryCount < MAX_RETRIES) {
-    retryCount++;
-    console.log(`[mediaPlayer] 加载失败，重试 ${retryCount}/${MAX_RETRIES}`);
 
-    // 延迟后重试
-    setTimeout(() => {
-      showMedia(direction);
-    }, 1000 * retryCount); // 指数退避
-  } else {
-    // 达到最大重试次数
-    console.error(`[mediaPlayer] 媒体加载失败，达到最大重试次数`);
-    if (deps.toastr && typeof deps.toastr.error === "function") {
-      deps.toastr.error(`媒体加载失败: ${e.message}`);
+    // 重试逻辑
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      console.log(`[mediaPlayer] 加载失败，重试 ${retryCount}/${MAX_RETRIES}`);
+
+      // 延迟后重试
+      setTimeout(() => {
+        showMedia(direction);
+      }, 1000 * retryCount); // 指数退避
+    } else {
+      // 达到最大重试次数
+      console.error(`[mediaPlayer] 媒体加载失败，达到最大重试次数`);
+      if (deps.toastr && typeof deps.toastr.error === "function") {
+        deps.toastr.error(`媒体加载失败: ${e.message}`);
+      }
+
+      retryCount = 0;
+      settings.isMediaLoading = false;
+      save();
     }
-
-    retryCount = 0;
-    settings.isMediaLoading = false;
-    save();
   }
-}
-
+};
 
 /**
  * 开始自动切换

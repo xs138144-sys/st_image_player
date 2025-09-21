@@ -3,7 +3,7 @@ import { deps } from "../core/deps.js";
 const {
   EventBus,
   toastr,
-  settings: { get, save, disableExtension },
+  settings: { get, save },
   utils,
 } = deps;
 const {
@@ -18,12 +18,23 @@ const EXTENSION_ID = "st_image_player";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings-panel";
 
+// 全局变量用于跟踪UI状态
+let uiInitialized = false;
+let playerWindowCreated = false;
+let settingsPanelCreated = false;
+
 /**
  * 初始化UI模块（创建界面+绑定事件）
  */
 export const init = () => {
+  if (uiInitialized) {
+    console.log(`[ui] UI模块已经初始化，跳过重复初始化`);
+    return;
+  }
+
   try {
     const settings = get();
+    console.log(`[ui] 开始初始化UI模块`);
 
     // 注册事件监听（接收外部UI操作请求）
     const removeCreateWindowListener = EventBus.on(
@@ -49,20 +60,7 @@ export const init = () => {
 
     // 新增：监听媒体状态更新以同步UI
     const removeMediaStateListener = EventBus.on("mediaStateUpdated", (media) => {
-      const $ = deps.jQuery;
-      if (!$) return;
-
-      // 更新媒体信息显示
-      const infoElement = $(`#${PLAYER_WINDOW_ID} .image-info`);
-      if (infoElement.length) {
-        infoElement.text(`${media.meta.name} (${media.meta.type} · ${media.meta.size})`);
-      }
-
-      // 更新视频控制栏时间显示
-      if (media.meta.type === "video") {
-        $(`#${PLAYER_WINDOW_ID} .total-time`).text(formatTime(media.state.duration));
-        $(`#${PLAYER_WINDOW_ID} .current-time`).text(formatTime(media.state.currentTime));
-      }
+      updateMediaInfo(media);
     });
 
     // 保存取消监听方法（包含所有事件）
@@ -84,14 +82,15 @@ export const init = () => {
 
       // 等待DOM加载完成
       $(document).ready(() => {
+        console.log('[UI] DOM就绪，开始创建元素');
         // 创建扩展菜单按钮
         createExtensionButton();
-      
+
         // 启用状态下创建UI
         if (settings.masterEnabled) {
           createPlayerWindow();
           createSettingsPanel();
-      
+
           // 检查服务就绪后显示初始媒体
           const statusListener = EventBus.on(
             "serviceStatusChecked",
@@ -104,13 +103,13 @@ export const init = () => {
           );
           EventBus.emit("requestCheckServiceStatus");
         }
+
+        uiInitialized = true;
+        console.log(`[ui] UI模块初始化完成`);
       });
     });
-
-    console.log(`[ui] 初始化完成，已注册事件监听`);
   } catch (e) {
     console.error(`[ui] 初始化错误:`, e);
-    // 使用安全的toastr调用
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`[ui] 初始化失败: ${e.message}`);
     }
@@ -142,10 +141,13 @@ export const cleanup = () => {
       window.uiEventListeners = null;
     }
 
+    uiInitialized = false;
+    playerWindowCreated = false;
+    settingsPanelCreated = false;
+
     console.log(`[ui] 资源清理完成`);
   } catch (e) {
     console.error(`[ui] 清理错误:`, e);
-    // 使用安全的toastr调用
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`[ui] 清理失败: ${e.message}`);
     }
@@ -202,83 +204,177 @@ const createExtensionButton = () => {
       transform: 'translate(-50%, -50%)'
     });
   });
-
-  $(`#extensions-settings-button`).trigger("click");
-  $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
-    behavior: "smooth",
-    block: "center",
-  });
 };
 
 /**
  * 创建播放器窗口
  */
 export const createPlayerWindow = async () => {
+  if (playerWindowCreated) {
+    console.log(`[ui] 播放器窗口已存在，跳过创建`);
+    return;
+  }
+
   const settings = get();
+  const $ = deps.jQuery;
 
-  safeJQuery(() => {
-    const $ = deps.jQuery;
-    if (!$) {
-      console.error('[UI] jQuery未加载，当前可用依赖:', Object.keys(deps));
-      toastr.error("关键依赖未加载，请刷新页面重试");
-      
-      // 添加备用初始化逻辑
-      setTimeout(() => {
-        if (deps.jQuery) {
-          console.log('[UI] 检测到jQuery已延迟加载，重新初始化');
-          init();
-        }
-      }, 3000);
-      return;
-    }
+  if (!$ || $(`#${PLAYER_WINDOW_ID}`).length) {
+    console.log(`[ui] jQuery未加载或播放器窗口已存在`);
+    return;
+  }
 
-    // 添加初始化状态追踪
-    console.log('[UI] 开始初始化，当前扩展菜单容器:', $('#extensionsMenu').length);
-    
-    // 等待DOM加载完成
-    $(document).ready(() => {
-      console.log('[UI] DOM就绪，开始创建元素');
-      // 创建扩展菜单按钮
-      createExtensionButton();
+  try {
+    const html = `
+      <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? 'no-border' : ''}">
+        <div class="image-player-header">
+          <div class="title">
+            <i class="fa-solid fa-film"></i>
+            <span>媒体播放器</span>
+          </div>
+          <div class="window-controls">
+            <button class="toggle-info ${settings.showInfo ? 'active' : ''}" title="显示/隐藏信息">
+              <i class="fa-solid fa-info"></i>
+            </button>
+            <button class="toggle-video-controls ${settings.showVideoControls ? 'active' : ''}" title="显示/隐藏视频控制">
+              <i class="fa-solid fa-sliders"></i>
+            </button>
+            <button class="lock" title="${settings.isLocked ? '解锁' : '锁定'}">
+              <i class="fa-solid ${settings.isLocked ? 'fa-lock' : 'fa-lock-open'}"></i>
+            </button>
+            <button class="hide" title="隐藏">
+              <i class="fa-solid fa-eye-slash"></i>
+            </button>
+          </div>
+        </div>
+        <div class="image-player-body">
+          <div class="image-container">
+            <div class="loading-animation">
+              <span class="loading-spinner"></span>
+              <span>加载中...</span>
+            </div>
+            <img class="image-player-img" style="display:none;" />
+            <video class="image-player-video" style="display:none;" playsinline></video>
+            <div class="image-info" style="${settings.showInfo ? '' : 'display:none;'}"></div>
+            <div class="video-controls" style="${settings.showVideoControls ? '' : 'display:none;'}">
+              <div class="progress-container">
+                <div class="progress-bar">
+                  <div class="progress-loaded"></div>
+                  <div class="progress-played"></div>
+                  <div class="progress-handle"></div>
+                </div>
+              </div>
+              <div class="video-control-group">
+                <button class="video-control-btn play-pause">
+                  <i class="fa-solid fa-play"></i>
+                </button>
+                <button class="video-control-btn volume-btn">
+                  <i class="fa-solid fa-volume-up"></i>
+                </button>
+                <div class="volume-slider-container">
+                  <input type="range" class="volume-slider" min="0" max="1" step="0.01" value="${settings.videoVolume}" />
+                </div>
+                <button class="video-control-btn loop-btn ${settings.videoLoop ? 'active' : ''}">
+                  <i class="fa-solid fa-repeat"></i>
+                </button>
+                <div class="time-display">
+                  <span class="current-time">00:00</span> / <span class="total-time">00:00</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="image-player-controls">
+            <div class="controls-group">
+              <button class="control-btn prev" title="上一个">
+                <i class="fa-solid fa-backward-step"></i>
+              </button>
+              <button class="control-btn play-pause" title="${settings.isPlaying ? '暂停' : '播放'}">
+                <i class="fa-solid ${settings.isPlaying ? 'fa-pause' : 'fa-play'}"></i>
+              </button>
+              <button class="control-btn next" title="下一个">
+                <i class="fa-solid fa-forward-step"></i>
+              </button>
+            </div>
+            <div class="controls-group">
+              <div class="control-text">
+                ${settings.playMode === 'random' ? '随机播放' : '顺序播放'}
+              </div>
+              <button class="control-btn mode-switch" title="切换播放模式">
+                <i class="fa-solid fa-shuffle"></i>
+              </button>
+            </div>
+            <div class="controls-group">
+              <button class="control-btn switch-mode-toggle" title="切换自动切换模式">
+                <i class="fa-solid ${settings.autoSwitchMode === 'detect' ? 'fa-robot' : 'fa-clock'}"></i>
+              </button>
+            </div>
+            <div class="controls-group media-filter-group">
+              <button class="control-btn media-filter-btn ${settings.mediaFilter === 'all' ? 'active' : ''}" data-type="all" title="所有媒体">
+                <i class="fa-solid fa-layer-group"></i>
+              </button>
+              <button class="control-btn media-filter-btn ${settings.mediaFilter === 'image' ? 'active' : ''}" data-type="image" title="仅图片">
+                <i class="fa-solid fa-image"></i>
+              </button>
+              <button class="control-btn media-filter-btn ${settings.mediaFilter === 'video' ? 'active' : ''}" data-type="video" title="仅视频">
+                <i class="fa-solid fa-video"></i>
+              </button>
+            </div>
+          </div>
+          <div class="resize-handle"></div>
+        </div>
+      </div>
+    `;
 
-      // 启用状态下创建UI
-      if (settings.masterEnabled) {
-        createPlayerWindow();
-        createSettingsPanel();
+    $("body").append(html);
+    setupWindowEvents();
+    bindVideoControls();
+    bindPlayerControls();
 
-        // 检查服务就绪后显示初始媒体
-        const statusListener = EventBus.on(
-          "serviceStatusChecked",
-          (status) => {
-            statusListener(); // 移除监听器
-            if (status.active && settings.isWindowVisible) {
-              EventBus.emit("requestShowInitialMedia");
-            }
-          }
-        );
-        EventBus.emit("requestCheckServiceStatus");
-      }
+    // 设置默认尺寸
+    const $window = $(`#${PLAYER_WINDOW_ID}`);
+    $window.css({
+      width: settings.windowSize?.width || 800,
+      height: settings.windowSize?.height || 600
     });
-  });
+
+    positionWindow();
+    playerWindowCreated = true;
+
+    console.log(`[ui] 播放器窗口创建完成`);
+  } catch (e) {
+    console.error(`[ui] 创建播放器窗口失败:`, e);
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`创建播放器窗口失败: ${e.message}`);
+    }
+  }
 };
 
-$("body").append(html);
-setupWindowEvents();
+/**
+ * 更新媒体信息显示
+ */
+const updateMediaInfo = (media) => {
+  const $ = deps.jQuery;
+  if (!$) return;
 
-// 设置默认尺寸
-$window.css({
-  width: settings.windowSize?.width || 800,
-  height: settings.windowSize?.height || 600
-});
+  // 更新媒体信息显示
+  const infoElement = $(`#${PLAYER_WINDOW_ID} .image-info`);
+  if (infoElement.length && media.meta) {
+    infoElement.text(`${media.meta.name} (${media.meta.type} · ${media.meta.size})`);
+  }
 
-positionWindow();
-bindVideoControls();
-bindPlayerControls();
+  // 更新视频控制栏时间显示
+  if (media.meta && media.meta.type === "video") {
+    $(`#${PLAYER_WINDOW_ID} .total-time`).text(formatTime(media.state.duration));
+    $(`#${PLAYER_WINDOW_ID} .current-time`).text(formatTime(media.state.currentTime));
+  }
+};
 
-// 新增控制栏事件绑定
+/**
+ * 绑定播放器控制事件
+ */
 const bindPlayerControls = () => {
   const $ = deps.jQuery;
   const $win = $(`#${PLAYER_WINDOW_ID}`);
+  if (!$win.length) return;
 
   // 播放/暂停按钮
   $win.find(".play-pause").on("click", () => {
@@ -318,23 +414,29 @@ const bindPlayerControls = () => {
 
 // 修复后的 createSettingsPanel 函数
 export const createSettingsPanel = async () => {
-  const settings = deps.settings.get();
+  if (settingsPanelCreated) {
+    console.log(`[ui] 设置面板已存在，跳过创建`);
+    return;
+  }
+
+  const settings = get();
   const $ = deps.jQuery;
   if (!$ || !settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
 
-  // 获取服务状态
-  const serviceStatus = await new Promise((resolve) => {
-    const removeListener = EventBus.on("serviceStatusChecked", (status) => {
-      removeListener();
-      resolve(status);
+  try {
+    // 获取服务状态
+    const serviceStatus = await new Promise((resolve) => {
+      const removeListener = EventBus.on("serviceStatusChecked", (status) => {
+        removeListener();
+        resolve(status);
+      });
+      EventBus.emit("requestCheckServiceStatus");
     });
-    EventBus.emit("requestCheckServiceStatus");
-  });
 
-  const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
-  const serviceDir = serviceStatus.directory || settings.serviceDirectory || "未设置";
+    const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
+    const serviceDir = serviceStatus.directory || settings.serviceDirectory || "未设置";
 
-  const html = `
+    const html = `
     <div id="${SETTINGS_PANEL_ID}" class="extension_settings inline-drawer">
       <div class="inline-drawer-toggle inline-drawer-header">
         <b><i class="fa-solid fa-cog"></i> ${EXTENSION_NAME}</b>
@@ -559,10 +661,17 @@ export const createSettingsPanel = async () => {
     </div>
   `;
 
-  $("#extensions_settings").append(html);
-  setupSettingsEvents();
+    $("#extensions_settings").append(html);
+    setupSettingsEvents();
+    settingsPanelCreated = true;
 
-  console.log(`[ui] 设置面板创建完成`);
+    console.log(`[ui] 设置面板创建完成`);
+  } catch (e) {
+    console.error(`[ui] 创建设置面板失败:`, e);
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error(`创建设置面板失败: ${e.message}`);
+    }
+  }
 };
 
 // 设置面板事件绑定

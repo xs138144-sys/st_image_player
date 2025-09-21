@@ -2,7 +2,7 @@
 import { deps } from "../core/deps.js";
 
 // 使用deps提供的核心功能
-const { extension_settings, saveSettingsDebounced } = deps;
+const { extension_settings, saveSettingsDebounced, EventBus } = deps; // 导入EventBus
 
 const EXTENSION_ID = "st_image_player";
 const CONFIG_VERSION = "1.4.2";
@@ -203,8 +203,8 @@ const update = (key, value) => {
 
   extension_settings[EXTENSION_ID] = settings;
 
-  // 触发设置更新事件
-  EventBus.emit("settingsUpdated", settings);
+  // 触发设置更新事件 - 使用deps.EventBus
+  deps.EventBus.emit("settingsUpdated", settings);
 
   return save();
 };

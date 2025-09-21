@@ -1,8 +1,5 @@
 import { deps } from "../core/deps.js";
 
-// 移除这行，因为 jQuery 可能还未加载
-// const { jQuery: $ } = deps;
-
 /**
  * 初始化工具函数
  */
@@ -48,13 +45,13 @@ export const formatTime = (seconds) => {
 /**
  * 调整视频控制栏布局
  */
-// modules/utils.js 补充调整逻辑
 export const adjustVideoControlsLayout = (win) => {
   const settings = deps.settings.get();
   const $ = deps.jQuery;
   if (!$) return;
 
   const $controls = win ? win.find(".video-controls") : $(`#st-image-player-window .video-controls`);
+  if (!$controls.length) return;
 
   if (!settings.showVideoControls) {
     $controls.hide();
@@ -101,29 +98,29 @@ export const getSafeGlobal = (name, defaultValue) => {
 /**
  * 检查目录是否有效
  */
-// 改进后的Electron环境检测
-const isElectron = !!window.require?.('electron');
-
-// 更新目录有效性检查
 export const isDirectoryValid = (path) => {
   if (!path) return false;
-  
+
   try {
+    // 检查是否在Electron环境中
+    const isElectron = typeof process !== 'undefined' &&
+      process.versions &&
+      process.versions.electron;
+
     if (!isElectron) {
-      deps.toastr.error('目录检查仅支持Electron桌面版');
+      console.warn('目录检查仅支持Electron桌面版');
       return false;
     }
-    
+
     const fs = window.require('fs');
-    return fs.existsSync(path) 
+    return fs.existsSync(path)
       && fs.statSync(path).isDirectory()
       && fs.accessSync(path, fs.constants.R_OK);
   } catch (e) {
     console.error('目录检查失败:', e);
-    deps.toastr.error(`目录检查错误: ${e.message}`);
     return false;
   }
-}
+};
 
 /**
  * 安全等待jQuery就绪
@@ -135,16 +132,19 @@ export const safeJQuery = (callback) => {
   }
 
   let retry = 0;
+  const maxRetries = 20;
   const interval = setInterval(() => {
-    if (typeof window.jQuery !== "undefined" || retry > 20) {
+    if (typeof window.jQuery !== "undefined" || retry >= maxRetries) {
       clearInterval(interval);
-      if (typeof window.jQuery !== "undefined") callback();
-      else console.error("jQuery 20秒内未就绪，扩展无法运行");
+      if (typeof window.jQuery !== "undefined") {
+        callback();
+      } else {
+        console.error("jQuery 10秒内未就绪，扩展无法运行");
+      }
     }
     retry++;
   }, 500);
 };
-// 在 utils.js 文件末尾添加以下函数
 
 /**
  * 注册模块清理函数
@@ -176,6 +176,50 @@ export const registerModuleCleanup = (moduleId, cleanupFn) => {
 
   console.log(`[utils] 已注册清理函数: ${moduleId}`);
 };
+
+/**
+ * 安全的防抖函数
+ */
+export const safeDebounce = (fn, delay) => {
+  let timer;
+  return (...args) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+};
+
+/**
+ * 生成唯一ID
+ */
+export const generateId = (prefix = '') => {
+  return prefix + Math.random().toString(36).substring(2, 11);
+};
+
+/**
+ * 深度合并对象
+ */
+export const deepMerge = (target, source) => {
+  if (typeof target !== 'object' || target === null) {
+    return source;
+  }
+
+  if (typeof source !== 'object' || source === null) {
+    return target;
+  }
+
+  const output = { ...target };
+
+  Object.keys(source).forEach(key => {
+    if (source[key] instanceof Object && key in target) {
+      output[key] = deepMerge(target[key], source[key]);
+    } else {
+      output[key] = source[key];
+    }
+  });
+
+  return output;
+};
+
 // 默认导出所有工具函数
 export default {
   init,
@@ -187,13 +231,8 @@ export default {
   getSafeGlobal,
   isDirectoryValid,
   safeJQuery,
-  registerModuleCleanup
-};
-
-export const safeDebounce = (fn, delay) => {
-  let timer;
-  return (...args) => {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
+  registerModuleCleanup,
+  safeDebounce,
+  generateId,
+  deepMerge
 };

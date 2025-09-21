@@ -22,6 +22,10 @@
     cursor: default;
 }
 
+.image-player-window.hidden {
+    display: none !important;
+}
+
 /* ==================== 标题栏样式 ==================== */
 .image-player-header {
     display: flex;
@@ -217,6 +221,16 @@
     background: rgba(67, 181, 129, 0.7);
 }
 
+.control-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.control-btn:disabled:hover {
+    background: rgba(114, 137, 218, 0.3);
+    transform: none;
+}
+
 .control-text {
     text-align: center;
     color: #a0a0a0;
@@ -322,6 +336,12 @@
 .menu-button:hover {
     background: linear-gradient(to right, #7280db, #8390e5);
     transform: translateY(-1px);
+}
+
+.menu-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 /* ==================== 状态指示器 ==================== */
@@ -693,4 +713,62 @@
 
 .flexGap5 {
     gap: 5px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .image-player-window {
+        max-width: 90vw;
+        max-height: 80vh;
+    }
+
+    .image-player-controls {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 6px;
+    }
+
+    .controls-group {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .settings-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .settings-row label {
+        min-width: auto;
+        margin-bottom: 4px;
+    }
+
+    .settings-row input[type="text"],
+    .settings-row input[type="number"],
+    .settings-row select {
+        min-width: 100%;
+        width: 100%;
+    }
+}
+
+/* 加载动画 */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #7289da;
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 8px;
 }

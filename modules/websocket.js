@@ -174,25 +174,3 @@ export const getStatus = () => {
     reconnectAttempts: reconnectAttempts
   };
 };
-
-// 优化后的重连机制
-const RECONNECT_CONFIG = {
-  baseDelay: 2000,
-  maxRetries: 5,
-  backoffFactor: 1.5
-};
-
-function reconnect() {
-  if (reconnectAttempts >= RECONNECT_CONFIG.maxRetries) {
-    console.warn('[websocket] 超过最大重试次数');
-    return;
-  }
-  
-  const delay = RECONNECT_CONFIG.baseDelay * Math.pow(RECONNECT_CONFIG.backoffFactor, reconnectAttempts);
-  console.log(`[websocket] ${delay.toFixed(0)}ms后第${reconnectAttempts + 1}次重试`);
-  
-  reconnectTimer = setTimeout(() => {
-    initWebSocket();
-    reconnectAttempts++;
-  }, delay);
-}

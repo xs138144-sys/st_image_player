@@ -4,6 +4,14 @@ const MEDIA_REQUEST_THROTTLE = 3000;
 let lastMediaRequestTime = 0;
 let pollingTimer = null;
 
+// 模块内部状态
+let mediaList = [];
+let currentMediaIndex = 0;
+let oldMediaListLength = 0;
+
+/**
+ * 验证目录有效性
+ */
 const validateDirectory = async (directoryPath) => {
   const settings = deps.settings.get();
 
@@ -13,26 +21,31 @@ const validateDirectory = async (directoryPath) => {
   }
 
   try {
-    const res = await fetch(`${settings.serviceUrl}/validate-directory`, {
+    const response = await fetch(`${settings.serviceUrl}/validate-directory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: directoryPath }),
+      signal: AbortSignal.timeout(10000) // 10秒超时
     });
 
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP ${res.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
     }
 
-    return await res.json();
-  } catch (e) {
-    console.error(`[api] 目录验证失败:`, e);
-    return { valid: false, error: e.message };
+    return await response.json();
+  } catch (error) {
+    console.error(`[api] 目录验证失败:`, error);
+    return {
+      valid: false,
+      error: error.name === 'AbortError' ? '请求超时' : error.message
+    };
   }
 };
 
-
-// 检查服务状态
+/**
+ * 检查服务状态
+ */
 const checkServiceStatus = async () => {
   const settings = deps.settings.get();
   if (!settings.serviceUrl) {
@@ -41,9 +54,15 @@ const checkServiceStatus = async () => {
   }
 
   try {
-    const res = await fetch(`${settings.serviceUrl}/status`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const response = await fetch(`${settings.serviceUrl}/status`, {
+      signal: AbortSignal.timeout(8000) // 8秒超时
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
     return {
       active: data.active,
       observerActive: data.observer_active || false,
@@ -54,13 +73,18 @@ const checkServiceStatus = async () => {
       mediaConfig: data.media_config || {},
       error: null,
     };
-  } catch (e) {
-    console.error(`[api] 服务检查失败:`, e);
-    return { active: false, error: e.message };
+  } catch (error) {
+    console.error(`[api] 服务检查失败:`, error);
+    return {
+      active: false,
+      error: error.name === 'AbortError' ? '请求超时' : error.message
+    };
   }
 };
 
-// 获取媒体列表
+/**
+ * 获取媒体列表
+ */
 const fetchMediaList = async (filterType = "all") => {
   const settings = deps.settings.get();
   if (!settings.serviceUrl) {
@@ -69,12 +93,18 @@ const fetchMediaList = async (filterType = "all") => {
   }
 
   try {
-    const res = await fetch(`${settings.serviceUrl}/media?type=${filterType}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const response = await fetch(`${settings.serviceUrl}/media?type=${filterType}`, {
+      signal: AbortSignal.timeout(15000) // 15秒超时
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
     return data.media || [];
-  } catch (e) {
-    console.error(`[api] 获取媒体列表失败:`, e);
+  } catch (error) {
+    console.error(`[api] 获取媒体列表失败:`, error);
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error("获取媒体列表失败，请检查服务连接");
     }
@@ -82,6 +112,9 @@ const fetchMediaList = async (filterType = "all") => {
   }
 };
 
+/**
+ * 更新扫描目录
+ */
 const updateScanDirectory = async (newPath) => {
   const settings = deps.settings.get();
 
@@ -101,27 +134,23 @@ const updateScanDirectory = async (newPath) => {
     return false;
   }
 
-  if (!settings.serviceUrl) {
-    console.warn(`[api] 服务地址未配置，无法更新目录`);
-    return false;
-  }
-
   try {
-    const res = await fetch(`${settings.serviceUrl}/scan`, {
+    const response = await fetch(`${settings.serviceUrl}/scan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: newPath }),
+      signal: AbortSignal.timeout(30000) // 30秒超时
     });
 
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || errorData.error || `HTTP ${res.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || `HTTP ${response.status}`);
     }
 
-    const result = await res.json();
+    const result = await response.json();
 
-    settings.serviceDirectory = newPath;
-    deps.settings.save(settings);
+    // 更新设置
+    deps.settings.update({ serviceDirectory: newPath });
 
     if (deps.toastr && typeof deps.toastr.success === "function") {
       deps.toastr.success(`目录已更新: ${newPath}`);
@@ -130,17 +159,18 @@ const updateScanDirectory = async (newPath) => {
     // 刷新媒体列表
     await refreshMediaList();
     return true;
-  } catch (e) {
-    console.error(`[api] 更新目录失败:`, e);
+  } catch (error) {
+    console.error(`[api] 更新目录失败:`, error);
     if (deps.toastr && typeof deps.toastr.error === "function") {
-      deps.toastr.error(`更新失败: ${e.message}`);
+      deps.toastr.error(`更新失败: ${error.name === 'AbortError' ? '请求超时' : error.message}`);
     }
     return false;
   }
 };
 
-
-// 更新媒体大小限制
+/**
+ * 更新媒体大小限制
+ */
 const updateMediaSizeLimit = async (imageMaxMb, videoMaxMb) => {
   const settings = deps.settings.get();
 
@@ -158,14 +188,9 @@ const updateMediaSizeLimit = async (imageMaxMb, videoMaxMb) => {
     return false;
   }
 
-  if (!settings.serviceUrl) {
-    console.warn(`[api] 服务地址未配置，无法更新大小限制`);
-    return false;
-  }
-
   try {
     const status = await checkServiceStatus();
-    const res = await fetch(`${settings.serviceUrl}/scan`, {
+    const response = await fetch(`${settings.serviceUrl}/scan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -173,16 +198,22 @@ const updateMediaSizeLimit = async (imageMaxMb, videoMaxMb) => {
         image_max_mb: imageMaxMb,
         video_max_mb: videoMaxMb,
       }),
+      signal: AbortSignal.timeout(30000) // 30秒超时
     });
 
-    if (!res.ok) throw new Error((await res.json()).message || "更新限制失败");
+    if (!response.ok) {
+      throw new Error((await response.json()).message || "更新限制失败");
+    }
 
-    settings.mediaConfig = {
-      ...settings.mediaConfig,
-      image_max_size_mb: imageMaxMb,
-      video_max_size_mb: videoMaxMb,
-    };
-    deps.settings.save();
+    // 更新设置
+    deps.settings.update({
+      mediaConfig: {
+        ...settings.mediaConfig,
+        image_max_size_mb: imageMaxMb,
+        video_max_size_mb: videoMaxMb,
+      }
+    });
+
     if (deps.toastr && typeof deps.toastr.success === "function") {
       deps.toastr.success(`大小限制更新: 图片${imageMaxMb}MB | 视频${videoMaxMb}MB`);
     }
@@ -190,16 +221,18 @@ const updateMediaSizeLimit = async (imageMaxMb, videoMaxMb) => {
     // 刷新媒体列表
     await refreshMediaList();
     return true;
-  } catch (e) {
-    console.error(`[api] 更新限制失败:`, e);
+  } catch (error) {
+    console.error(`[api] 更新限制失败:`, error);
     if (deps.toastr && typeof deps.toastr.error === "function") {
-      deps.toastr.error(`更新失败: ${e.message}`);
+      deps.toastr.error(`更新失败: ${error.name === 'AbortError' ? '请求超时' : error.message}`);
     }
     return false;
   }
 };
 
-// 清理无效媒体
+/**
+ * 清理无效媒体
+ */
 const cleanupInvalidMedia = async () => {
   const settings = deps.settings.get();
 
@@ -209,12 +242,16 @@ const cleanupInvalidMedia = async () => {
   }
 
   try {
-    const res = await fetch(`${settings.serviceUrl}/cleanup`, {
+    const response = await fetch(`${settings.serviceUrl}/cleanup`, {
       method: "POST",
+      signal: AbortSignal.timeout(30000) // 30秒超时
     });
-    if (!res.ok) throw new Error("清理请求失败");
 
-    const data = await res.json();
+    if (!response.ok) {
+      throw new Error("清理请求失败");
+    }
+
+    const data = await response.json();
     if (deps.toastr && typeof deps.toastr.success === "function") {
       deps.toastr.success(
         `清理完成: 移除${data.removed}个无效文件，剩余${data.remaining_total}个`
@@ -224,16 +261,18 @@ const cleanupInvalidMedia = async () => {
     // 刷新媒体列表
     await refreshMediaList();
     return data;
-  } catch (e) {
-    console.error(`[api] 清理媒体失败:`, e);
+  } catch (error) {
+    console.error(`[api] 清理媒体失败:`, error);
     if (deps.toastr && typeof deps.toastr.error === "function") {
-      deps.toastr.error(`清理失败: ${e.message}`);
+      deps.toastr.error(`清理失败: ${error.name === 'AbortError' ? '请求超时' : error.message}`);
     }
     return null;
   }
 };
 
-// 刷新媒体列表
+/**
+ * 刷新媒体列表
+ */
 const refreshMediaList = async (filterType) => {
   const settings = deps.settings.get();
   const now = Date.now();
@@ -242,50 +281,67 @@ const refreshMediaList = async (filterType) => {
   // 节流控制
   if (now - lastMediaRequestTime < MEDIA_REQUEST_THROTTLE) {
     console.log(`[api] 媒体列表请求节流，返回缓存`);
-    return window.mediaList || [];
+    return mediaList;
   }
 
   lastMediaRequestTime = now;
-  // 拉取最新列表
-  window.mediaList = await fetchMediaList(targetFilter);
 
-  // 确保设置对象中的属性存在
-  if (!settings.randomMediaList) settings.randomMediaList = [];
-  if (!settings.randomPlayedIndices) settings.randomPlayedIndices = [];
+  try {
+    // 拉取最新列表
+    mediaList = await fetchMediaList(targetFilter);
 
-  settings.randomMediaList = [...window.mediaList];
-  const oldLength = window.oldMediaListLength || 0;
+    // 确保设置对象中的属性存在
+    const updatedSettings = { ...settings };
+    if (!updatedSettings.randomMediaList) updatedSettings.randomMediaList = [];
+    if (!updatedSettings.randomPlayedIndices) updatedSettings.randomPlayedIndices = [];
 
-  // 列表状态处理
-  if (window.mediaList.length === 0) {
-    window.currentMediaIndex = 0;
-    if (settings.randomPlayedIndices) settings.randomPlayedIndices = [];
-    if (settings.currentRandomIndex !== undefined) settings.currentRandomIndex = -1;
-    if (deps.toastr && typeof deps.toastr.warning === "function") {
-      deps.toastr.warning(`当前筛选无可用${targetFilter}媒体，请检查目录或筛选条件`);
+    updatedSettings.randomMediaList = [...mediaList];
+
+    // 列表状态处理
+    if (mediaList.length === 0) {
+      currentMediaIndex = 0;
+      updatedSettings.randomPlayedIndices = [];
+      updatedSettings.currentRandomIndex = -1;
+
+      if (deps.toastr && typeof deps.toastr.warning === "function") {
+        deps.toastr.warning(`当前筛选无可用${targetFilter}媒体，请检查目录或筛选条件`);
+      }
+    } else if (mediaList.length !== oldMediaListLength) {
+      currentMediaIndex = 0;
+      updatedSettings.randomPlayedIndices = [];
+      updatedSettings.currentRandomIndex = -1;
     }
-  } else if (window.mediaList.length !== oldLength) {
-    window.currentMediaIndex = 0;
-    if (settings.randomPlayedIndices) settings.randomPlayedIndices = [];
-    if (settings.currentRandomIndex !== undefined) settings.currentRandomIndex = -1;
+
+    oldMediaListLength = mediaList.length;
+
+    // 保存设置
+    deps.settings.update(updatedSettings);
+
+    // 通知播放模块恢复播放
+    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
+      deps.EventBus.emit("requestResumePlayback");
+    }
+
+    console.log(`[api] 媒体列表刷新完成，共${mediaList.length}个媒体`);
+    return mediaList;
+  } catch (error) {
+    console.error(`[api] 刷新媒体列表失败:`, error);
+    return mediaList; // 返回之前的列表
   }
-
-  window.oldMediaListLength = window.mediaList.length;
-  deps.settings.save();
-
-  // 通知播放模块恢复播放
-  if (settings.isPlaying && settings.autoSwitchMode === "timer") {
-    deps.EventBus.emit("requestResumePlayback");
-  }
-
-  console.log(`[api] 媒体列表刷新完成，共${window.mediaList.length}个媒体`);
-  return window.mediaList;
 };
-// 启动服务状态轮询
+
+/**
+ * 启动服务状态轮询
+ */
 const startServicePolling = () => {
   const settings = deps.settings.get();
+
   // 清除旧定时器
-  if (pollingTimer) clearInterval(pollingTimer);
+  if (pollingTimer) {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
+  }
+
   // 启动新轮询
   pollingTimer = setInterval(() => {
     if (settings.masterEnabled) {
@@ -296,9 +352,13 @@ const startServicePolling = () => {
   }, settings.pollingInterval || 30000);
 };
 
-// 初始化API模块
+/**
+ * 初始化API模块
+ */
 const init = () => {
   try {
+    console.log(`[api] 模块初始化开始`);
+
     // 注册事件监听
     const removeRefreshListener = deps.EventBus.on(
       "requestRefreshMediaList",
@@ -374,9 +434,13 @@ const init = () => {
   }
 };
 
-// 清理API模块
+/**
+ * 清理API模块
+ */
 const cleanup = () => {
   try {
+    console.log(`[api] 开始清理资源`);
+
     // 清除轮询定时器
     if (pollingTimer) {
       clearInterval(pollingTimer);
@@ -392,6 +456,12 @@ const cleanup = () => {
       });
       window.apiEventListeners = null;
     }
+
+    // 重置模块状态
+    mediaList = [];
+    currentMediaIndex = 0;
+    oldMediaListLength = 0;
+    lastMediaRequestTime = 0;
 
     console.log(`[api] 资源清理完成`);
   } catch (e) {
