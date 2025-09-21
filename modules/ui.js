@@ -218,108 +218,47 @@ export const createPlayerWindow = async () => {
 
   safeJQuery(() => {
     const $ = deps.jQuery;
-    if (!$ || !settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+    if (!$) {
+      console.error('[UI] jQuery未加载，当前可用依赖:', Object.keys(deps));
+      toastr.error("关键依赖未加载，请刷新页面重试");
+      
+      // 添加备用初始化逻辑
+      setTimeout(() => {
+        if (deps.jQuery) {
+          console.log('[UI] 检测到jQuery已延迟加载，重新初始化');
+          init();
+        }
+      }, 3000);
+      return;
+    }
 
-    const html = `
-      <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? "no-border" : ""}">
-        <div class="image-player-header">
-          <div class="title"><i class="fa-solid fa-film"></i> ${EXTENSION_NAME}</div>
-          <div class="window-controls">
-            <button class="lock"><i class="fa-solid ${settings.isLocked ? "fa-lock" : "fa-lock-open"}"></i></button>
-            <button class="toggle-info ${settings.showInfo ? "active" : ""}"><i class="fa-solid fa-circle-info"></i></button>
-            <button class="toggle-video-controls ${settings.showVideoControls ? "active" : ""}" title="${settings.showVideoControls ? "隐藏视频控制" : "显示视频控制"}">
-              <i class="fa-solid fa-video"></i>
-            </button>
-            <button class="hide"><i class="fa-solid fa-minus"></i></button>
-          </div>
-        </div>
-        <div class="image-player-body">
-          <div class="image-container">
-            <div class="loading-animation">加载中...</div>
-            <img class="image-player-img" onerror="this.onerror=null;this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg=='" />
-            <video class="image-player-video" preload="metadata" ${settings.videoLoop ? "loop" : ""}>您的浏览器不支持HTML5视频</video>
-            ${settings.showVideoControls ? `
-              <div class="video-controls">
-                ${settings.customVideoControls.showProgress ? `
-                  <div class="progress-container">
-                    <div class="progress-bar">
-                      <div class="progress-loaded"></div>
-                      <div class="progress-played"></div>
-                      <div class="progress-handle"></div>
-                    </div>
-                  </div>
-                ` : ""}
-                <div class="video-control-group">
-                  ${settings.customVideoControls.showVolume ? `
-                    <button class="video-control-btn volume-btn">
-                      <i class="fa-solid ${settings.videoVolume > 0 ? "fa-volume-high" : "fa-volume-mute"}"></i>
-                    </button>
-                    <div class="volume-slider-container">
-                      <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="${settings.videoVolume}" />
-                    </div>
-                  ` : ""}
-                  ${settings.customVideoControls.showLoop ? `
-                    <button class="video-control-btn loop-btn ${settings.videoLoop ? "active" : ""}">
-                      <i class="fa-solid fa-repeat"></i>
-                    </button>
-                  ` : ""}
-                  ${settings.customVideoControls.showTime ? `
-                    <div class="time-display">
-                      <span class="current-time">00:00</span> / <span class="total-time">00:00</span>
-                    </div>
-                  ` : ""}
-                </div>
-              </div>
-            ` : ""}
-          </div>
-          <div class="image-info" ${!settings.showInfo ? 'style="display:none;"' : ""}>加载中...</div>
-        </div>
-        <div class="image-player-controls">
-          <div class="controls-group">
-            <button class="control-btn play-pause"><i class="fa-solid ${settings.isPlaying ? "fa-pause" : "fa-play"}"></i></button>
-            <button class="control-btn mode-switch" title="${settings.playMode === "random" ? "随机模式" : "顺序模式"}">
-              <i class="fa-solid ${settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol"}"></i>
-            </button>
-            <button class="control-btn switch-mode-toggle ${settings.autoSwitchMode === "detect" ? "active" : ""}" title="${settings.autoSwitchMode === "detect" ? "检测播放" : "定时切换"
-      }">
-              <i class="fa-solid ${settings.autoSwitchMode === "detect" ? "fa-robot" : "fa-clock"}"></i>
-            </button>
-          </div>
-          <div class="controls-group">
-            <button class="control-btn prev" title="上一个"><i class="fa-solid fa-backward-step"></i></button>
-            <div class="control-text">${settings.playMode === "random" ? "随机模式" : "顺序模式: 0/0"
-      }</div>
-            <button class="control-btn next" title="下一个"><i class="fa-solid fa-forward-step"></i></button>
-          </div>
-          <div class="controls-group media-filter-group">
-            <button class="control-btn media-filter-btn ${settings.mediaFilter === "all" ? "active" : ""}" data-type="all" title="所有媒体">
-              <i class="fa-solid fa-film"></i>
-            </button>
-            <button class="control-btn media-filter-btn ${settings.mediaFilter === "image" ? "active" : ""}" data-type="image" title="仅图片">
-              <i class="fa-solid fa-image"></i>
-            </button>
-            <button class="control-btn media-filter-btn ${settings.mediaFilter === "video" ? "active" : ""}" data-type="video" title="仅视频">
-              <i class="fa-solid fa-video"></i>
-            </button>
-          </div>
-          <div class="resize-handle"></div>
-        </div>
-      </div>
-    `;
+    // 添加初始化状态追踪
+    console.log('[UI] 开始初始化，当前扩展菜单容器:', $('#extensionsMenu').length);
+    
+    // 等待DOM加载完成
+    $(document).ready(() => {
+      console.log('[UI] DOM就绪，开始创建元素');
+      // 创建扩展菜单按钮
+      createExtensionButton();
 
-    $("body").append(html);
-    setupWindowEvents();
-    positionWindow();
-    bindVideoControls();
-    bindPlayerControls(); // 绑定新增控制栏事件
+      // 启用状态下创建UI
+      if (settings.masterEnabled) {
+        createPlayerWindow();
+        createSettingsPanel();
 
-    // 初始化筛选状态同步
-    const filterBtn = $(`#${PLAYER_WINDOW_ID} .media-filter-btn[data-type="${settings.mediaFilter}"]`);
-    filterBtn.addClass("active");
-
-    const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-    if (video) video.volume = settings.videoVolume;
-    console.log(`[ui] 播放器窗口创建完成（含完整控制栏）`);
+        // 检查服务就绪后显示初始媒体
+        const statusListener = EventBus.on(
+          "serviceStatusChecked",
+          (status) => {
+            statusListener(); // 移除监听器
+            if (status.active && settings.isWindowVisible) {
+              EventBus.emit("requestShowInitialMedia");
+            }
+          }
+        );
+        EventBus.emit("requestCheckServiceStatus");
+      }
+    });
   });
 };
 
