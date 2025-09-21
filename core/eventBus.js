@@ -19,41 +19,12 @@ export class EventBus {
       this.events.set(eventName, new Set());
     }
     const callbacks = this.events.get(eventName);
-
-    // 检查是否已存在相同回调
-    for (const existingCallback of callbacks) {
-      if (existingCallback === callback) {
-        console.warn(`[EventBus] 事件 ${eventName} 已存在相同回调，跳过重复注册`);
-        return () => this.off(eventName, callback);
-      }
-    }
-
     callbacks.add(callback);
 
     // 返回取消监听函数
     return () => {
       this.off(eventName, callback);
     };
-  }
-
-  /**
-   * 注册一次性事件监听
-   * @param {string} eventName 事件名称
-   * @param {Function} callback 回调函数
-   * @returns {Function} 取消监听的函数
-   */
-  once(eventName, callback) {
-    if (typeof callback !== 'function') {
-      console.error('[EventBus] 回调必须是函数', eventName, callback);
-      return () => { };
-    }
-
-    const onceCallback = (...args) => {
-      this.off(eventName, onceCallback);
-      callback(...args);
-    };
-
-    return this.on(eventName, onceCallback);
   }
 
   /**

@@ -4,7 +4,6 @@ import json
 import time
 import random
 import logging
-import logging.handlers
 import threading
 import urllib.parse
 from wsgiref.simple_server import make_server
@@ -13,21 +12,12 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_cors import CORS
 import mimetypes
-from pathlib import Path
+import magic
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 from gevent.pywsgi import WSGIServer
 from typing import Dict, List, Tuple, Optional, Set, Any
 import fnmatch
-
-# 添加资源路径检测
-if getattr(sys, 'frozen', False):
-    BASE_DIR = sys._MEIPASS
-else:
-    BASE_DIR = Path(__file__).resolve().parent
-# 加载环境变量
-from dotenv import load_dotenv
-load_dotenv(BASE_DIR / '.env')
 
 # ------------------------------
 # 基础配置与初始化
@@ -40,26 +30,19 @@ sys.getfilesystemencoding = lambda: "utf-8"
 app = Flask(__name__)
 cors = CORS(app, resources={
     r"/*": {
-        "origins": os.getenv("CORS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000,http://127.0.0.1:9001,http://localhost:9001").split(","),
+        "origins": ["http://127.0.0.1:8000", "http://localhost:8000"],
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["X-Request-ID"]
+        "allow_headers": ["Content-Type"]
     }
 })
 
 # 日志配置
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(threadName)s] %(levelname)s - %(module)s:%(lineno)d - %(message)s",
-    encoding='utf-8',
+    format="%(asctime)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.handlers.RotatingFileHandler(
-            filename='image_service.log',
-            encoding='utf-8',
-            maxBytes=10*1024*1024,
-            backupCount=5
-        )
+        logging.FileHandler("image_service.log", encoding="utf-8"),
     ],
 )
 
@@ -73,15 +56,14 @@ mimetypes.add_type("video/x-matroska", ".mkv")
 # 核心状态与配置管理（封装全局变量）
 # ------------------------------
 class ConfigManager:
-    __slots__ = ['lock', 'config_file', 'config_version', 'scan_directory', 'allowed_origins', 'media_config', 'mime_map', 'ignore_patterns', '_thread_map']
+    """配置管理器（线程安全）"""
 
     def __init__(self):
-        self.lock = threading.RLock()
-        self._thread_map = {}
+        self.lock = threading.RLock()  # 可重入锁，支持嵌套调用
         self.config_file = "local_image_service_config.json"
-        self.config_version = "1.2"
-        self.scan_directory = ""  # 清空默认目录
-        self.allowed_origins = ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:9001", "http://127.0.0.1:9001"]
+        self.config_version = "1.2"  # 更新版本号
+        self.scan_directory = self._get_default_scan_dir()
+        self.allowed_origins = ["http://localhost:8000", "http://127.0.0.1:8000"]
         # 媒体配置
         self.media_config = {
             "image": {
@@ -132,11 +114,14 @@ class ConfigManager:
 
     @staticmethod
     def _get_default_scan_dir():
-        return ""  # 返回空字符串
+        """获取系统默认下载目录"""
+        if os.name == "nt":
+            return os.path.join(os.environ.get("USERPROFILE", ""), "Downloads")
+        else:
+            return os.path.expanduser("~/Downloads")
 
     def load(self):
-        if not self.scan_directory:
-            logging.error("请在前端配置扫描目录")
+        """加载配置文件"""
         try:
             if not os.path.exists(self.config_file):
                 self.save()  # 生成默认配置
@@ -190,13 +175,8 @@ class ConfigManager:
 
     def _migrate_config(self, config):
         """配置版本迁移"""
-        # 注释掉暂时不需要的迁移模块
-        # from .migrators import VersionMigrator_1_1_to_1_2  # 新增迁移器
         current_version = config.get("config_version")
         if current_version != self.config_version:
-            pass  # 暂时禁用迁移功能
-            migrator = VersionMigrator_1_1_to_1_2(config)
-            return migrator.execute()
             logging.info(
                 f"迁移配置 from {current_version or '未知'} to {self.config_version}"
             )
@@ -694,7 +674,6 @@ class WebSocketManager:
 
     _active_ws = []
     _lock = threading.Lock()
-    allowed_origins = config_mgr.allowed_origins
 
     @classmethod
     def add_connection(cls, ws):
@@ -847,31 +826,28 @@ def get_random_media():
 
 
 @app.route("/media/<path:rel_path>", methods=["GET"])
-# 增强路径校验
 def get_media_file(rel_path):
+    """获取媒体文件（支持断点续传）"""
     try:
-        # 解码并规范化路径
+        # 解码URL编码的路径
         rel_path = urllib.parse.unquote(rel_path)
-        scan_dir = os.path.realpath(config_mgr.get_scan_dir())
-        full_path = os.path.normpath(os.path.join(scan_dir, rel_path))
+        scan_dir = config_mgr.get_scan_dir()
+        full_path = os.path.abspath(os.path.join(scan_dir, rel_path))
 
-        # 多重安全检查
-        if not os.path.exists(full_path):
-            logging.warning(f'文件不存在: {rel_path}')
-            return jsonify({'error': '文件不存在'}), 404
-
-        if not os.path.isfile(full_path):
-            logging.warning(f'非法文件类型: {rel_path}')
-            return jsonify({'error': '路径不合法'}), 403
-
-        if not full_path.startswith(os.path.normcase(scan_dir)):
-            logging.warning(f'路径越界尝试: {rel_path} → {full_path}')
-            return jsonify({'error': '路径不合法'}), 403
-
-        # 新增符号链接检查
-        if os.path.islink(full_path):
-            logging.warning(f'拒绝符号链接访问: {rel_path}')
-            return jsonify({'error': '非法文件类型'}), 403
+        # 严格验证路径是否在扫描目录内（使用规范化路径比较）
+        scan_dir_abs = os.path.abspath(scan_dir)
+        full_path_abs = os.path.abspath(full_path)
+        
+        # 使用os.path.commonpath检查路径是否在允许范围内
+        try:
+            common_path = os.path.commonpath([scan_dir_abs, full_path_abs])
+            if common_path != scan_dir_abs:
+                logging.warning(f"路径越界尝试: {rel_path} -> {full_path_abs}")
+                return jsonify({"error": "路径不合法"}), 403
+        except ValueError:
+            # 路径不在同一驱动器上
+            logging.warning(f"路径跨驱动器尝试: {rel_path} -> {full_path_abs}")
+            return jsonify({"error": "路径不合法"}), 403
 
         if not os.path.exists(full_path) or not os.path.isfile(full_path):
             return jsonify({"error": "文件不存在"}), 404
@@ -995,12 +971,6 @@ def websocket_endpoint():
     if not ws:
         return "需要WebSocket连接", 400
 
-    # 握手阶段验证Origin
-    origin = request.environ.get('HTTP_ORIGIN')
-    if origin not in WebSocketManager.allowed_origins:
-        ws.close(code=4001, reason='Origin not allowed')
-        return
-
     WebSocketManager.add_connection(ws)
     try:
         # 发送初始化消息
@@ -1110,7 +1080,7 @@ def main():
     # 打印启动信息
     logging.info("=" * 80)
     logging.info("本地媒体服务启动（支持图片+视频）")
-    logging.info("服务地址: http://127.0.0.1:9001")
+    logging.info("服务地址: http://127.0.0.1:9000")
     img_cfg = config_mgr.get_media_config("image")
     video_cfg = config_mgr.get_media_config("video")
     logging.info(
@@ -1126,17 +1096,7 @@ def main():
     logging.info("=" * 80)
 
     # 启动服务器
-    # 修改服务启动配置
-    server = pywsgi.WSGIServer(('0.0.0.0', 9001), app, handler_class=WebSocketHandler)
-    
-    # 添加端口检测
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if sock.connect_ex(('localhost', 9001)) == 0:
-        logging.error("端口9001已被占用，请使用其他端口")
-        sys.exit(1)
-    sock.close()
+    server = pywsgi.WSGIServer(("0.0.0.0", 9000), app, handler_class=WebSocketHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

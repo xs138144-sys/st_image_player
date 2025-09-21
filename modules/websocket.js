@@ -70,17 +70,6 @@ export const init = () => {
     websocket.onerror = (error) => {
       console.error(`[websocket] 连接错误:`, error);
       deps.toastr.error("媒体同步连接出错");
-      
-      // 添加具体的错误提示和重连逻辑
-      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        const delay = Math.min(3000, 1000 * (reconnectAttempts + 1));
-        console.log(`[websocket] ${delay}ms后重试连接 (尝试 ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
-        deps.toastr.info(`连接错误，${delay}ms后重试...`);
-      } else {
-        console.log(`[websocket] 达到最大重连次数，停止重连`);
-        deps.toastr.warning('媒体服务连接失败，请确保已启动后端服务', '连接问题');
-        deps.toastr.info('请检查后端服务是否运行: python image_service.py');
-      }
     };
 
     websocket.onclose = (event) => {
@@ -92,8 +81,7 @@ export const init = () => {
       // 如果不是手动关闭，则尝试重连
       if (!isManualClose && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttempts++;
-        // 指数退避算法
-        const delay = 2000 * Math.pow(1.5, reconnectAttempts);
+        const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000); // 指数退避
         console.log(`[websocket] 将在${delay / 1000}秒后重试 (尝试 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
         deps.toastr.info(`媒体同步已断开，${delay / 1000}秒后重连...`);
 
@@ -103,9 +91,6 @@ export const init = () => {
       } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
         console.log(`[websocket] 达到最大重连次数，停止重连`);
         deps.toastr.error("媒体同步连接失败，请检查服务状态");
-        // 添加具体的用户提示
-        deps.toastr.warning('媒体服务连接失败，请确保已启动后端服务', '连接问题');
-        deps.toastr.info('请检查后端服务是否运行: python image_service.py');
       }
 
       deps.EventBus.emit("websocketDisconnected");

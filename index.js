@@ -77,7 +77,9 @@ const loadModule = async (moduleName, retries = 3) => {
   }
 };
 
-// 更新初始化调用
+/**
+ * 批量加载所有模块
+ */
 const initExtension = async () => {
   console.log(`[index] 媒体播放器扩展开始初始化（共${MODULES.length}个模块）`);
 
@@ -158,7 +160,7 @@ const waitForSTAndInit = () => {
       mediaFilter: "all",
       isPlaying: false,
       serviceDirectory: "",
-      serviceUrl: "http://127.0.0.1:9001",
+      serviceUrl: "http://127.0.0.1:9000",
       mediaConfig: {
         image_max_size_mb: 5,
         video_max_size_mb: 100,
@@ -180,7 +182,7 @@ const waitForSTAndInit = () => {
       console.log(`[${EXT_ID}] 迁移配置从 ${settings.config_version || '未知'} 到 1.4.2`);
 
       // 添加缺失的配置项
-      if (!settings.serviceUrl) settings.serviceUrl = "http://127.0.0.1:9001";
+      if (!settings.serviceUrl) settings.serviceUrl = "http://127.0.0.1:9000";
       if (!settings.websocket_timeout) settings.websocket_timeout = 10000;
       if (!settings.randomPlayedIndices) settings.randomPlayedIndices = [];
 
@@ -189,65 +191,15 @@ const waitForSTAndInit = () => {
     }
   }
 
-  // 防止重复初始化
-  if (window[EXT_ID + '_initialized']) {
-    console.log(`[${EXT_ID}] 扩展已经初始化，跳过重复初始化`);
-    return;
-  }
-
   // 检查ST是否已经就绪（使用更可靠的方法）
   if (typeof window.jQuery !== 'undefined' && window.jQuery.fn) {
-    window[EXT_ID + '_initialized'] = true;
     return safeInit(initExtension);
   }
 
   // 设置超时，防止永远等待
   setTimeout(() => {
-    if (!window[EXT_ID + '_initialized']) {
-      window[EXT_ID + '_initialized'] = true;
-      safeInit(initExtension);
-    }
+    safeInit(initExtension);
   }, 15000);
-};
-
-// 添加扩展菜单容器就绪检查（移植2.0版本的逻辑）
-const checkExtensionMenuReady = () => {
-  const startTime = Date.now();
-  
-  return new Promise((resolve) => {
-    const check = () => {
-      // 检查扩展菜单容器是否存在
-      const menuContainer = document.getElementById("extensionsMenu") || document.getElementById("extensions_menu");
-      const settingsContainer = document.getElementById("extensions_settings");
-      
-      // 检查全局设置是否加载
-      const globalSettingsReady = !!deps.extension_settings[EXT_ID] || Date.now() - startTime > 5000;
-      
-      // 检查jQuery是否可用
-      const jQueryReady = !!window.jQuery || Date.now() - startTime > 5000;
-      
-      // 检查SillyTavern是否完全加载（通过检查扩展设置按钮）
-      const stFullyLoaded = !!document.getElementById("extensions-settings-button") || Date.now() - startTime > 5000;
-      
-      if ((menuContainer || stFullyLoaded) && globalSettingsReady && jQueryReady) {
-        console.log(`[${EXT_ID}] 扩展环境已就绪`);
-        resolve(true);
-        return;
-      }
-      
-      // 超时保护：5秒后强制继续
-      if (Date.now() - startTime > 5000) {
-        console.warn(`[${EXT_ID}] 5秒超时，强制继续初始化`);
-        resolve(true);
-        return;
-      }
-      
-      // 继续检查
-      setTimeout(check, 300);
-    };
-    
-    check();
-  });
 };
 
 // 启动扩展
@@ -272,5 +224,4 @@ window.addEventListener("beforeunload", () => {
     });
   }
   console.log(`[index] 扩展资源已清理`);
-  window[EXT_ID + '_initialized'] = false;
 });

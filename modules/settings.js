@@ -2,7 +2,7 @@
 import { deps } from "../core/deps.js";
 
 // 使用deps提供的核心功能
-const { extension_settings, saveSettingsDebounced, EventBus } = deps; // 导入EventBus
+const { extension_settings, saveSettingsDebounced } = deps;
 
 const EXTENSION_ID = "st_image_player";
 const CONFIG_VERSION = "1.4.2";
@@ -32,7 +32,7 @@ if (!extension_settings[EXTENSION_ID]) {
     mediaFilter: "all",
     isPlaying: false,
     serviceDirectory: "",
-    serviceUrl: "http://127.0.0.1:9001",
+    serviceUrl: "http://127.0.0.1:9000",
     mediaConfig: {
       image_max_size_mb: 5,
       video_max_size_mb: 100,
@@ -191,21 +191,23 @@ const get = () => {
   return extension_settings[EXTENSION_ID] || {};
 };
 
-// 更新设置函数
+// 更新设置函数 - 新增
 const update = (key, value) => {
   const settings = get();
 
+  // 处理两种调用方式：
+  // 1. update(key, value) - 设置单个属性
+  // 2. update({key1: value1, key2: value2}) - 设置多个属性
   if (typeof key === 'object') {
+    // 对象形式：更新多个属性
     Object.assign(settings, key);
   } else {
+    // 键值对形式：更新单个属性
     settings[key] = value;
   }
 
+  // 保存更新后的设置
   extension_settings[EXTENSION_ID] = settings;
-
-  // 触发设置更新事件 - 使用deps.EventBus
-  deps.EventBus.emit("settingsUpdated", settings);
-
   return save();
 };
 
@@ -214,6 +216,7 @@ const save = () => {
   const settings = get();
   const saveFn = window.saveSettingsDebounced || saveSettingsDebounced;
 
+  // 使用deps提供的extension_settings
   deps.extension_settings[EXTENSION_ID] = settings;
 
   if (saveFn && typeof saveFn === "function") {
@@ -223,16 +226,12 @@ const save = () => {
       return true;
     } catch (e) {
       console.error(`[settings] 核心保存失败:`, e);
-      // 失败时尝试使用localStorage
     }
   }
 
   // localStorage备用方案
   try {
-    // 确保只保存当前扩展的设置
-    const allSettings = JSON.parse(localStorage.getItem("extension_settings") || "{}");
-    allSettings[EXTENSION_ID] = settings;
-    localStorage.setItem("extension_settings", JSON.stringify(allSettings));
+    localStorage.setItem("extension_settings", JSON.stringify(deps.extension_settings));
     console.log(`[settings] localStorage保存成功`);
     return true;
   } catch (e) {
@@ -247,29 +246,6 @@ const save = () => {
 // 初始化函数
 const init = () => {
   migrateSettings();
-  
-  // 添加事件监听器
-  deps.EventBus.on("enableExtension", () => {
-    const settings = get();
-    settings.masterEnabled = true;
-    update(settings);
-    console.log(`[settings] 扩展已启用`);
-  });
-  
-  deps.EventBus.on("disableExtension", () => {
-    const settings = get();
-    settings.masterEnabled = false;
-    update(settings);
-    console.log(`[settings] 扩展已禁用`);
-  });
-  
-  deps.EventBus.on("toggleWindowVisibility", () => {
-    const settings = get();
-    settings.isWindowVisible = !settings.isWindowVisible;
-    update(settings);
-    console.log(`[settings] 窗口可见性切换为: ${settings.isWindowVisible ? '显示' : '隐藏'}`);
-  });
-  
   console.log(`[settings] 设置模块初始化完成`);
 };
 
@@ -284,6 +260,12 @@ const settingsModule = {
 };
 
 // 明确导出所有方法
-// 统一导出方式
 export default settingsModule;
-export { init, cleanup };
+export {
+  init,
+  cleanup,
+  migrateSettings,
+  save,
+  get,
+  update // 添加update方法
+};
