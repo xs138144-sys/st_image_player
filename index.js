@@ -78,14 +78,17 @@ const loadModule = async (moduleName, options = {}) => {
   }
 };
 
-// UI模块特殊加载函数（简化版，直接加载）
+// UI模块特殊加载函数（等待扩展菜单容器就绪）
 async function loadUIModule() {
   if (document.readyState === 'loading') {
     // DOM 未完全加载，等待
     await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
   }
   
-  // 直接加载 UI 模块，UI模块会自己创建所需的DOM元素
+  // 等待扩展菜单容器就绪
+  await checkExtensionMenuReady();
+  
+  // 加载 UI 模块
   return await loadModule('ui');
 }
 
@@ -228,6 +231,40 @@ const waitForSTAndInit = () => {
       safeInit(initExtension);
     }
   }, 15000);
+};
+
+// 添加扩展菜单容器就绪检查（移植2.0版本的逻辑）
+const checkExtensionMenuReady = () => {
+  const startTime = Date.now();
+  
+  return new Promise((resolve) => {
+    const check = () => {
+      // 检查扩展菜单容器是否存在
+      const menuContainer = document.getElementById("extensionsMenu") || document.getElementById("extensions_menu");
+      const settingsContainer = document.getElementById("extensions_settings");
+      
+      // 检查全局设置是否加载
+      const globalSettingsReady = !!deps.extension_settings[EXT_ID] || Date.now() - startTime > 5000;
+      
+      if (menuContainer && settingsContainer && globalSettingsReady) {
+        console.log(`[${EXT_ID}] 扩展菜单和设置容器已就绪`);
+        resolve(true);
+        return;
+      }
+      
+      // 超时保护：5秒后强制继续
+      if (Date.now() - startTime > 5000) {
+        console.warn(`[${EXT_ID}] 5秒超时，强制继续初始化`);
+        resolve(true);
+        return;
+      }
+      
+      // 继续检查
+      setTimeout(check, 300);
+    };
+    
+    check();
+  });
 };
 
 // 启动扩展

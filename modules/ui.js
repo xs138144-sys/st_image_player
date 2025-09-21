@@ -164,32 +164,33 @@ const createExtensionButton = () => {
 
   const settings = get();
   const buttonHtml = `
-    <div id="ext_menu_${EXTENSION_ID}" class="extension-menu-item">
-      <div class="extension-title">
-        <i class="fa-solid fa-film"></i> 媒体播放器
-        <div class="extension-toggle">
-          <label class="switch">
-            <input type="checkbox" ${settings.masterEnabled ? "checked" : ""} id="${EXTENSION_ID}_toggle">
-            <span class="slider round"></span>
-          </label>
-        </div>
-      </div>
-      <div class="extension-actions">
-        <button class="extension-action ${EXTENSION_ID}_settings" title="设置">
-          <i class="fa-solid fa-cog"></i>
-        </button>
-        <button class="extension-action ${EXTENSION_ID}_showhide" title="${settings.isWindowVisible ? "隐藏" : "显示"}">
-          <i class="fa-solid ${settings.isWindowVisible ? "fa-eye-slash" : "fa-eye"}"></i>
-        </button>
-      </div>
+    <div id="ext_menu_${EXTENSION_ID}" class="list-group-item flex-container flexGap5">
+      <div class="fa-solid fa-film"></div>
+      <span>${EXTENSION_NAME}</span>
+      <!-- 媒体信息显示 -->
+      <span class="media-info" style="margin-left:8px; font-size:10px; color:#a0a0a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        ${settings.showInfo ? "加载中..." : "隐藏信息"}
+      </span>
+      <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">
+        ${settings.isPlaying ? "播放中" : "已暂停"}
+      </span>
+      <span class="mode-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">
+        ${settings.playMode === "random" ? "随机" : "顺序"}
+      </span>
+      <span class="filter-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">
+        ${settings.mediaFilter === "all" ? "所有" : settings.mediaFilter === "image" ? "图片" : "视频"}
+      </span>
     </div>
   `;
 
-  // 添加到扩展菜单
-  if ($("#extensions_menu").length) {
+  // 添加到扩展菜单 - 使用SillyTavern标准的扩展菜单容器
+  if ($("#extensionsMenu").length) {
+    $("#extensionsMenu").append(buttonHtml);
+  } else if ($("#extensions_menu").length) {
+    // 备选容器名称
     $("#extensions_menu").append(buttonHtml);
   } else {
-    // 备选位置
+    // 如果标准扩展菜单不存在，创建备选菜单
     $("body").append(`
       <div id="extensions_menu" class="extensions-menu">
         ${buttonHtml}
@@ -212,56 +213,50 @@ const createExtensionButton = () => {
     }
   `).appendTo('head');
 
-  // 绑定按钮事件
+  // 绑定按钮事件 - 点击菜单项跳转到设置面板
   $(`#ext_menu_${EXTENSION_ID}`).on('click', () => {
-    const $panel = $(`#${SETTINGS_PANEL_ID}`);
-    if ($panel.length) {
-      // 如果面板已存在，确保它是展开状态并显示
-      $panel.addClass("is-open");
-      $panel.find(".inline-drawer-content").slideDown();
-      
-      // 定位面板到合适的位置（如果需要）
-      positionSettingsPanel();
+    // 触发SillyTavern的设置面板按钮
+    if ($("#extensions-settings-button").length) {
+      $("#extensions-settings-button").trigger("click");
+      // 滚动到设置面板
+      $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
     } else {
-      // 如果面板不存在，创建它
+      // 备选方案：直接创建设置面板
       createSettingsPanel();
     }
   });
 
-  // 绑定设置按钮事件
-  $(`.${EXTENSION_ID}_settings`).on('click', (e) => {
-    e.stopPropagation();
-    const $panel = $(`#${SETTINGS_PANEL_ID}`);
-    if ($panel.length) {
-      // 如果面板已存在，确保它是展开状态并显示
-      $panel.addClass("is-open");
-      $panel.find(".inline-drawer-content").slideDown();
-      
-      // 定位面板到合适的位置（如果需要）
-      positionSettingsPanel();
-    } else {
-      // 如果面板不存在，创建它
-      createSettingsPanel();
-    }
-  });
+  // 添加状态更新定时器（1秒同步一次）
+  setInterval(() => {
+    const currentSettings = get();
+    const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
+    const win = $(`#${PLAYER_WINDOW_ID}`);
+    const infoElement = win.find(".image-info");
 
-  // 绑定显示/隐藏按钮事件
-  $(`.${EXTENSION_ID}_showhide`).on('click', (e) => {
-    e.stopPropagation();
-    EventBus.emit("toggleWindowVisibility");
-  });
-
-  // 绑定启用/禁用切换事件
-  $(`#${EXTENSION_ID}_toggle`).on('change', function() {
-    const enabled = $(this).is(':checked');
-    if (enabled) {
-      // 启用扩展
-      EventBus.emit("enableExtension");
-    } else {
-      // 禁用扩展
-      EventBus.emit("disableExtension");
+    if (menuBtn.length) {
+      // 1. 同步播放状态
+      menuBtn.find(".play-status").text(currentSettings.isPlaying ? "播放中" : "已暂停");
+      // 2. 同步播放模式
+      menuBtn.find(".mode-text").text(currentSettings.playMode === "random" ? "随机" : "顺序");
+      // 3. 同步媒体筛选
+      menuBtn.find(".filter-text").text(
+        currentSettings.mediaFilter === "all"
+          ? "所有"
+          : currentSettings.mediaFilter === "image"
+          ? "图片"
+          : "视频"
+      );
+      // 4. 同步媒体信息
+      if (currentSettings.showInfo && infoElement.is(":visible")) {
+        menuBtn.find(".media-info").text(infoElement.text()).show();
+      } else {
+        menuBtn.find(".media-info").text("隐藏信息").show();
+      }
     }
-  });
+  }, 1000);
 };
 
 /**
