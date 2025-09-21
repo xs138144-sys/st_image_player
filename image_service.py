@@ -40,7 +40,7 @@ sys.getfilesystemencoding = lambda: "utf-8"
 app = Flask(__name__)
 cors = CORS(app, resources={
     r"/*": {
-        "origins": os.getenv("CORS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000").split(","),
+        "origins": os.getenv("CORS_ORIGINS", "http://127.0.0.1:9000,http://localhost:9000").split(","),
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "expose_headers": ["X-Request-ID"]
@@ -81,7 +81,7 @@ class ConfigManager:
         self.config_file = "local_image_service_config.json"
         self.config_version = "1.2"
         self.scan_directory = ""  # 清空默认目录
-        self.allowed_origins = ["http://localhost:8000", "http://127.0.0.1:8000"]
+        self.allowed_origins = ["http://localhost:9000", "http://127.0.0.1:9000"]
         # 媒体配置
         self.media_config = {
             "image": {
@@ -1127,14 +1127,14 @@ def main():
 
     # 启动服务器
     # 修改服务启动配置
-    server = pywsgi.WSGIServer(('0.0.0.0', 8000), app, handler_class=WebSocketHandler)
+    server = pywsgi.WSGIServer(('0.0.0.0', 9000), app, handler_class=WebSocketHandler)
     
     # 添加端口检测
     import socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if sock.connect_ex(('localhost', 8000)) == 0:
-        logging.error("端口8000已被占用，请使用其他端口")
+    if sock.connect_ex(('localhost', 9000)) == 0:
+        logging.error("端口9000已被占用，请使用其他端口")
         sys.exit(1)
     sock.close()
     try:

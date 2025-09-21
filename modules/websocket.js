@@ -70,6 +70,14 @@ export const init = () => {
     websocket.onerror = (error) => {
       console.error(`[websocket] 连接错误:`, error);
       deps.toastr.error("媒体同步连接出错");
+      
+      // 添加具体的错误提示
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        const delay = Math.min(3000, 1000 * (reconnectAttempts + 1));
+        console.log(`[websocket] ${delay}ms后重试连接 (尝试 ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+      } else {
+        deps.toastr.warning('媒体服务连接失败，请确保已启动后端服务', '连接问题');
+      }
     };
 
     websocket.onclose = (event) => {
@@ -92,6 +100,8 @@ export const init = () => {
       } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
         console.log(`[websocket] 达到最大重连次数，停止重连`);
         deps.toastr.error("媒体同步连接失败，请检查服务状态");
+        // 添加具体的用户提示
+        deps.toastr.warning('媒体服务连接失败，请确保已启动后端服务', '连接问题');
       }
 
       deps.EventBus.emit("websocketDisconnected");

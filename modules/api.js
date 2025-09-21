@@ -83,6 +83,26 @@ const checkServiceStatus = async () => {
 };
 
 /**
+ * 检查服务状态并显示用户提示
+ */
+async function checkServiceStatusWithAlert() {
+  try {
+    const status = await checkServiceStatus();
+    return status;
+  } catch (error) {
+    console.error('媒体服务未启动:', error);
+    // 显示用户提示
+    if (deps.toastr && typeof deps.toastr.error === "function") {
+      deps.toastr.error('媒体播放器后端服务未启动，请运行: python image_service.py', '服务未运行', {
+        timeOut: 10000,
+        preventDuplicates: true
+      });
+    }
+    throw error;
+  }
+}
+
+/**
  * 获取媒体列表
  */
 const fetchMediaList = async (filterType = "all") => {
@@ -413,6 +433,18 @@ const init = () => {
       }
     );
 
+    // 添加服务状态检查事件监听（带用户提示）
+    const removeStatusAlertListener = deps.EventBus.on(
+      "service_status_check",
+      async () => {
+        try {
+          await checkServiceStatusWithAlert();
+        } catch (error) {
+          // 服务不可用，但不阻止其他功能
+        }
+      }
+    );
+
     // 启动服务轮询
     startServicePolling();
 
@@ -423,6 +455,7 @@ const init = () => {
       removeUpdateDirListener,
       removeUpdateSizeListener,
       removeStatusListener,
+      removeStatusAlertListener
     ];
 
     console.log(`[api] 初始化完成，已注册事件监听`);

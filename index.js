@@ -78,6 +78,30 @@ const loadModule = async (moduleName, options = {}) => {
   }
 };
 
+// UI模块特殊加载函数
+async function loadUIModule() {
+  if (document.readyState === 'loading') {
+    // DOM 未完全加载，等待
+    await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
+  }
+  
+  // 确保所需的 DOM 元素存在
+  const maxRetries = 10;
+  let retries = 0;
+  
+  while (retries < maxRetries) {
+    if (document.querySelector('#extensions-menu') && 
+        document.querySelector('#extensionsSettings')) {
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+    retries++;
+  }
+  
+  // 现在加载 UI 模块
+  return await loadModule('ui');
+}
+
 // 更新初始化调用
 const initExtension = async () => {
   console.log(`[index] 媒体播放器扩展开始初始化（共${MODULES.length}个模块）`);
@@ -90,12 +114,17 @@ const initExtension = async () => {
   try {
     const loadResults = {};
 
-    // 按顺序加载模块
+    // 按顺序加载模块，UI模块使用特殊加载方式
     for (const moduleName of MODULES) {
-      const success = await loadModule(moduleName, {
-        maxRetries: 5,
-        baseDelay: 1000
-      });
+      let success;
+      if (moduleName === 'ui') {
+        success = await loadUIModule();
+      } else {
+        success = await loadModule(moduleName, {
+          maxRetries: 5,
+          baseDelay: 1000
+        });
+      }
       loadResults[moduleName] = success;
 
       if (!success) {
