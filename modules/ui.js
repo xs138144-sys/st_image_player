@@ -208,16 +208,12 @@ const createExtensionButton = () => {
     </div>
   `;
 
-  // 添加到扩展菜单 - 使用SillyTavern标准的扩展菜单容器
+  // 使用与有BUG版本相同的简单逻辑
   if ($("#extensionsMenu").length) {
     $("#extensionsMenu").append(buttonHtml);
     console.log(`[ui] 添加到标准扩展菜单容器`);
-  } else if ($("#extensions_menu").length) {
-    // 备选容器名称
-    $("#extensions_menu").append(buttonHtml);
-    console.log(`[ui] 添加到备选扩展菜单容器`);
   } else {
-    // 如果标准扩展菜单不存在，创建备选菜单
+    // 备选位置 - 直接添加到body
     $("body").append(`
       <div id="extensions_menu" class="extensions-menu">
         ${buttonHtml}
