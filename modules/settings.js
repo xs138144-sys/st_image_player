@@ -191,6 +191,15 @@ const get = () => {
   return extension_settings[EXTENSION_ID] || {};
 };
 
+// 更新单个设置项
+const update = (key, value) => {
+  const settings = get();
+  settings[key] = value;
+  extension_settings[EXTENSION_ID] = settings;
+  save();
+  return settings;
+};
+
 // 保存设置函数
 const save = () => {
   const settings = get();
@@ -233,7 +242,8 @@ const settingsModule = {
   cleanup,
   migrateSettings,
   save,
-  get
+  get,
+  update // 添加update方法
 };
 
 // 明确导出所有方法
@@ -243,5 +253,6 @@ export {
   cleanup,
   migrateSettings,
   save,
-  get
+  get,
+  update // 添加update方法
 };

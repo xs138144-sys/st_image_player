@@ -28,6 +28,13 @@ sys.stderr.reconfigure(encoding="utf-8")
 sys.getfilesystemencoding = lambda: "utf-8"
 
 app = Flask(__name__)
+cors = CORS(app, resources={
+    r"/*": {
+        "origins": ["http://127.0.0.1:8000", "http://localhost:8000"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # 日志配置
 logging.basicConfig(
@@ -700,22 +707,6 @@ class WebSocketManager:
         with cls._lock:
             cls._active_ws = [ws for ws in cls._active_ws if not ws.closed]
 
-
-# ------------------------------
-# API接口
-# ------------------------------
-@app.before_request
-def handle_preflight():
-    """处理跨域预检请求"""
-    if request.method == "OPTIONS":
-        response = jsonify({"status": "ok"})
-        origins = config_mgr.allowed_origins
-        response.headers.add(
-            "Access-Control-Allow-Origin", ", ".join(origins) if origins else "*"
-        )
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
-        response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        return response
 
 
 @app.route("/scan", methods=["POST"])
