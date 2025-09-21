@@ -492,7 +492,7 @@ export const createSettingsPanel = async () => {
     return;
   }
 
-  const settings = get();
+  const settings = deps.settings.get();
   const $ = deps.jQuery;
   if (!$ || !settings.masterEnabled) return;
   
