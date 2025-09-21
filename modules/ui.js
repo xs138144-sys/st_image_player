@@ -164,15 +164,24 @@ const createExtensionButton = () => {
 
   const settings = get();
   const buttonHtml = `
-    <div id="ext_menu_${EXTENSION_ID}" class="list-group-item flex-container flexGap5">
-      <div class="fa-solid fa-film"></div>
-      <span>${EXTENSION_NAME}</span>
-      <span class="media-info" style="margin-left:8px; font-size:10px; color:#a0a0a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-        ${settings.showInfo ? "加载中..." : "隐藏信息"}
-      </span>
-      <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">${settings.isPlaying ? "播放中" : "已暂停"}</span>
-      <span class="mode-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${settings.playMode === "random" ? "随机" : "顺序"}</span>
-      <span class="filter-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${settings.mediaFilter === "all" ? "所有" : settings.mediaFilter === "image" ? "图片" : "视频"}</span>
+    <div id="ext_menu_${EXTENSION_ID}" class="extension-menu-item">
+      <div class="extension-title">
+        <i class="fa-solid fa-film"></i> 媒体播放器
+        <div class="extension-toggle">
+          <label class="switch">
+            <input type="checkbox" ${settings.masterEnabled ? "checked" : ""} id="${EXTENSION_ID}_toggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+      <div class="extension-actions">
+        <button class="extension-action ${EXTENSION_ID}_settings" title="设置">
+          <i class="fa-solid fa-cog"></i>
+        </button>
+        <button class="extension-action ${EXTENSION_ID}_showhide" title="${settings.isWindowVisible ? "隐藏" : "显示"}">
+          <i class="fa-solid ${settings.isWindowVisible ? "fa-eye-slash" : "fa-eye"}"></i>
+        </button>
+      </div>
     </div>
   `;
 
@@ -216,6 +225,41 @@ const createExtensionButton = () => {
     } else {
       // 如果面板不存在，创建它
       createSettingsPanel();
+    }
+  });
+
+  // 绑定设置按钮事件
+  $(`.${EXTENSION_ID}_settings`).on('click', (e) => {
+    e.stopPropagation();
+    const $panel = $(`#${SETTINGS_PANEL_ID}`);
+    if ($panel.length) {
+      // 如果面板已存在，确保它是展开状态并显示
+      $panel.addClass("is-open");
+      $panel.find(".inline-drawer-content").slideDown();
+      
+      // 定位面板到合适的位置（如果需要）
+      positionSettingsPanel();
+    } else {
+      // 如果面板不存在，创建它
+      createSettingsPanel();
+    }
+  });
+
+  // 绑定显示/隐藏按钮事件
+  $(`.${EXTENSION_ID}_showhide`).on('click', (e) => {
+    e.stopPropagation();
+    EventBus.emit("toggleWindowVisibility");
+  });
+
+  // 绑定启用/禁用切换事件
+  $(`#${EXTENSION_ID}_toggle`).on('change', function() {
+    const enabled = $(this).is(':checked');
+    if (enabled) {
+      // 启用扩展
+      EventBus.emit("enableExtension");
+    } else {
+      // 禁用扩展
+      EventBus.emit("disableExtension");
     }
   });
 };

@@ -247,6 +247,29 @@ const save = () => {
 // 初始化函数
 const init = () => {
   migrateSettings();
+  
+  // 添加事件监听器
+  deps.EventBus.on("enableExtension", () => {
+    const settings = get();
+    settings.masterEnabled = true;
+    update(settings);
+    console.log(`[settings] 扩展已启用`);
+  });
+  
+  deps.EventBus.on("disableExtension", () => {
+    const settings = get();
+    settings.masterEnabled = false;
+    update(settings);
+    console.log(`[settings] 扩展已禁用`);
+  });
+  
+  deps.EventBus.on("toggleWindowVisibility", () => {
+    const settings = get();
+    settings.isWindowVisible = !settings.isWindowVisible;
+    update(settings);
+    console.log(`[settings] 窗口可见性切换为: ${settings.isWindowVisible ? '显示' : '隐藏'}`);
+  });
+  
   console.log(`[settings] 设置模块初始化完成`);
 };
 
