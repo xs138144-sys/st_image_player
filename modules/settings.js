@@ -269,3 +269,70 @@ export {
   get,
   update // 添加update方法
 };
+
+// 初始化默认设置
+const defaultSettings = {
+    masterEnabled: true,
+    enabled: true,
+    serviceUrl: "http://localhost:9000", // 适配新的Python服务器地址
+    playMode: "random",
+    autoSwitchMode: "timer",
+    switchInterval: 5000,
+    position: { x: 100, y: 100, width: 600, height: 400 },
+    isLocked: false,
+    isWindowVisible: true,
+    showInfo: false,
+    aiResponseCooldown: 3000,
+    lastAISwitchTime: 0,
+    lastSwitchTime: 0, // 添加默认值
+    randomPlayedIndices: [],
+    randomMediaList: [],
+    isPlaying: false,
+    transitionEffect: "fade",
+    preloadImages: true,
+    preloadVideos: false,
+    playerDetectEnabled: true,
+    aiDetectEnabled: true,
+    pollingInterval: 30000,
+    slideshowMode: false,
+    videoLoop: false,
+    videoVolume: 0.8,
+    mediaFilter: "all",
+    showVideoControls: true,
+    hideBorder: false,
+    customVideoControls: {
+        showProgress: true,
+        showVolume: true,
+        showLoop: true,
+        showTime: true,
+    },
+    progressUpdateInterval: null,
+    serviceDirectory: "",
+    isMediaLoading: false,
+    currentRandomIndex: -1,
+    showMediaUpdateToast: false,
+    aiEventRegistered: false,
+    filterTriggerSource: null,
+    CONFIG_VERSION: CONFIG_VERSION,
+};
+
+// 确保默认设置被正确应用
+export const ensureDefaultSettings = () => {
+  const settings = get();
+  let hasChanges = false;
+  
+  Object.keys(defaultSettings).forEach(key => {
+    if (settings[key] === undefined) {
+      settings[key] = defaultSettings[key];
+      hasChanges = true;
+      console.log(`[settings] 添加缺失的默认设置: ${key} = ${defaultSettings[key]}`);
+    }
+  });
+  
+  if (hasChanges) {
+    save();
+  }
+};
+
+// 在初始化时确保默认设置
+deps.EventBus.on("extensionInitialized", ensureDefaultSettings);

@@ -87,12 +87,12 @@ const onAIResponse = () => {
     return;
   }
 
-  // 冷却时间检查
-  const now = performance.now();
-  if (now - settings.lastAISwitchTime < (settings.aiResponseCooldown || 3000)) return;
+  // 冷却时间检查 - 修复：使用Date.now()而不是performance.now()
+  const now = Date.now();
+  if (now - (settings.lastAISwitchTime || 0) < (settings.aiResponseCooldown || 3000)) return;
 
   // 触发切换
-  deps.settings.save({ lastAISwitchTime: now });
+  deps.settings.update({ lastAISwitchTime: now });
   deps.EventBus.emit("requestMediaPlay", { direction: "next" });
   console.log(`[aiEvents] AI回复触发媒体切换`);
 };
@@ -120,12 +120,12 @@ const onPlayerMessage = () => {
     return;
   }
 
-  // 冷却时间检查
-  const now = performance.now();
-  if (now - settings.lastAISwitchTime < (settings.aiResponseCooldown || 3000)) return;
+  // 冷却时间检查 - 修复：使用Date.now()而不是performance.now()
+  const now = Date.now();
+  if (now - (settings.lastAISwitchTime || 0) < (settings.aiResponseCooldown || 3000)) return;
 
   // 触发切换（通过事件总线）
-  deps.settings.save({ lastAISwitchTime: now });
+  deps.settings.update({ lastAISwitchTime: now });
   deps.EventBus.emit("requestMediaPlay", { direction: "next" });
   console.log(`[aiEvents] 玩家消息触发媒体切换`);
 };

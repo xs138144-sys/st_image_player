@@ -21,13 +21,14 @@ from typing import Dict, List, Tuple, Optional, Set, Any
 import fnmatch
 
 # 添加资源路径检测
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     BASE_DIR = sys._MEIPASS
 else:
     BASE_DIR = Path(__file__).resolve().parent
 # 加载环境变量
 from dotenv import load_dotenv
-load_dotenv(BASE_DIR / '.env')
+
+load_dotenv(BASE_DIR / ".env")
 
 # ------------------------------
 # 基础配置与初始化
@@ -38,28 +39,34 @@ sys.stderr.reconfigure(encoding="utf-8")
 sys.getfilesystemencoding = lambda: "utf-8"
 
 app = Flask(__name__)
-cors = CORS(app, resources={
-    r"/*": {
-        "origins": os.getenv("CORS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000,http://127.0.0.1:9001,http://localhost:9001").split(","),
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["X-Request-ID"]
-    }
-})
+cors = CORS(
+    app,
+    resources={
+        r"/*": {
+            "origins": os.getenv(
+                "CORS_ORIGINS",
+                "http://127.0.0.1:8000,http://localhost:8000,http://127.0.0.1:9001,http://localhost:9001",
+            ).split(","),
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["X-Request-ID"],
+        }
+    },
+)
 
 # 日志配置
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(threadName)s] %(levelname)s - %(module)s:%(lineno)d - %(message)s",
-    encoding='utf-8',
+    encoding="utf-8",
     handlers=[
         logging.StreamHandler(),
         logging.handlers.RotatingFileHandler(
-            filename='image_service.log',
-            encoding='utf-8',
-            maxBytes=10*1024*1024,
-            backupCount=5
-        )
+            filename="image_service.log",
+            encoding="utf-8",
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+        ),
     ],
 )
 
@@ -73,7 +80,17 @@ mimetypes.add_type("video/x-matroska", ".mkv")
 # 核心状态与配置管理（封装全局变量）
 # ------------------------------
 class ConfigManager:
-    __slots__ = ['lock', 'config_file', 'config_version', 'scan_directory', 'allowed_origins', 'media_config', 'mime_map', 'ignore_patterns', '_thread_map']
+    __slots__ = [
+        "lock",
+        "config_file",
+        "config_version",
+        "scan_directory",
+        "allowed_origins",
+        "media_config",
+        "mime_map",
+        "ignore_patterns",
+        "_thread_map",
+    ]
 
     def __init__(self):
         self.lock = threading.RLock()
@@ -81,7 +98,12 @@ class ConfigManager:
         self.config_file = "local_image_service_config.json"
         self.config_version = "1.2"
         self.scan_directory = ""  # 清空默认目录
-        self.allowed_origins = ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:9001", "http://127.0.0.1:9001"]
+        self.allowed_origins = [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "http://localhost:9001",
+            "http://127.0.0.1:9001",
+        ]
         # 媒体配置
         self.media_config = {
             "image": {
@@ -144,10 +166,10 @@ class ConfigManager:
 
             with open(self.config_file, "r", encoding="utf-8") as f:
                 raw_config = json.load(f)
-                
+
             # 保存原始配置用于比较
             original_config = self.save()
-            
+
             self._migrate_config(raw_config)  # 处理旧版本配置
 
             # 更新配置
@@ -178,7 +200,7 @@ class ConfigManager:
                 # 更新忽略模式
                 if "ignore_patterns" in raw_config:
                     self.ignore_patterns = raw_config["ignore_patterns"]
-            
+
             # 只有在配置确实发生变化时才保存
             new_config = self.save()
             if new_config != original_config:
@@ -195,8 +217,8 @@ class ConfigManager:
         current_version = config.get("config_version")
         if current_version != self.config_version:
             pass  # 暂时禁用迁移功能
-            migrator = VersionMigrator_1_1_to_1_2(config)
-            return migrator.execute()
+            # migrator = VersionMigrator_1_1_to_1_2(config)
+            # return migrator.execute()
             logging.info(
                 f"迁移配置 from {current_version or '未知'} to {self.config_version}"
             )
@@ -342,11 +364,15 @@ class MediaState:
         """更新媒体库（去重+删除无效文件）"""
         with self.lock:
             # 移除已删除的文件
-            existing_paths = {os.path.normcase(os.path.normpath(m["path"])) for m in self.media_db}
+            existing_paths = {
+                os.path.normcase(os.path.normpath(m["path"])) for m in self.media_db
+            }
             self.media_db = [m for m in self.media_db if os.path.exists(m["path"])]
 
             # 添加新文件（去重）- 使用规范化路径比较
-            current_paths = {os.path.normcase(os.path.normpath(m["path"])) for m in self.media_db}
+            current_paths = {
+                os.path.normcase(os.path.normpath(m["path"])) for m in self.media_db
+            }
             for m in new_media:
                 norm_path = os.path.normcase(os.path.normpath(m["path"]))
                 if norm_path not in current_paths:
@@ -419,30 +445,33 @@ class MediaState:
 config_mgr = ConfigManager()
 media_state = MediaState()
 
+
 @app.route("/validate-directory", methods=["POST"])
 def validate_directory():
     """验证目录是否有效"""
     try:
         data = request.json or {}
         directory = data.get("path", "")
-        
+
         if not directory:
             return jsonify({"valid": False, "error": "目录路径为空"})
-        
+
         if not os.path.exists(directory):
             return jsonify({"valid": False, "error": "目录不存在"})
-        
+
         if not os.path.isdir(directory):
             return jsonify({"valid": False, "error": "路径不是目录"})
-        
+
         if not os.access(directory, os.R_OK):
             return jsonify({"valid": False, "error": "无目录读权限"})
-        
+
         return jsonify({"valid": True, "message": "目录有效"})
-        
+
     except Exception as e:
         logging.error(f"目录验证错误: {str(e)}", exc_info=True)
         return jsonify({"valid": False, "error": str(e)})
+
+
 # ------------------------------
 # 媒体处理与监控
 # ------------------------------
@@ -621,7 +650,7 @@ class FileSystemMonitor(FileSystemEventHandler):
                 logging.error(f"监控停止失败: {str(e)}", exc_info=True)
             finally:
                 self.observer = None
-                
+
         # 取消任何待处理的扫描计时器（使用线程锁）
         with self._timer_lock:
             if self._scan_timer is not None and self._scan_timer.is_alive():
@@ -719,38 +748,43 @@ class WebSocketManager:
                 "total_count": counts["total"],
                 "image_count": counts["image"],
                 "video_count": counts["video"],
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
         )
 
         with cls._lock:
             # 创建完全独立的副本，避免迭代中修改列表
             active_ws_copy = list(cls._active_ws)
-            
+
         # 在锁外处理发送，避免阻塞
         inactive_connections = []
         for ws in active_ws_copy:
             try:
                 # 添加超时和心跳检测
-                if not ws.closed and hasattr(ws, 'last_activity') and (time.time() - ws.last_activity < 60):
+                if (
+                    not ws.closed
+                    and hasattr(ws, "last_activity")
+                    and (time.time() - ws.last_activity < 60)
+                ):
                     ws.send(message)
                 else:
                     inactive_connections.append(ws)
             except Exception as e:
                 logging.error(f"WebSocket发送失败: {str(e)}")
                 inactive_connections.append(ws)
-        
+
         # 清理不活跃连接
         if inactive_connections:
             with cls._lock:
-                cls._active_ws = [ws for ws in cls._active_ws if ws not in inactive_connections]
+                cls._active_ws = [
+                    ws for ws in cls._active_ws if ws not in inactive_connections
+                ]
 
     @classmethod
     def cleanup_inactive(cls):
         """清理无效连接（心跳检测）"""
         with cls._lock:
             cls._active_ws = [ws for ws in cls._active_ws if not ws.closed]
-
 
 
 @app.route("/scan", methods=["POST"])
@@ -857,21 +891,21 @@ def get_media_file(rel_path):
 
         # 多重安全检查
         if not os.path.exists(full_path):
-            logging.warning(f'文件不存在: {rel_path}')
-            return jsonify({'error': '文件不存在'}), 404
+            logging.warning(f"文件不存在: {rel_path}")
+            return jsonify({"error": "文件不存在"}), 404
 
         if not os.path.isfile(full_path):
-            logging.warning(f'非法文件类型: {rel_path}')
-            return jsonify({'error': '路径不合法'}), 403
+            logging.warning(f"非法文件类型: {rel_path}")
+            return jsonify({"error": "路径不合法"}), 403
 
         if not full_path.startswith(os.path.normcase(scan_dir)):
-            logging.warning(f'路径越界尝试: {rel_path} → {full_path}')
-            return jsonify({'error': '路径不合法'}), 403
+            logging.warning(f"路径越界尝试: {rel_path} → {full_path}")
+            return jsonify({"error": "路径不合法"}), 403
 
         # 新增符号链接检查
         if os.path.islink(full_path):
-            logging.warning(f'拒绝符号链接访问: {rel_path}')
-            return jsonify({'error': '非法文件类型'}), 403
+            logging.warning(f"拒绝符号链接访问: {rel_path}")
+            return jsonify({"error": "非法文件类型"}), 403
 
         if not os.path.exists(full_path) or not os.path.isfile(full_path):
             return jsonify({"error": "文件不存在"}), 404
@@ -885,7 +919,7 @@ def get_media_file(rel_path):
             # 更健壮的MIME类型回退逻辑
             image_exts = config_mgr.get_media_config("image").get("extensions", ())
             video_exts = config_mgr.get_media_config("video").get("extensions", ())
-            
+
             if file_ext.lower() in image_exts:
                 mime_type = f"image/{file_ext[1:]}"
             elif file_ext.lower() in video_exts:
@@ -996,9 +1030,9 @@ def websocket_endpoint():
         return "需要WebSocket连接", 400
 
     # 握手阶段验证Origin
-    origin = request.environ.get('HTTP_ORIGIN')
+    origin = request.environ.get("HTTP_ORIGIN")
     if origin not in WebSocketManager.allowed_origins:
-        ws.close(code=4001, reason='Origin not allowed')
+        ws.close(code=4001, reason="Origin not allowed")
         return
 
     WebSocketManager.add_connection(ws)
@@ -1127,13 +1161,14 @@ def main():
 
     # 启动服务器
     # 修改服务启动配置
-    server = pywsgi.WSGIServer(('0.0.0.0', 9001), app, handler_class=WebSocketHandler)
-    
+    server = pywsgi.WSGIServer(("0.0.0.0", 9001), app, handler_class=WebSocketHandler)
+
     # 添加端口检测
     import socket
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if sock.connect_ex(('localhost', 9001)) == 0:
+    if sock.connect_ex(("localhost", 9001)) == 0:
         logging.error("端口9001已被占用，请使用其他端口")
         sys.exit(1)
     sock.close()

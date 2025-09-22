@@ -173,3 +173,48 @@ export const getStatus = () => {
     reconnectAttempts: reconnectAttempts
   };
 };
+
+/**
+ * 重新连接WebSocket（外部调用）
+ */
+export const reconnect = () => {
+  console.log(`[websocket] 手动触发重连`);
+  isManualClose = false;
+  reconnectAttempts = 0;
+  
+  // 先关闭现有连接
+  if (websocket) {
+    websocket.close();
+    websocket = null;
+  }
+  
+  // 停止心跳和重连定时器
+  stopHeartbeat();
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  
+  // 立即重新连接
+  init();
+};
+
+/**
+ * 检查并修复WebSocket连接状态
+ */
+export const checkAndFixConnection = () => {
+  const status = getStatus();
+  
+  if (status.readyState === WebSocket.CLOSED && !isManualClose) {
+    console.log(`[websocket] 检测到异常关闭，尝试重新连接`);
+    reconnect();
+    return true;
+  }
+  
+  return false;
+};
+
+// 添加定时检查连接状态
+setInterval(() => {
+  checkAndFixConnection();
+}, 30000); // 每30秒检查一次连接状态

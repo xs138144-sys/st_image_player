@@ -11,7 +11,12 @@ const { formatTime, applyTransitionEffect } = utils;
 let switchTimer = null;
 let progressUpdateInterval = null;
 let preloadedMedia = null;
-const winSelector = `#st-image-player-window`;
+
+// 常量定义（与UI模块保持一致）
+const EXTENSION_ID = "st_image_player";
+const PLAYER_WINDOW_ID = "st-image-player-window";
+const SETTINGS_PANEL_ID = "st-image-player-settings-panel";
+const winSelector = `#${PLAYER_WINDOW_ID}`;
 
 // 模块内状态
 let mediaList = [];
@@ -119,7 +124,6 @@ export const init = () => {
       showMedia(data?.direction || "current");
     });
 
-
     const removeStartPlaybackListener = EventBus.on(
       "requestStartPlayback",
       startPlayback
@@ -148,6 +152,42 @@ export const init = () => {
       }
     );
 
+    // 新增事件监听：播放模式切换
+    const removeChangePlayModeListener = EventBus.on("changePlayMode", (newMode) => {
+      const settings = get();
+      settings.playMode = newMode;
+      save();
+      console.log(`[mediaPlayer] 播放模式已切换为: ${newMode}`);
+      
+      // 更新UI按钮状态
+      updatePlayModeUI();
+    });
+
+    // 新增事件监听：自动切换模式切换
+    const removeChangeAutoSwitchModeListener = EventBus.on("changeAutoSwitchMode", (newMode) => {
+      const settings = get();
+      settings.autoSwitchMode = newMode;
+      save();
+      console.log(`[mediaPlayer] 自动切换模式已切换为: ${newMode}`);
+      
+      // 更新UI按钮状态
+      updateAutoSwitchModeUI();
+    });
+
+    // 新增事件监听：媒体筛选器切换
+    const removeChangeMediaFilterListener = EventBus.on("changeMediaFilter", (filterType) => {
+      const settings = get();
+      settings.mediaFilter = filterType;
+      save();
+      console.log(`[mediaPlayer] 媒体筛选器已切换为: ${filterType}`);
+      
+      // 刷新媒体列表
+      EventBus.emit("requestRefreshMediaList", { filterType });
+      
+      // 更新UI按钮状态
+      updateMediaFilterUI();
+    });
+
 
 
 
@@ -159,6 +199,9 @@ export const init = () => {
       removeResumePlaybackListener,
       removeUpdateVolumeListener,
       removeMediaListListener,
+      removeChangePlayModeListener,
+      removeChangeAutoSwitchModeListener,
+      removeChangeMediaFilterListener,
     ];
 
     // 初始化媒体列表
@@ -556,6 +599,13 @@ export const showMedia = async (direction) => {
       videoElement.onpause = () => {
         window.media.state.isPlaying = false;
       };
+      // 监听视频播放结束事件 - 修复视频播放完毕切换问题
+      videoElement.onended = () => {
+        console.log("[mediaPlayer] 视频播放完毕，自动切换到下一个");
+        if (!settings.videoLoop) {
+          showMedia("next");
+        }
+      };
 
       startProgressUpdate(videoElement); // 启动视频进度更新
     }
@@ -627,6 +677,9 @@ export const startPlayback = () => {
   startAutoSwitch();
   const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
   if (video) video.play();
+  
+  // 更新UI按钮状态
+  updatePlayButtonUI(true);
 };
 
 /**
@@ -639,6 +692,44 @@ export const stopPlayback = () => {
   clearTimeout(switchTimer);
   const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
   if (video) video.pause();
+  
+  // 更新UI按钮状态
+  updatePlayButtonUI(false);
+};
+
+/**
+ * 更新播放按钮UI状态
+ */
+const updatePlayButtonUI = (isPlaying) => {
+  const $ = deps.jQuery;
+  if (!$) return;
+  
+  const $win = $(winSelector);
+  if ($win.length) {
+    // 更新播放器窗口中的播放/暂停按钮
+    const $playBtn = $win.find(".play-pause i");
+    $playBtn
+      .removeClass("fa-play fa-pause")
+      .addClass(isPlaying ? "fa-pause" : "fa-play");
+    
+    // 更新设置面板中的播放状态显示
+    const $settingsPanel = $("#" + SETTINGS_PANEL_ID);
+    if ($settingsPanel.length) {
+      const $playStatus = $settingsPanel.find(".play-status");
+      if ($playStatus.length) {
+        $playStatus.text(isPlaying ? "播放中" : "已暂停");
+      }
+    }
+    
+    // 更新扩展菜单按钮的播放状态
+    const $menuBtn = $("#ext_menu_" + EXTENSION_ID);
+    if ($menuBtn.length) {
+      const $menuPlayStatus = $menuBtn.find(".play-status");
+      if ($menuPlayStatus.length) {
+        $menuPlayStatus.text(isPlaying ? "播放中" : "已暂停");
+      }
+    }
+  }
 };
 
 /**
@@ -686,4 +777,70 @@ const updateVideoProgress = (video) => {
 
   const percent = (video.currentTime / video.duration) * 100;
   $win.find(".progress-played").css("width", `${percent}%`);
+};
+
+/**
+ * 更新播放模式UI状态
+ */
+const updatePlayModeUI = () => {
+  const $ = deps.jQuery;
+  if (!$) return;
+
+  const settings = get();
+  const $window = $(winSelector);
+  
+  // 更新模式切换按钮
+  const $modeBtn = $window.find(".mode-switch");
+  $modeBtn.attr("title", settings.playMode === "random" ? "随机模式" : "顺序模式");
+  $modeBtn.find("i")
+    .removeClass("fa-shuffle fa-list-ol")
+    .addClass(settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol");
+  
+  // 更新模式文本显示
+  $window.find(".control-text").text(
+    settings.playMode === "random" ? "随机模式" : `顺序模式: 0/0`
+  );
+  
+  console.log(`[mediaPlayer] 播放模式UI已更新: ${settings.playMode}`);
+};
+
+/**
+ * 更新自动切换模式UI状态
+ */
+const updateAutoSwitchModeUI = () => {
+  const $ = deps.jQuery;
+  if (!$) return;
+
+  const settings = get();
+  const $window = $(winSelector);
+  
+  // 更新自动切换模式按钮
+  const $switchModeBtn = $window.find(".switch-mode-toggle");
+  $switchModeBtn.attr("title", settings.autoSwitchMode === "detect" ? "检测播放" : "定时切换");
+  $switchModeBtn.find("i")
+    .removeClass("fa-robot fa-clock")
+    .addClass(settings.autoSwitchMode === "detect" ? "fa-robot" : "fa-clock");
+  $switchModeBtn.toggleClass("active", settings.autoSwitchMode === "detect");
+  
+  console.log(`[mediaPlayer] 自动切换模式UI已更新: ${settings.autoSwitchMode}`);
+};
+
+/**
+ * 更新媒体筛选器UI状态
+ */
+const updateMediaFilterUI = () => {
+  const $ = deps.jQuery;
+  if (!$) return;
+
+  const settings = get();
+  const $window = $(winSelector);
+  
+  // 更新所有筛选按钮状态
+  $window.find(".media-filter-btn").each(function() {
+    const $btn = $(this);
+    const btnType = $btn.data("type");
+    $btn.toggleClass("active", btnType === settings.mediaFilter);
+  });
+  
+  console.log(`[mediaPlayer] 媒体筛选器UI已更新: ${settings.mediaFilter}`);
 };
