@@ -363,7 +363,10 @@ export const createPlayerWindow = async () => {
               <i class="fa-solid fa-video"></i>
             </button>
           </div>
-          <div class="resize-handle"></div>
+          <div class="resize-handle resize-handle-se"></div>
+          <div class="resize-handle resize-handle-sw"></div>
+          <div class="resize-handle resize-handle-ne"></div>
+          <div class="resize-handle resize-handle-nw"></div>
         </div>
       </div>
     `;
@@ -374,9 +377,22 @@ export const createPlayerWindow = async () => {
     bindVideoControls();
     bindPlayerControls(); // 绑定新增控制栏事件
 
+    // 强制应用窗口尺寸约束，防止第一个媒体过大
+    const $window = $(`#${PLAYER_WINDOW_ID}`);
+    const windowSize = settings.windowSize || { width: 600, height: 450 };
+    
+    // 确保窗口尺寸不超过最大限制
+    const maxWidth = Math.min(windowSize.width, window.innerWidth * 0.9);
+    const maxHeight = Math.min(windowSize.height, window.innerHeight * 0.8);
+    
+    $window.css({
+      width: `${maxWidth}px`,
+      height: `${maxHeight}px`
+    });
+
     // 根据设置决定是否显示播放器
     if (!settings.isWindowVisible) {
-      $(`#${PLAYER_WINDOW_ID}`).hide();
+      $window.hide();
     }
 
     // 初始化筛选状态同步
@@ -845,13 +861,40 @@ const addPlayerCSS = () => {
       /* 调整手柄 */
       #${PLAYER_WINDOW_ID} .resize-handle {
         position: absolute !important;
-        bottom: 3px !important;
-        right: 3px !important;
         width: 16px !important;
         height: 16px !important;
         cursor: nwse-resize !important;
         opacity: 0.6 !important;
         transition: opacity 0.2s ease !important;
+        z-index: 1000 !important;
+      }
+
+      /* 右下角手柄 */
+      #${PLAYER_WINDOW_ID} .resize-handle-se {
+        bottom: 3px !important;
+        right: 3px !important;
+        cursor: nwse-resize !important;
+      }
+
+      /* 左下角手柄 */
+      #${PLAYER_WINDOW_ID} .resize-handle-sw {
+        bottom: 3px !important;
+        left: 3px !important;
+        cursor: nesw-resize !important;
+      }
+
+      /* 右上角手柄 */
+      #${PLAYER_WINDOW_ID} .resize-handle-ne {
+        top: 3px !important;
+        right: 3px !important;
+        cursor: nesw-resize !important;
+      }
+
+      /* 左上角手柄 */
+      #${PLAYER_WINDOW_ID} .resize-handle-nw {
+        top: 3px !important;
+        left: 3px !important;
+        cursor: nwse-resize !important;
       }
 
       #${PLAYER_WINDOW_ID} .resize-handle:hover {
@@ -861,13 +904,31 @@ const addPlayerCSS = () => {
       #${PLAYER_WINDOW_ID} .resize-handle::before {
         content: '' !important;
         position: absolute !important;
-        bottom: 3px !important;
-        right: 3px !important;
         width: 8px !important;
         height: 8px !important;
+        border-radius: 1px !important;
+      }
+
+      #${PLAYER_WINDOW_ID} .resize-handle-se::before,
+      #${PLAYER_WINDOW_ID} .resize-handle-nw::before {
+        bottom: 3px !important;
+        right: 3px !important;
         border-right: 2px solid rgba(255, 255, 255, 0.4) !important;
         border-bottom: 2px solid rgba(255, 255, 255, 0.4) !important;
-        border-radius: 1px !important;
+      }
+
+      #${PLAYER_WINDOW_ID} .resize-handle-sw::before {
+        bottom: 3px !important;
+        left: 3px !important;
+        border-left: 2px solid rgba(255, 255, 255, 0.4) !important;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.4) !important;
+      }
+
+      #${PLAYER_WINDOW_ID} .resize-handle-ne::before {
+        top: 3px !important;
+        right: 3px !important;
+        border-right: 2px solid rgba(255, 255, 255, 0.4) !important;
+        border-top: 2px solid rgba(255, 255, 255, 0.4) !important;
       }
 
       /* 加载动画 */
@@ -1525,12 +1586,14 @@ const setupWindowEvents = () => {
 
   // 窗口大小调整
   let isResizing = false;
-  const $resizeHandle = $window.find(".resize-handle");
+  let resizeDirection = null;
+  const $resizeHandles = $window.find(".resize-handle");
 
-  $resizeHandle.mousedown(function (e) {
+  $resizeHandles.mousedown(function (e) {
     if (settings.isLocked) return;
 
     isResizing = true;
+    resizeDirection = $(this).attr("class").split(" ")[1]; // 获取手柄类型
     e.preventDefault();
     $window.addClass("resizing");
   });
@@ -1538,12 +1601,45 @@ const setupWindowEvents = () => {
   $(document).mousemove(function (e) {
     if (!isResizing || settings.isLocked) return;
 
-    const newWidth = e.clientX - $window.offset().left;
-    const newHeight = e.clientY - $window.offset().top;
+    const offset = $window.offset();
+    const currentLeft = offset.left;
+    const currentTop = offset.top;
+    const currentWidth = $window.width();
+    const currentHeight = $window.height();
+
+    let newWidth = currentWidth;
+    let newHeight = currentHeight;
+    let newLeft = currentLeft;
+    let newTop = currentTop;
+
+    switch (resizeDirection) {
+      case "resize-handle-se": // 右下角
+        newWidth = e.clientX - currentLeft;
+        newHeight = e.clientY - currentTop;
+        break;
+      case "resize-handle-sw": // 左下角
+        newWidth = currentLeft + currentWidth - e.clientX;
+        newHeight = e.clientY - currentTop;
+        newLeft = e.clientX;
+        break;
+      case "resize-handle-ne": // 右上角
+        newWidth = e.clientX - currentLeft;
+        newHeight = currentTop + currentHeight - e.clientY;
+        newTop = e.clientY;
+        break;
+      case "resize-handle-nw": // 左上角
+        newWidth = currentLeft + currentWidth - e.clientX;
+        newHeight = currentTop + currentHeight - e.clientY;
+        newLeft = e.clientX;
+        newTop = e.clientY;
+        break;
+    }
 
     // 限制最小尺寸
     if (newWidth > 320 && newHeight > 240) {
       $window.css({
+        left: newLeft + "px",
+        top: newTop + "px",
         width: newWidth + "px",
         height: newHeight + "px"
       });
@@ -1551,8 +1647,9 @@ const setupWindowEvents = () => {
       // 调整视频控制栏布局
       adjustVideoControlsLayout($window);
 
-      // 保存大小
+      // 保存大小和位置
       settings.windowSize = { width: newWidth, height: newHeight };
+      settings.windowPosition = { left: newLeft, top: newTop };
       save();
     }
   });

@@ -139,9 +139,18 @@ const checkDependencies = () => {
 
   const hasEventSource = !!eventSource;
   const hasEventTypes = Object.keys(event_types).length > 0;
+  const hasSillyTavern = !!window.SillyTavern;
+  
   console.log(
-    `[aiEvents] 依赖检查: eventSource=${hasEventSource}, event_types=${hasEventTypes}`
+    `[aiEvents] 依赖检查: eventSource=${hasEventSource}, event_types=${hasEventTypes}, SillyTavern=${hasSillyTavern}`
   );
+  
+  // 如果SillyTavern不存在，说明可能不在SillyTavern环境中
+  if (!hasSillyTavern) {
+    console.warn('[aiEvents] 不在SillyTavern环境中，AI事件功能将禁用');
+    return false;
+  }
+  
   return hasEventSource && hasEventTypes;
 };
 
@@ -216,9 +225,24 @@ const registerAIEventListeners = () => {
         return;
       }
       console.error(`[aiEvents] 依赖未就绪，注册失败`);
+      
+      // 提供更详细的错误信息
+      const eventSource = deps.utils.getSafeGlobal("eventSource", null);
+      const event_types = deps.utils.getSafeGlobal("event_types", {});
+      const hasSillyTavern = !!window.SillyTavern;
+      
+      let errorMsg = "AI事件依赖缺失";
+      if (!hasSillyTavern) {
+        errorMsg = "不在SillyTavern环境中，AI事件功能已禁用";
+      } else if (!eventSource) {
+        errorMsg = "eventSource未找到，请确保SillyTavern已完全加载";
+      } else if (Object.keys(event_types).length === 0) {
+        errorMsg = "event_types未初始化，请刷新页面重试";
+      }
+      
       // 使用安全的toastr调用
       if (deps.toastr && typeof deps.toastr.error === "function") {
-        deps.toastr.error("AI事件依赖缺失，请刷新页面重试");
+        deps.toastr.error(errorMsg);
       }
       return;
     }
