@@ -179,9 +179,13 @@ export const init = async () => {
     console.error(`[websocket] 初始化错误:`, e);
     // 10秒后重试，但只在未达到最大重连次数时重试
     if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      reconnectAttempts++;
+      const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000); // 指数退避
+      console.log(`[websocket] 将在${delay / 1000}秒后重试 (尝试 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+      
       reconnectTimer = setTimeout(() => {
         init();
-      }, 10000);
+      }, delay);
     } else {
       console.log(`[websocket] 达到最大重连次数，停止重连`);
       safeToastr.error("媒体同步连接失败，请检查服务状态");
@@ -245,6 +249,12 @@ export const closeWebSocket = () => {
  */
 export const cleanup = () => {
   closeWebSocket();
+  
+  // 清理连接检查定时器
+  if (connectionCheckInterval) {
+    clearInterval(connectionCheckInterval);
+  }
+  
   console.log(`[websocket] 资源清理完成`);
 };
 
@@ -308,7 +318,9 @@ setTimeout(() => {
   }
 }, 3000);
 
-// 添加定时检查连接状态
-setInterval(() => {
-  checkAndFixConnection();
+// 添加定时检查连接状态（仅在连接断开时重连）
+const connectionCheckInterval = setInterval(() => {
+  if (!isManualClose) {
+    checkAndFixConnection();
+  }
 }, 30000); // 每30秒检查一次连接状态
