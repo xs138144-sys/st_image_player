@@ -1144,7 +1144,7 @@ def main():
     # 打印启动信息
     logging.info("=" * 80)
     logging.info("本地媒体服务启动（支持图片+视频）")
-    logging.info("服务地址: http://127.0.0.1:9001")
+    logging.info("服务地址: http://127.0.0.1:9000")
     img_cfg = config_mgr.get_media_config("image")
     video_cfg = config_mgr.get_media_config("video")
     logging.info(
@@ -1161,15 +1161,15 @@ def main():
 
     # 启动服务器
     # 修改服务启动配置
-    server = pywsgi.WSGIServer(("0.0.0.0", 9001), app, handler_class=WebSocketHandler)
+    server = pywsgi.WSGIServer(("0.0.0.0", 9000), app, handler_class=WebSocketHandler)
 
     # 添加端口检测
     import socket
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if sock.connect_ex(("localhost", 9001)) == 0:
-        logging.error("端口9001已被占用，请使用其他端口")
+    if sock.connect_ex(("localhost", 9000)) == 0:
+        logging.error("端口9000已被占用，请使用其他端口")
         sys.exit(1)
     sock.close()
     try:
