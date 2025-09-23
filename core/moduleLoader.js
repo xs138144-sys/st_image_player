@@ -95,8 +95,29 @@ export class ModuleLoader {
         }
       } else {
         // SillyTavern环境：模块位于扩展根目录下
-        // 所有模块都在扩展根目录下，不需要额外的路径前缀
-        fullUrl = `${baseUrl}${moduleName}.js`;
+        // 在ST环境中，模块文件都在扩展根目录下，但模块名称可能包含路径
+        // 需要根据模块类型正确处理路径
+        if (moduleName.startsWith('ui/')) {
+          // UI模块：ui/ui.js -> /scripts/extensions/third-party/st_image_player/ui/ui.js
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else if (moduleName.startsWith('media/')) {
+          // 媒体模块：media/mediaPlayer.js -> /scripts/extensions/third-party/st_image_player/media/mediaPlayer.js
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else if (moduleName.startsWith('settings/')) {
+          // settings模块：settings/settingsManager -> /scripts/extensions/third-party/st_image_player/modules/settings/settingsManager.js
+          const actualPath = moduleName.replace('settings/', 'modules/settings/');
+          fullUrl = `${baseUrl}${actualPath}.js`;
+        } else if (moduleName.startsWith('api/')) {
+          // API模块：api/mediaApi -> /scripts/extensions/third-party/st_image_player/modules/api/mediaApi.js
+          const actualPath = moduleName.replace('api/', 'modules/api/');
+          fullUrl = `${baseUrl}${actualPath}.js`;
+        } else if (moduleName.includes('/')) {
+          // 其他带路径的模块
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else {
+          // 工具模块：timeUtils -> /scripts/extensions/third-party/st_image_player/modules/timeUtils.js
+          fullUrl = `${baseUrl}modules/${moduleName}.js`;
+        }
       }
       
       console.log(`[moduleLoader] 模块路径: ${moduleName}`);
