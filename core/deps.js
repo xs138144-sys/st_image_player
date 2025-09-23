@@ -121,8 +121,10 @@ const deps = {
 
   // 修复设置获取方法
   get settings() {
-    // 直接使用模块列表中的完整名称
-    const settingsModule = this.getModule('modules/settings/settingsManager');
+    // 尝试多种可能的模块名称（按优先级排序）
+    const settingsModule = this.getModule('settings/settingsManager') || 
+                          this.getModule('modules/settings/settingsManager') || 
+                          this.getModule('settingsManager');
     
     if (!settingsModule || typeof settingsModule.get !== 'function') {
       console.warn('[deps] settings模块未正确加载，使用回退方案');
