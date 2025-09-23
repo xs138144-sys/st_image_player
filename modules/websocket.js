@@ -23,7 +23,7 @@ const loadSocketIOLibrary = () => {
     // 创建script标签加载SocketIO
     const script = document.createElement('script');
     script.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
-    script.integrity = 'sha384-7QbL3K2l0Q5NZNVJ6Z+5qk=5W2VKJ7a1I6s2+1I/5K5K5N5P5G5G5G5G5G5G5G5G5';
+    // 移除integrity校验以避免浏览器阻止加载
     script.crossOrigin = 'anonymous';
     
     script.onload = () => {
