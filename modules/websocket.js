@@ -1,7 +1,7 @@
-// websocket.js 修复版本
+// websocket.js 修复版本 - 适配Flask-SocketIO
 import { deps } from '../core/deps.js';
 
-let websocket = null;
+let socket = null;
 let reconnectTimer = null;
 let heartbeatInterval = null;
 let isManualClose = false;
@@ -9,12 +9,45 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
 /**
- * 初始化WebSocket连接
+ * 动态加载SocketIO客户端库
  */
-export const init = () => {
+const loadSocketIOLibrary = () => {
+  return new Promise((resolve, reject) => {
+    // 检查是否已经加载
+    if (typeof io !== 'undefined') {
+      console.log(`[websocket] SocketIO库已加载`);
+      resolve();
+      return;
+    }
+
+    // 创建script标签加载SocketIO
+    const script = document.createElement('script');
+    script.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+    script.integrity = 'sha384-7QbL3K2l0Q5NZNVJ6Z+5qk=5W2VKJ7a1I6s2+1I/5K5K5N5P5G5G5G5G5G5G5G5G5';
+    script.crossOrigin = 'anonymous';
+    
+    script.onload = () => {
+      console.log(`[websocket] SocketIO客户端库加载成功`);
+      resolve();
+    };
+    
+    script.onerror = (error) => {
+      console.error(`[websocket] SocketIO客户端库加载失败:`, error);
+      deps.toastr.error("SocketIO库加载失败，请检查网络");
+      reject(error);
+    };
+    
+    document.head.appendChild(script);
+  });
+};
+
+/**
+ * 初始化SocketIO连接
+ */
+export const init = async () => {
   const settings = deps.settings.get();
   if (!settings.serviceUrl) {
-    console.warn(`[websocket] 未配置服务地址，无法初始化WebSocket`);
+    console.warn(`[websocket] 未配置服务地址，无法初始化SocketIO`);
     return;
   }
 
@@ -24,16 +57,25 @@ export const init = () => {
     reconnectTimer = null;
   }
 
-  // 转换HTTP地址为WebSocket地址
-  const wsUrl = settings.serviceUrl.replace(/^http/, 'ws') + '/ws';
-
-  console.log(`[websocket] 尝试连接: ${wsUrl}`);
+  // 确保使用正确的SocketIO路径
+  const serviceUrl = settings.serviceUrl.replace(/\/$/, ''); // 移除末尾斜杠
+  console.log(`[websocket] 尝试连接SocketIO: ${serviceUrl}`);
 
   try {
-    websocket = new WebSocket(wsUrl);
+    // 动态加载SocketIO客户端库
+    if (typeof io === 'undefined') {
+      console.log(`[websocket] 动态加载SocketIO客户端库`);
+      await loadSocketIOLibrary();
+    }
 
-    websocket.onopen = () => {
-      console.log(`[websocket] 连接成功: ${wsUrl}`);
+    // 创建SocketIO连接
+    socket = io(serviceUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: false // 手动处理重连
+    });
+
+    socket.on('connect', () => {
+      console.log(`[websocket] SocketIO连接成功: ${serviceUrl}`);
       deps.toastr.success("媒体实时同步已启用");
       reconnectAttempts = 0; // 重置重连计数
 
@@ -42,45 +84,26 @@ export const init = () => {
 
       deps.EventBus.emit("websocketConnected");
       isManualClose = false;
-    };
+    });
 
-    websocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log(`[websocket] 收到消息:`, data);
+    socket.on('init', (data) => {
+      console.log(`[websocket] 收到初始化消息，媒体总数: ${data.total_count}`);
+      deps.EventBus.emit("websocketInitialized", data);
+    });
 
-        // 处理心跳响应
-        if (data.type === "pong") {
-          console.log(`[websocket] 收到心跳响应`);
-          return;
-        }
+    socket.on('media_updated', (data) => {
+      console.log(`[websocket] 收到媒体更新消息:`, data);
+      deps.EventBus.emit("websocketMessage", data);
+      deps.EventBus.emit("mediaListUpdated", data);
+      deps.EventBus.emit("requestRefreshMediaList");
+    });
 
-        // 处理初始化消息
-        if (data.type === "init") {
-          console.log(`[websocket] 收到初始化消息，媒体总数: ${data.total_count}`);
-          deps.EventBus.emit("websocketInitialized", data);
-          return;
-        }
+    socket.on('pong', (data) => {
+      console.log(`[websocket] 收到心跳响应`);
+    });
 
-        deps.EventBus.emit("websocketMessage", data);
-
-        if (data.type === "media_updated") {
-          deps.EventBus.emit("mediaListUpdated", data);
-          // 刷新媒体列表
-          deps.EventBus.emit("requestRefreshMediaList");
-        }
-      } catch (e) {
-        console.error(`[websocket] 消息解析失败:`, e);
-      }
-    };
-
-    websocket.onerror = (error) => {
-      console.error(`[websocket] 连接错误:`, error);
-      deps.toastr.error("媒体同步连接出错");
-    };
-
-    websocket.onclose = (event) => {
-      console.log(`[websocket] 连接关闭`, event.code, event.reason);
+    socket.on('disconnect', (reason) => {
+      console.log(`[websocket] SocketIO连接断开:`, reason);
 
       // 停止心跳
       stopHeartbeat();
@@ -101,7 +124,13 @@ export const init = () => {
       }
 
       deps.EventBus.emit("websocketDisconnected");
-    };
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error(`[websocket] SocketIO连接错误:`, error);
+      deps.toastr.error("媒体同步连接出错");
+    });
+
   } catch (e) {
     console.error(`[websocket] 初始化错误:`, e);
     // 10秒后重试
@@ -118,12 +147,12 @@ const startHeartbeat = () => {
   stopHeartbeat(); // 先停止旧的心跳
 
   heartbeatInterval = setInterval(() => {
-    if (websocket && websocket.readyState === WebSocket.OPEN) {
+    if (socket && socket.connected) {
       try {
-        websocket.send(JSON.stringify({
+        socket.emit('ping', {
           type: "ping",
           timestamp: Date.now()
-        }));
+        });
         console.log(`[websocket] 发送心跳`);
       } catch (e) {
         console.error(`[websocket] 发送心跳失败:`, e);
@@ -143,15 +172,15 @@ const stopHeartbeat = () => {
 };
 
 /**
- * 关闭WebSocket连接
+ * 关闭SocketIO连接
  */
 export const closeWebSocket = () => {
   isManualClose = true;
   stopHeartbeat();
 
-  if (websocket) {
-    websocket.close();
-    websocket = null;
+  if (socket) {
+    socket.disconnect();
+    socket = null;
   }
 
   if (reconnectTimer) {
@@ -171,18 +200,18 @@ export const cleanup = () => {
 };
 
 /**
- * 获取WebSocket状态
+ * 获取SocketIO状态
  */
 export const getStatus = () => {
   return {
-    connected: websocket && websocket.readyState === WebSocket.OPEN,
-    readyState: websocket ? websocket.readyState : WebSocket.CLOSED,
+    connected: socket ? socket.connected : false,
+    readyState: socket ? (socket.connected ? 1 : 0) : 0, // 1=OPEN, 0=CLOSED
     reconnectAttempts: reconnectAttempts
   };
 };
 
 /**
- * 重新连接WebSocket（外部调用）
+ * 重新连接SocketIO（外部调用）
  */
 export const reconnect = () => {
   console.log(`[websocket] 手动触发重连`);
@@ -190,9 +219,9 @@ export const reconnect = () => {
   reconnectAttempts = 0;
   
   // 先关闭现有连接
-  if (websocket) {
-    websocket.close();
-    websocket = null;
+  if (socket) {
+    socket.disconnect();
+    socket = null;
   }
   
   // 停止心跳和重连定时器
@@ -207,12 +236,12 @@ export const reconnect = () => {
 };
 
 /**
- * 检查并修复WebSocket连接状态
+ * 检查并修复SocketIO连接状态
  */
 export const checkAndFixConnection = () => {
   const status = getStatus();
   
-  if (status.readyState === WebSocket.CLOSED && !isManualClose) {
+  if (!status.connected && !isManualClose) {
     console.log(`[websocket] 检测到异常关闭，尝试重新连接`);
     reconnect();
     return true;
