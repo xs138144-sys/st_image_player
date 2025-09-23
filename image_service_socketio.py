@@ -57,6 +57,7 @@ cors = CORS(
             "methods": ["GET", "POST", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "expose_headers": ["X-Request-ID"],
+            "supports_credentials": True,
         }
     },
 )

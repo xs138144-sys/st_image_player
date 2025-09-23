@@ -89,7 +89,10 @@ export const init = () => {
 
       // 启用状态下创建UI
       if (settings.masterEnabled) {
-        createPlayerWindow();
+        // 根据设置决定是否创建播放器窗口
+        if (settings.isWindowVisible) {
+          createPlayerWindow();
+        }
         
         // 确保SillyTavern扩展设置容器存在
         ensureExtensionsSettingsContainer();
