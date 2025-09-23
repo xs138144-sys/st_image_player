@@ -93,12 +93,12 @@ const deps = {
    * 快捷访问常用模块
    */
   get utils() {
-    return this.getModule('utils') || {};
+    return this.getModule('utils') || this.getModule('modules/timeUtils') || this.getModule('modules/domUtils') || {};
   },
 
   // 修复设置获取方法
   get settings() {
-    const settingsModule = this.getModule('settings');
+    const settingsModule = this.getModule('settings') || this.getModule('modules/settings/settingsManager');
     if (!settingsModule || typeof settingsModule.get !== 'function') {
       console.warn('[deps] settings模块未正确加载，使用回退方案');
       return {
@@ -110,18 +110,49 @@ const deps = {
     return settingsModule;
   },
 
-  // 修复API获取方法 - 修正函数名拼写
+  // 修复API获取方法 - 支持新的API模块结构
   get api() {
-    const apiModule = this.getModule('api');
-    if (!apiModule || typeof apiModule.checkServiceStatus !== 'function') {
-      console.warn('[deps] api模块未正确加载，使用回退方案');
-      return {
-        checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }),
-        fetchMediaList: () => Promise.resolve([]),
-        refreshMediaList: () => Promise.resolve([])
-      };
-    }
-    return apiModule;
+    const apiModule = this.getModule('api') || {};
+    const serviceApi = this.getModule('modules/api/serviceApi') || {};
+    const mediaApi = this.getModule('modules/api/mediaApi') || {};
+    const configApi = this.getModule('modules/api/configApi') || {};
+    
+    // 合并所有API功能
+    return {
+      ...apiModule,
+      ...serviceApi,
+      ...mediaApi,
+      ...configApi,
+      // 回退方案
+      checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }),
+      fetchMediaList: () => Promise.resolve([]),
+      refreshMediaList: () => Promise.resolve([])
+    };
+  },
+
+  // 新增：服务API快捷访问
+  get serviceApi() {
+    return this.getModule('modules/api/serviceApi') || this.api;
+  },
+
+  // 新增：媒体API快捷访问
+  get mediaApi() {
+    return this.getModule('modules/api/mediaApi') || this.api;
+  },
+
+  // 新增：配置API快捷访问
+  get configApi() {
+    return this.getModule('modules/api/configApi') || this.api;
+  },
+
+  // 新增：时间工具快捷访问
+  get timeUtils() {
+    return this.getModule('modules/timeUtils') || this.utils;
+  },
+
+  // 新增：DOM工具快捷访问
+  get domUtils() {
+    return this.getModule('modules/domUtils') || this.utils;
   },
 
   get EventBus() {
