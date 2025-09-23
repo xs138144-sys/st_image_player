@@ -867,6 +867,7 @@ const addPlayerCSS = () => {
         opacity: 0.6 !important;
         transition: opacity 0.2s ease !important;
         z-index: 1000 !important;
+        pointer-events: all !important;
       }
 
       /* 右下角手柄 */

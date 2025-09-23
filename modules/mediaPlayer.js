@@ -124,6 +124,10 @@ export const init = () => {
       showMedia(data?.direction || "current");
     });
 
+    const removePauseListener = EventBus.on("requestMediaPause", () => {
+      stopPlayback();
+    });
+
     const removeStartPlaybackListener = EventBus.on(
       "requestStartPlayback",
       startPlayback
@@ -149,6 +153,9 @@ export const init = () => {
         console.log(
           `[mediaPlayer] 媒体列表已更新，共${mediaList.length}个媒体`
         );
+        
+        // 更新媒体数量显示
+        updateMediaCountDisplay();
         
         // 新增：媒体列表刷新后自动播放第一个媒体
         if (mediaList.length > 0) {
@@ -622,6 +629,9 @@ export const showMedia = async (direction) => {
     settings.isMediaLoading = false;
     save();
     startAutoSwitch(); // 启动自动切换
+    
+    // 更新媒体数量显示
+    updateMediaCountDisplay();
 
 
   } catch (e) {
@@ -804,9 +814,10 @@ const updatePlayModeUI = () => {
     .addClass(settings.playMode === "random" ? "fa-shuffle" : "fa-list-ol");
   
   // 更新模式文本显示
-  $window.find(".control-text").text(
-    settings.playMode === "random" ? "随机模式" : `顺序模式: 0/0`
-  );
+  const mediaCountText = settings.playMode === "random" 
+    ? "随机模式" 
+    : `顺序模式: ${currentMediaIndex + 1}/${mediaList.length}`;
+  $window.find(".control-text").text(mediaCountText);
   
   console.log(`[mediaPlayer] 播放模式UI已更新: ${settings.playMode}`);
 };
@@ -850,4 +861,23 @@ const updateMediaFilterUI = () => {
   });
   
   console.log(`[mediaPlayer] 媒体筛选器UI已更新: ${settings.mediaFilter}`);
+};
+
+/**
+ * 更新媒体数量显示
+ */
+const updateMediaCountDisplay = () => {
+  const $ = deps.jQuery;
+  if (!$) return;
+
+  const settings = get();
+  const $window = $(winSelector);
+  
+  if (mediaList.length > 0) {
+    const mediaCountText = settings.playMode === "random" 
+      ? "随机模式" 
+      : `顺序模式: ${currentMediaIndex + 1}/${mediaList.length}`;
+    $window.find(".control-text").text(mediaCountText);
+    console.log(`[mediaPlayer] 媒体数量显示已更新: ${mediaCountText}`);
+  }
 };
