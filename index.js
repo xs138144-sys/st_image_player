@@ -11,7 +11,7 @@ const MODULES = [
   "modules/utils",
   
   // 设置相关模块 - 在API之前加载
-  "modules/settings/settingsManager",
+  "modules/settings",
   "modules/settings/settingsMigrator",
   
   // API相关模块
@@ -46,7 +46,7 @@ const initExtension = async () => {
 
     // 检查关键模块加载状态
     const criticalModules = [
-      "modules/settings/settingsManager", 
+      "modules/settings", 
       "modules/api/serviceApi", 
       "modules/domUtils"
     ];
