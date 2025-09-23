@@ -19,7 +19,7 @@ export class ModuleLoader {
     // 更智能的环境检测：检查是否在测试页面中运行
     // 检测SillyTavern环境
     const isSillyTavern = typeof window !== 'undefined' && 
-        (window.SillyTavern || 
+        (!!window.SillyTavern || 
          window.location?.pathname?.includes('/scripts/extensions/') ||
          window.location?.pathname?.includes('/extensions/'));
          
