@@ -105,8 +105,11 @@ export class ModuleLoader {
       // 在SillyTavern中，需要基于扩展根目录构建完整URL
       const baseUrl = this._getExtensionBaseUrl();
       let fullUrl;
+      
       if (baseUrl) {
+        // 使用检测到的baseUrl构建完整URL
         fullUrl = new URL(modulePath, baseUrl).href;
+        console.log(`[moduleLoader] 使用baseUrl构建路径: ${fullUrl}`);
       } else {
         // 如果baseUrl是空字符串（开发环境），需要从当前脚本URL推断完整路径
         const scripts = document.querySelectorAll('script[src*="st_image_player"]');
