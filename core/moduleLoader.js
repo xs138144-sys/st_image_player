@@ -15,11 +15,11 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 在SillyTavern扩展中，路径是稳定的，直接使用绝对路径
-    // 这样可以避免相对路径解析问题，确保始终指向正确的扩展目录
-    const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
-    console.log(`[moduleLoader] 使用绝对路径: ${extensionRoot}`);
-    return extensionRoot;
+    // 模块加载器核心和模块之间的路径是固定的
+    // 模块加载器核心和ST主核心之间的路径也是固定的
+    // 使用相对路径，让浏览器基于当前脚本位置自动解析
+    console.log(`[moduleLoader] 使用相对路径，基于当前脚本位置解析`);
+    return '';
   }
 
   /**
@@ -35,6 +35,7 @@ export class ModuleLoader {
       // 处理模块路径逻辑
       // 注意：moduleName已经包含了完整的相对路径（如'modules/timeUtils'）
       // 直接添加.js扩展名即可，不需要额外添加目录前缀
+      // 在SillyTavern扩展中，路径结构是固定的：/scripts/extensions/third-party/st_image_player/
       modulePath = `${moduleName}.js`;
       
       console.log(`[moduleLoader] 相对路径: ${modulePath}`);
