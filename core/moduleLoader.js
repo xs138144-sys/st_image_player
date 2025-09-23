@@ -39,9 +39,9 @@ export class ModuleLoader {
       }
     }
     
-    // 如果无法检测，使用默认的SillyTavern扩展路径
-    const defaultPath = window.location.origin + '/scripts/extensions/third-party/st_image_player/';
-    console.log(`[moduleLoader] 使用默认扩展路径: ${defaultPath}`);
+    // 如果无法检测，使用当前目录作为根路径（开发环境）
+    const defaultPath = window.location.origin + '/';
+    console.log(`[moduleLoader] 使用开发环境根路径: ${defaultPath}`);
     return defaultPath;
   }
 
@@ -200,7 +200,7 @@ export class ModuleLoader {
     let cleanupFunction = moduleObj.cleanup || moduleObj.default?.cleanup;
     if (typeof cleanupFunction !== "function") {
       console.warn(`[moduleLoader] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
-      cleanupFunction = async () => { console.log(`[${moduleName}] 默认清理完成`) };
+      cleanupFunction = async () => { console.log(`[${moduleName}] 默认清理完成`); };
     }
 
     // 确保模块对象有正确的方法
