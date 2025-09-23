@@ -15,32 +15,61 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 在SillyTavern环境中，从当前脚本URL推断扩展根目录
+    // 支持两种安装方式的路径检测
+    // 1. 本地安装: /scripts/extensions/third-party/st_image_player/
+    // 2. GitHub安装: /data/default-user/extensions/st_image_player/
+    
+    // 尝试检测当前脚本的实际路径
     const scripts = document.querySelectorAll('script[src*="st_image_player"]');
     
     if (scripts.length > 0) {
       const scriptUrl = scripts[0].src;
       console.log(`[moduleLoader] 检测到脚本URL: ${scriptUrl}`);
       
-      // 提取扩展根目录（移除core/部分）
-      const coreIndex = scriptUrl.indexOf('/core/');
-      if (coreIndex !== -1) {
-        const extensionRoot = scriptUrl.substring(0, coreIndex) + '/';
-        console.log(`[moduleLoader] 检测到扩展根目录: ${extensionRoot}`);
+      // 检查GitHub安装路径
+      if (scriptUrl.includes('/data/default-user/extensions/')) {
+        const extensionRoot = '/data/default-user/extensions/st_image_player/';
+        console.log(`[moduleLoader] 检测到GitHub安装路径: ${extensionRoot}`);
         return extensionRoot;
       }
       
-      // 尝试其他可能的路径模式
-      const stIndex = scriptUrl.indexOf('/st_image_player/');
-      if (stIndex !== -1) {
-        const extensionRoot = scriptUrl.substring(0, stIndex + '/st_image_player/'.length);
-        console.log(`[moduleLoader] 检测到扩展根目录: ${extensionRoot}`);
+      // 检查本地安装路径
+      if (scriptUrl.includes('/scripts/extensions/third-party/')) {
+        const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
+        console.log(`[moduleLoader] 检测到本地安装路径: ${extensionRoot}`);
         return extensionRoot;
+      }
+      
+      // 检查开发环境（Python HTTP服务器）
+      if (scriptUrl.includes('localhost:8000') || scriptUrl.includes('127.0.0.1:8000')) {
+        // 在开发环境中，使用相对路径，让浏览器自动处理
+        console.log(`[moduleLoader] 检测到开发环境，使用相对路径`);
+        return '';
+      }
+      
+      // 如果无法确定具体路径，尝试从脚本URL推断扩展根目录
+      try {
+        // 提取脚本目录路径（移除文件名部分）
+        const scriptDir = scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1);
+        
+        // 检查是否在core目录中，如果是则向上移动一级
+        if (scriptDir.includes('/core/')) {
+          const extensionRoot = scriptDir.replace('/core/', '/');
+          console.log(`[moduleLoader] 推断扩展根目录: ${extensionRoot}`);
+          return extensionRoot;
+        }
+        
+        // 直接使用脚本所在目录
+        console.log(`[moduleLoader] 使用脚本所在目录: ${scriptDir}`);
+        return scriptDir;
+      } catch (e) {
+        console.warn(`[moduleLoader] 路径推断失败，使用相对路径`);
+        return '';
       }
     }
     
-    // 如果无法检测，使用相对路径（可能会失败）
-    console.warn(`[moduleLoader] 无法检测扩展根目录，使用相对路径`);
+    // 如果没有找到脚本，使用相对路径
+    console.warn(`[moduleLoader] 未找到扩展脚本，使用相对路径`);
     return '';
   }
 
