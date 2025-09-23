@@ -8,11 +8,12 @@ const moduleLoader = new ModuleLoader(deps);
 
 // 需加载的模块列表（按依赖顺序排列）
 const MODULES = [
-  // 基础工具模块
+  // 基础工具模块 - 先加载这些，因为它们被其他模块依赖
   "modules/timeUtils",
   "modules/domUtils",
+  "modules/utils",
   
-  // 设置相关模块
+  // 设置相关模块 - 在API之前加载
   "modules/settings/settingsManager",
   "modules/settings/settingsMigrator",
   
@@ -21,7 +22,7 @@ const MODULES = [
   "modules/api/mediaApi",
   "modules/api/configApi",
   
-  // 迁移模块（提供向后兼容性）
+  // 迁移模块（提供向后兼容性）- 最后加载
   "modules/migration/legacyModuleAdapter",
   
   // 其他模块
