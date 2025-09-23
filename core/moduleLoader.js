@@ -20,10 +20,23 @@ export class ModuleLoader {
     const scripts = document.querySelectorAll('script[src*="st_image_player"]');
     if (scripts.length > 0) {
       const scriptSrc = scripts[0].src;
-      // 移除core/目录部分，获取扩展根目录
-      const extensionPath = scriptSrc.substring(0, scriptSrc.indexOf('/core/')) + '/';
-      console.log(`[moduleLoader] 检测到扩展根目录: ${extensionPath}`);
-      return extensionPath;
+      console.log(`[moduleLoader] 检测到脚本URL: ${scriptSrc}`);
+      
+      // 安全地移除core/目录部分，获取扩展根目录
+      const coreIndex = scriptSrc.indexOf('/core/');
+      if (coreIndex !== -1) {
+        const extensionPath = scriptSrc.substring(0, coreIndex) + '/';
+        console.log(`[moduleLoader] 检测到扩展根目录: ${extensionPath}`);
+        return extensionPath;
+      } else {
+        // 如果没有找到/core/，尝试其他可能的路径模式
+        const stIndex = scriptSrc.indexOf('/st_image_player/');
+        if (stIndex !== -1) {
+          const extensionPath = scriptSrc.substring(0, stIndex + '/st_image_player/'.length);
+          console.log(`[moduleLoader] 检测到扩展根目录: ${extensionPath}`);
+          return extensionPath;
+        }
+      }
     }
     
     // 如果无法检测，使用默认的SillyTavern扩展路径
