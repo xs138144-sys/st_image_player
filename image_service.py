@@ -499,7 +499,7 @@ class MediaManager:
                 return "video"
             return None
         except Exception as e:
-            logging.warning(f"类型检测失败 {file_path}: {str(e)}")
+            logging.debug(f"类型检测失败 {file_path}: {str(e)}")
             # 纯扩展名检测
             file_lower = file_name.lower()
             image_exts = config_mgr.get_media_config("image").get("extensions", ())
