@@ -17,9 +17,12 @@ export class ModuleLoader {
   async loadModule(moduleName, retries = 3) {
     try {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
-      // 修复路径处理逻辑
+      // 修复路径处理逻辑 - 移除重复的"modules"前缀
       let modulePath;
-      if (moduleName.includes('/')) {
+      if (moduleName.startsWith('modules/')) {
+        // 如果模块名已经包含modules/前缀，直接使用
+        modulePath = `./${moduleName}.js`;
+      } else if (moduleName.includes('/')) {
         // 对于子目录模块，确保路径正确
         modulePath = `./modules/${moduleName}.js`;
       } else {
