@@ -39,9 +39,16 @@ export class ModuleLoader {
       }
     }
     
-    // 如果无法检测，使用当前目录作为根路径（开发环境）
-    const defaultPath = window.location.origin + '/';
-    console.log(`[moduleLoader] 使用开发环境根路径: ${defaultPath}`);
+    // 如果无法检测，尝试多种可能的SillyTavern扩展路径
+    const possiblePaths = [
+      '/scripts/extensions/third-party/st_image_player/', // 本地安装路径
+      '/data/default-user/extensions/st_image_player/',   // GitHub在线安装路径
+      '/'  // 最后尝试根路径
+    ];
+    
+    // 返回第一个可能的路径
+    const defaultPath = window.location.origin + possiblePaths[0];
+    console.log(`[moduleLoader] 使用默认扩展路径: ${defaultPath}`);
     return defaultPath;
   }
 
@@ -58,13 +65,13 @@ export class ModuleLoader {
       // 处理模块路径逻辑
       if (moduleName.startsWith('modules/') || moduleName.startsWith('media/') || moduleName.startsWith('ui/')) {
         // 如果模块名已经包含目录前缀，直接使用
-        modulePath = `./${moduleName}.js`;
+        modulePath = `${moduleName}.js`;
       } else if (moduleName.includes('/')) {
         // 对于子目录模块，确保路径正确
-        modulePath = `./${moduleName}.js`;
+        modulePath = `${moduleName}.js`;
       } else {
         // 对于根目录模块，默认放在modules目录
-        modulePath = `./modules/${moduleName}.js`;
+        modulePath = `modules/${moduleName}.js`;
       }
       
       console.log(`[moduleLoader] 相对路径: ${modulePath}`);
