@@ -19,6 +19,7 @@ export class ModuleLoader {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
       
       // 在SillyTavern环境中，模块路径需要相对于扩展根目录
+      // 扩展根目录在SillyTavern中为: /scripts/extensions/third-party/st_image_player/
       let modulePath;
       if (moduleName.startsWith('modules/')) {
         // 如果模块名已经包含modules/前缀，直接使用
@@ -32,6 +33,14 @@ export class ModuleLoader {
       }
       
       // 在SillyTavern中，import使用相对路径，但需要确保路径正确
+      // 注意：SillyTavern扩展脚本运行在http://127.0.0.1:8000/scripts/extensions/third-party/st_image_player/
+      // 因此相对路径需要相对于扩展根目录
+      console.log(`[moduleLoader] 加载路径: ${modulePath}`);
+      
+      // 添加调试信息，显示完整的URL路径
+      const fullUrl = new URL(modulePath, window.location.href).href;
+      console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
+      
       const module = await import(modulePath);
 
       // 检查模块是否有效
