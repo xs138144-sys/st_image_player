@@ -149,6 +149,12 @@ export const init = () => {
         console.log(
           `[mediaPlayer] 媒体列表已更新，共${mediaList.length}个媒体`
         );
+        
+        // 新增：媒体列表刷新后自动播放第一个媒体
+        if (mediaList.length > 0) {
+          console.log(`[mediaPlayer] 自动播放第一个媒体`);
+          showMedia("current");
+        }
       }
     );
 

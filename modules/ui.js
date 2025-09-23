@@ -357,6 +357,9 @@ export const createPlayerWindow = async () => {
     const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
     if (video) video.volume = settings.videoVolume;
     console.log(`[ui] 播放器窗口创建完成（含完整控制栏）`);
+    
+    // 新增：窗口创建后触发媒体列表刷新
+    EventBus.emit("requestRefreshMediaList");
   });
 };
 

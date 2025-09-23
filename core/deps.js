@@ -9,7 +9,7 @@ window.extension_settings = window.extension_settings || {};
 window.saveSettingsDebounced = window.saveSettingsDebounced || (() => {
   console.warn('saveSettingsDebounced 不可用，使用默认实现');
   let timeout = null;
-  return () => {
+  return (() => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => {
       try {
@@ -19,7 +19,7 @@ window.saveSettingsDebounced = window.saveSettingsDebounced || (() => {
         console.error('无法保存设置到本地存储', e);
       }
     }, 1000);
-  };
+  });
 })();
 
 const deps = {

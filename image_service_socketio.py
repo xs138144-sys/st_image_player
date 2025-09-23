@@ -770,8 +770,8 @@ def get_media_file(rel_path):
             logging.warning(f"非法文件类型: {rel_path}")
             return jsonify({"error": "路径不合法"}), 403
 
-        if not full_path.startswith(os.path.normcase(scan_dir)):
-            logging.warning(f"路径越界尝试: {rel_path} → {full_path}")
+        if not os.path.normcase(full_path).startswith(os.path.normcase(scan_dir)):
+            logging.warning(f"路径越界尝试: {rel_path} → {full_path} (scan_dir: {scan_dir})")
             return jsonify({"error": "路径不合法"}), 403
 
         # 新增符号链接检查
