@@ -44,8 +44,8 @@ sys.getfilesystemencoding = lambda: "utf-8"
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
+# CORS配置 - 允许SillyTavern前端访问
 cors = CORS(
     app,
     resources={
@@ -60,6 +60,8 @@ cors = CORS(
         }
     },
 )
+
+socketio = SocketIO(app, async_mode='threading')
 
 # 日志配置
 logging.basicConfig(
