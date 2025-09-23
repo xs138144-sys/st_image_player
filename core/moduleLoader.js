@@ -15,74 +15,11 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 支持两种安装方式的路径检测
-    // 1. 本地安装: /scripts/extensions/third-party/st_image_player/
-    // 2. GitHub安装: /data/default-user/extensions/st_image_player/
-    
-    // 尝试检测当前脚本的实际路径
-    const scripts = document.querySelectorAll('script[src*="st_image_player"]');
-    
-    if (scripts.length > 0) {
-      const scriptUrl = scripts[0].src;
-      console.log(`[moduleLoader] 检测到脚本URL: ${scriptUrl}`);
-      
-      // 检查GitHub安装路径（确保不是开发服务器）
-      if (scriptUrl.includes('/data/default-user/extensions/') && 
-          !scriptUrl.includes('localhost:8000') && 
-          !scriptUrl.includes('127.0.0.1:8000')) {
-        const extensionRoot = '/data/default-user/extensions/st_image_player/';
-        console.log(`[moduleLoader] 检测到GitHub安装路径: ${extensionRoot}`);
-        return extensionRoot;
-      }
-      
-      // 检查本地安装路径（确保不是开发服务器）
-      if (scriptUrl.includes('/scripts/extensions/third-party/') && 
-          !scriptUrl.includes('localhost:8000') && 
-          !scriptUrl.includes('127.0.0.1:8000')) {
-        const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
-        console.log(`[moduleLoader] 检测到本地安装路径: ${extensionRoot}`);
-        return extensionRoot;
-      }
-      
-      // 检查本地安装但通过Python HTTP服务器访问的情况
-      if (scriptUrl.includes('/scripts/extensions/third-party/') && 
-          (scriptUrl.includes('localhost:8000') || scriptUrl.includes('127.0.0.1:8000'))) {
-        const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
-        console.log(`[moduleLoader] 检测到本地安装（通过HTTP服务器）: ${extensionRoot}`);
-        return extensionRoot;
-      }
-      
-      // 检查开发环境（Python HTTP服务器）
-      if (scriptUrl.includes('localhost:8000') || scriptUrl.includes('127.0.0.1:8000')) {
-        // 在开发环境中，使用相对路径，让浏览器自动处理
-        console.log(`[moduleLoader] 检测到开发环境，使用相对路径`);
-        return '';
-      }
-      
-      // 如果无法确定具体路径，尝试从脚本URL推断扩展根目录
-      try {
-        // 提取脚本目录路径（移除文件名部分）
-        const scriptDir = scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1);
-        
-        // 检查是否在core目录中，如果是则向上移动一级
-        if (scriptDir.includes('/core/')) {
-          const extensionRoot = scriptDir.replace('/core/', '/');
-          console.log(`[moduleLoader] 推断扩展根目录: ${extensionRoot}`);
-          return extensionRoot;
-        }
-        
-        // 直接使用脚本所在目录
-        console.log(`[moduleLoader] 使用脚本所在目录: ${scriptDir}`);
-        return scriptDir;
-      } catch (e) {
-        console.warn(`[moduleLoader] 路径推断失败，使用相对路径`);
-        return '';
-      }
-    }
-    
-    // 如果没有找到脚本，使用相对路径
-    console.warn(`[moduleLoader] 未找到扩展脚本，使用相对路径`);
-    return '';
+    // 在SillyTavern扩展中，路径是稳定的，直接使用绝对路径
+    // 这样可以避免相对路径解析问题，确保始终指向正确的扩展目录
+    const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
+    console.log(`[moduleLoader] 使用绝对路径: ${extensionRoot}`);
+    return extensionRoot;
   }
 
   /**
@@ -105,24 +42,11 @@ export class ModuleLoader {
       // 在SillyTavern中，需要基于扩展根目录构建完整URL
       const baseUrl = this._getExtensionBaseUrl();
       let fullUrl;
-      
       if (baseUrl) {
-        // 使用检测到的baseUrl构建完整URL
         fullUrl = new URL(modulePath, baseUrl).href;
-        console.log(`[moduleLoader] 使用baseUrl构建路径: ${fullUrl}`);
       } else {
-        // 如果baseUrl是空字符串（开发环境），需要从当前脚本URL推断完整路径
-        const scripts = document.querySelectorAll('script[src*="st_image_player"]');
-        if (scripts.length > 0) {
-          const scriptUrl = scripts[0].src;
-          const scriptDir = scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1);
-          fullUrl = new URL(modulePath, scriptDir).href;
-          console.log(`[moduleLoader] 开发环境推断路径: ${fullUrl}`);
-        } else {
-          // 如果无法推断，使用相对路径
-          fullUrl = modulePath;
-          console.warn(`[moduleLoader] 无法推断开发环境路径，使用相对路径: ${fullUrl}`);
-        }
+        // 如果baseUrl是空字符串，直接使用相对路径（可能会失败）
+        fullUrl = modulePath;
       }
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
