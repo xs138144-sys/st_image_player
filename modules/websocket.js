@@ -88,12 +88,6 @@ export const init = async () => {
     return;
   }
 
-  // 添加超时机制，防止初始化卡住
-  const initTimeout = 10000; // 10秒超时
-  const timeoutPromise = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error(`WebSocket初始化超时`)), initTimeout)
-  );
-
   // 清除旧的重连定时器
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -109,11 +103,7 @@ export const init = async () => {
     if (typeof io === 'undefined') {
       console.log(`[websocket] 动态加载SocketIO客户端库`);
       try {
-        // 使用超时机制加载SocketIO库
-        await Promise.race([
-          loadSocketIOLibrary(),
-          timeoutPromise
-        ]);
+        await loadSocketIOLibrary();
         // 等待一小段时间确保库完全加载
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (e) {
