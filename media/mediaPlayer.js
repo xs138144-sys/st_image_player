@@ -183,6 +183,65 @@ const registerMediaPlayerEvents = () => {
       EventBus.emit('currentMediaResponse', currentMedia);
     });
   });
+  
+  // 添加扩展菜单点击事件处理
+  EventBus.on('extensionMenuClicked', (data) => {
+    if (data.extensionId === 'st_image_player') {
+      handleMenuAction(data.action);
+    }
+  });
+  
+  // 处理菜单操作
+  const handleMenuAction = (action) => {
+    switch (action) {
+      case 'play_pause':
+        togglePlayPause();
+        break;
+      case 'next_media':
+        nextMedia();
+        break;
+      case 'prev_media':
+        prevMedia();
+        break;
+      case 'refresh_media':
+        refreshMediaList();
+        break;
+      default:
+        console.warn(`[mediaPlayer] 未处理的菜单操作: ${action}`);
+    }
+  };
+  
+  // 添加播放/暂停功能
+  const togglePlayPause = () => {
+    import('./core/mediaCore.js').then(module => {
+      const status = module.getPlaybackStatus();
+      if (status.isPlaying) {
+        module.pausePlayback();
+      } else {
+        module.startPlayback();
+      }
+    });
+  };
+  
+  // 添加上下媒体切换功能
+  const nextMedia = () => {
+    import('./core/mediaCore.js').then(module => {
+      module.nextMedia();
+    });
+  };
+  
+  const prevMedia = () => {
+    import('./core/mediaCore.js').then(module => {
+      module.prevMedia();
+    });
+  };
+  
+  // 添加媒体列表刷新功能
+  const refreshMediaList = () => {
+    import('./core/mediaCore.js').then(module => {
+      module.refreshMediaList();
+    });
+  };
 };
 
 /**

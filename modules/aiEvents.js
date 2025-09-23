@@ -93,7 +93,7 @@ const onAIResponse = () => {
 
   // 触发切换（通过事件总线，使用正确的消息格式）
   deps.settings.update({ lastAISwitchTime: now });
-  deps.EventBus.emit("requestMediaPlay", { direction: "next" });
+  deps.EventBus.emit("autoSwitchMedia", { direction: "next" });
   console.log(`[aiEvents] AI回复触发媒体切换`);
 };
 
@@ -126,7 +126,7 @@ const onPlayerMessage = () => {
 
   // 触发切换（通过事件总线，使用正确的消息格式）
   deps.settings.update({ lastAISwitchTime: now });
-  deps.EventBus.emit("requestMediaPlay", { direction: "next" });
+  deps.EventBus.emit("autoSwitchMedia", { direction: "next" });
   console.log(`[aiEvents] 玩家消息触发媒体切换`);
 };
 

@@ -2,7 +2,12 @@ import { deps } from "../../core/deps.js";
 import { initMediaElements, removeMediaElements, getMediaElements } from "./mediaElementManager.js";
 import { registerMediaEvents, unregisterMediaEvents } from "./mediaEventManager.js";
 import { loadSavedState, saveCurrentState, setMediaList, getMediaList, setPlayMode, setAutoSwitchMode, setVolume, setVideoVolume } from "./mediaStateManager.js";
-import { playMedia, pauseMedia, resumeMedia, stopAllMedia } from "./mediaPlaybackManager.js";
+import { 
+  playMedia as playbackPlayMedia, 
+  pauseMedia as playbackPauseMedia,
+  resumeMedia as playbackResumeMedia,
+  stopAllMedia as playbackStopAllMedia
+} from "./mediaPlaybackManager.js";
 import { startStatusCheckTimer, clearAllTimers } from "./mediaTimerManager.js";
 import { checkMediaStatus, checkAutoSwitch, getCurrentTime, getDuration, getBufferedInfo } from "./mediaStatusChecker.js";
 
@@ -86,6 +91,7 @@ export const setMediaList = (list) => {
   mediaState.mediaList = list;
   mediaState.currentIndex = -1;
   console.log(`[mediaCore] 设置媒体列表，共 ${list.length} 个项目`);
+  EventBus.emit('mediaStateChanged', { ...mediaState });
 };
 
 /**
@@ -101,6 +107,7 @@ export const getMediaList = () => {
 export const setPlayMode = (mode) => {
   mediaState.playMode = mode;
   console.log(`[mediaCore] 播放模式设置为: ${mode}`);
+  EventBus.emit('mediaStateChanged', { ...mediaState });
 };
 
 /**
@@ -109,6 +116,7 @@ export const setPlayMode = (mode) => {
 export const setAutoSwitchMode = (mode) => {
   mediaState.autoSwitchMode = mode;
   console.log(`[mediaCore] 自动切换模式设置为: ${mode}`);
+  EventBus.emit('mediaStateChanged', { ...mediaState });
 };
 
 /**
@@ -120,6 +128,7 @@ export const setVolume = (volume) => {
     mediaElements.audio.volume = volume;
   }
   console.log(`[mediaCore] 音量设置为: ${volume}`);
+  EventBus.emit('mediaStateChanged', { ...mediaState });
 };
 
 /**
@@ -131,17 +140,19 @@ export const setVideoVolume = (volume) => {
     mediaElements.video.volume = volume;
   }
   console.log(`[mediaCore] 视频音量设置为: ${volume}`);
+  EventBus.emit('mediaStateChanged', { ...mediaState });
 };
 
 /**
  * 播放媒体
  */
 export const playMedia = (media) => {
-  const success = playMedia(media, mediaElements);
+  const success = playbackPlayMedia(media, mediaElements);
   if (success) {
     mediaState.currentMedia = media;
     mediaState.isPlaying = true;
     mediaState.isPaused = false;
+    EventBus.emit('mediaStateChanged', { ...mediaState });
   }
   return success;
 };
@@ -151,10 +162,11 @@ export const playMedia = (media) => {
  */
 export const pauseMedia = () => {
   if (mediaState.currentMedia) {
-    const success = pauseMedia(mediaState.currentMedia.type, mediaElements);
+    const success = playbackPauseMedia(mediaState.currentMedia.type, mediaElements);
     if (success) {
       mediaState.isPlaying = false;
       mediaState.isPaused = true;
+      EventBus.emit('mediaStateChanged', { ...mediaState });
     }
     return success;
   }
@@ -166,10 +178,11 @@ export const pauseMedia = () => {
  */
 export const resumeMedia = () => {
   if (mediaState.currentMedia) {
-    const success = resumeMedia(mediaState.currentMedia.type, mediaElements);
+    const success = playbackResumeMedia(mediaState.currentMedia.type, mediaElements);
     if (success) {
       mediaState.isPlaying = true;
       mediaState.isPaused = false;
+      EventBus.emit('mediaStateChanged', { ...mediaState });
     }
     return success;
   }
@@ -180,10 +193,11 @@ export const resumeMedia = () => {
  * 停止所有媒体
  */
 export const stopAllMedia = () => {
-  stopAllMedia(mediaElements);
+  playbackStopAllMedia(mediaElements);
   mediaState.isPlaying = false;
   mediaState.isPaused = false;
   mediaState.currentMedia = null;
+  EventBus.emit('mediaStateChanged', { ...mediaState });
 };
 
 /**
