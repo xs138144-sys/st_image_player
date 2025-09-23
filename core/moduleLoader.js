@@ -17,9 +17,9 @@ export class ModuleLoader {
   _getExtensionBaseUrl() {
     // 使用相对路径，让浏览器基于当前脚本位置自动解析
     // 当前脚本位置: /scripts/extensions/third-party/st_image_player/core/moduleLoader.js
-    // 模块路径相对于扩展根目录: ../
+    // 模块路径相对于扩展根目录: ../../
     console.log(`[moduleLoader] 使用相对路径，基于当前脚本位置解析`);
-    return '../';
+    return '../../';
   }
 
   /**
