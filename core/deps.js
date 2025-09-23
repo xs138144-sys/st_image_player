@@ -100,18 +100,24 @@ const deps = {
 
   // 修复设置获取方法
   get settings() {
-    // 尝试多种可能的模块名称
-    const settingsModule = this.getModule('settings') || 
-                          this.getModule('modules/settings/settingsManager') ||
+    // 尝试多种可能的模块名称（按优先级排序）
+    const settingsModule = this.getModule('modules/settings/settingsManager') || 
+                          this.getModule('settings') ||
                           this.getModule('modules/settings') ||
                           this.getModule('settingsManager');
     
     if (!settingsModule || typeof settingsModule.get !== 'function') {
       console.warn('[deps] settings模块未正确加载，使用回退方案');
       return {
-        get: () => ({}), // 返回空对象的回退函数
+        get: () => ({
+          serviceUrl: "http://127.0.0.1:9000",
+          serviceDirectory: "",
+          mediaSizeLimit: 10,
+          pollingInterval: 30000
+        }), // 返回默认设置的回退函数
         save: () => console.warn('settings.save不可用'),
-        migrateSettings: () => console.warn('settings.migrateSettings不可用')
+        migrateSettings: () => console.warn('settings.migrateSettings不可用'),
+        update: (updates) => ({ ...updates })
       };
     }
     return settingsModule;
