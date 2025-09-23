@@ -78,7 +78,9 @@ export const init = () => {
     safeJQuery(() => {
       const $ = deps.jQuery;
       if (!$) {
-        toastr.error("jQuery 未加载，UI 功能无法使用");
+        if (deps.toastr && typeof deps.toastr.error === "function") {
+          deps.toastr.error("jQuery 未加载，UI 功能无法使用");
+        }
         return;
       }
 
@@ -1164,7 +1166,9 @@ const setupSettingsEvents = () => {
     if (newUrl) {
       deps.settings.update({ serviceUrl: newUrl });
       EventBus.emit("requestCheckServiceStatus");
-      toastr.info("服务地址已更新");
+      if (deps.toastr && typeof deps.toastr.info === "function") {
+        deps.toastr.info("服务地址已更新");
+      }
     }
   });
 
@@ -1174,9 +1178,13 @@ const setupSettingsEvents = () => {
     if (newPath) {
       // 移除目录有效性检查（网页版无法进行）
       EventBus.emit("requestUpdateScanDirectory", { newPath });
-      toastr.info("正在更新目录...");
+      if (deps.toastr && typeof deps.toastr.info === "function") {
+        deps.toastr.info("正在更新目录...");
+      }
     } else {
-      toastr.warning("请输入有效的目录路径");
+      if (deps.toastr && typeof deps.toastr.warning === "function") {
+        deps.toastr.warning("请输入有效的目录路径");
+      }
     }
   });
 
@@ -1186,7 +1194,9 @@ const setupSettingsEvents = () => {
     const videoMaxMb = parseInt($panel.find("#video-max-size").val());
 
     if (isNaN(imageMaxMb) || isNaN(videoMaxMb)) {
-      toastr.warning("请输入有效的数值");
+      if (deps.toastr && typeof deps.toastr.warning === "function") {
+        deps.toastr.warning("请输入有效的数值");
+      }
       return;
     }
 
@@ -1387,13 +1397,17 @@ const setupSettingsEvents = () => {
   $panel.find("#player-refresh").click(function () {
     EventBus.emit("requestCheckServiceStatus");
     EventBus.emit("requestRefreshMediaList");
-    toastr.info("正在刷新服务状态...");
+    if (deps.toastr && typeof deps.toastr.info === "function") {
+      deps.toastr.info("正在刷新服务状态...");
+    }
   });
 
   $panel.find("#clear-random-history").click(function () {
     if (confirm("确定要清理随机播放历史记录吗？这将重置随机播放算法。")) {
       EventBus.emit("requestClearRandomHistory");
-      toastr.info("随机播放历史已清理");
+      if (deps.toastr && typeof deps.toastr.info === "function") {
+        deps.toastr.info("随机播放历史已清理");
+      }
     }
   });
 
@@ -1527,7 +1541,9 @@ const setupWindowEvents = () => {
       .removeClass("fa-lock fa-lock-open")
       .addClass(settings.isLocked ? "fa-lock" : "fa-lock-open");
 
-    toastr.info(settings.isLocked ? "播放器已锁定" : "播放器已解锁");
+    if (deps.toastr && typeof deps.toastr.info === "function") {
+      deps.toastr.info(settings.isLocked ? "播放器已锁定" : "播放器已解锁");
+    }
   });
 
   // 显示/隐藏信息按钮
@@ -1685,7 +1701,6 @@ const updateStatusDisplay = (status) => {
 };
 
 /**
-<<<<<<< HEAD
  * 确保SillyTavern扩展设置容器存在
  */
 const ensureExtensionsSettingsContainer = () => {
@@ -1700,7 +1715,10 @@ const ensureExtensionsSettingsContainer = () => {
       </div>
     `);
     console.log(`[ui] 创建扩展设置容器`);
-=======
+  }
+};
+
+/**
  * 创建最小化设置面板（仅包含总开关）
  */
 const createMinimalSettingsPanel = () => {
@@ -1744,11 +1762,19 @@ const createMinimalSettingsPanel = () => {
       createPlayerWindow();
       createSettingsPanel();
       EventBus.emit("requestCheckServiceStatus");
-      toastr.success("媒体播放器扩展已启用");
+      if (deps.toastr && typeof deps.toastr.success === "function") {
+        deps.toastr.success("媒体播放器扩展已启用");
+      }
     }
   });
 };
 
+// 添加CSS样式
+const addPlayerStyles = () => {
+  const $ = deps.jQuery;
+  if (!$) return;
+
+  const css = `
 <style>
   #${PLAYER_WINDOW_ID} .image-player-img {
     max-width: 100% !important;
@@ -1773,6 +1799,5 @@ const createMinimalSettingsPanel = () => {
 
   if ($(`#image-player-css`).length === 0) {
     $("head").append(css);
->>>>>>> 2baa4482a0805fb7e54c5829ba9889f06ead402d
   }
 };
