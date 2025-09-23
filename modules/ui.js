@@ -177,6 +177,9 @@ const createExtensionButton = () => {
       <span class="play-status" style="margin-left:auto; font-size:10px; color:#a0a0a0;">${settings.isPlaying ? "播放中" : "已暂停"}</span>
       <span class="mode-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${settings.playMode === "random" ? "随机" : "顺序"}</span>
       <span class="filter-text" style="margin-left:8px; font-size:10px; color:#a0a0a0;">${settings.mediaFilter === "all" ? "所有" : settings.mediaFilter === "image" ? "图片" : "视频"}</span>
+      <span class="showhide" style="margin-left:8px; cursor:pointer;" title="${settings.isWindowVisible ? "隐藏播放器" : "显示播放器"}">
+        <i class="fa-solid ${settings.isWindowVisible ? "fa-eye-slash" : "fa-eye"}"></i>
+      </span>
     </div>
   `;
 
@@ -193,7 +196,25 @@ const createExtensionButton = () => {
   }
 
   // 绑定按钮事件
-  $(`#ext_menu_${EXTENSION_ID}`).on("click", () => {
+  $(`#ext_menu_${EXTENSION_ID}`).on("click", (e) => {
+    // 如果点击的是showhide按钮，则切换播放器显示状态
+    if ($(e.target).closest('.showhide').length) {
+      const settings = get();
+      const $playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+      
+      if ($playerWindow.length) {
+        settings.isWindowVisible = !settings.isWindowVisible;
+        save();
+        
+        if (settings.isWindowVisible) {
+          $playerWindow.show();
+        } else {
+          $playerWindow.hide();
+        }
+      }
+      return;
+    }
+    
     // 确保扩展设置容器存在
     ensureExtensionsSettingsContainer();
     
@@ -239,6 +260,14 @@ const createExtensionButton = () => {
     } else {
       menuBtn.find(".media-info").text("隐藏信息").show();
     }
+    
+    // 同步窗口显示状态（新增）
+    const showhideIcon = $(`#ext_menu_${EXTENSION_ID} .showhide i`);
+    if (showhideIcon.length) {
+      showhideIcon
+        .removeClass("fa-eye fa-eye-slash")
+        .addClass(settings.isWindowVisible ? "fa-eye-slash" : "fa-eye");
+    }
   }, 1000);
 };
 
@@ -253,7 +282,7 @@ export const createPlayerWindow = async () => {
     if (!$ || !settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
     const html = `
-      <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? "no-border" : ""}">
+      <div id="${PLAYER_WINDOW_ID}" class="image-player-window ${settings.hideBorder ? "no-border" : ""}" style="max-width: 90vw; max-height: 90vh;">
         <div class="image-player-header">
           <div class="title"><i class="fa-solid fa-film"></i> ${EXTENSION_NAME}</div>
           <div class="window-controls">
@@ -268,8 +297,8 @@ export const createPlayerWindow = async () => {
         <div class="image-player-body">
           <div class="image-container">
             <div class="loading-animation">加载中...</div>
-            <img class="image-player-img" onerror="this.onerror=null;this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg=='" />
-            <video class="image-player-video" preload="metadata" ${settings.videoLoop ? "loop" : ""}>您的浏览器不支持HTML5视频</video>
+            <img class="image-player-img" onerror="this.onerror=null;this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg=='" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+            <video class="image-player-video" preload="metadata" ${settings.videoLoop ? "loop" : ""} style="max-width: 100%; max-height: 100%; object-fit: contain;">您的浏览器不支持HTML5视频</video>
             ${settings.showVideoControls ? `
               <div class="video-controls">
                 ${settings.customVideoControls.showProgress ? `

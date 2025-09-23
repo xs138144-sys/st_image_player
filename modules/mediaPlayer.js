@@ -681,7 +681,7 @@ export const startPlayback = () => {
   const settings = get();
   settings.isPlaying = true;
   save();
-  startAutoSwitch();
+  startAutoSwitch(); // 确保启动定时切换
   const video = $(winSelector).find(".image-player-video")[0]; // 修复选择器
   if (video) video.play();
   
