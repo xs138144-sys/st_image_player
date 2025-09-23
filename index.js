@@ -22,14 +22,14 @@ const MODULES = [
   "modules/api/mediaApi",
   "modules/api/configApi",
   
-  // 迁移模块（提供向后兼容性）- 最后加载
-  "modules/migration/legacyModuleAdapter",
-  
   // 其他模块
   "modules/websocket",
   "media/mediaPlayer",
   "modules/aiEvents",
   "ui/ui",
+  
+  // 迁移模块（提供向后兼容性）- 最后加载，确保所有基础模块都已加载
+  "modules/migration/legacyModuleAdapter",
 ];
 
 /**

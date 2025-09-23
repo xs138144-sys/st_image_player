@@ -6,21 +6,23 @@ const eventBusInstance = new EventBus();
 
 // 确保全局对象存在并提供后备方案
 window.extension_settings = window.extension_settings || {};
-window.saveSettingsDebounced = window.saveSettingsDebounced || (() => {
+if (!window.saveSettingsDebounced) {
   console.warn('saveSettingsDebounced 不可用，使用默认实现');
-  let timeout = null;
-  return (() => {
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      try {
-        localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings || {}));
-        console.log('设置已保存到本地存储');
-      } catch (e) {
-        console.error('无法保存设置到本地存储', e);
-      }
-    }, 1000);
-  });
-})();
+  window.saveSettingsDebounced = (() => {
+    let timeout = null;
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        try {
+          localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings || {}));
+          console.log('设置已保存到本地存储');
+        } catch (e) {
+          console.error('无法保存设置到本地存储', e);
+        }
+      }, 1000);
+    };
+  })();
+}
 
 const deps = {
   modules: {},
