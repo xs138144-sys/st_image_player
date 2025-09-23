@@ -1,0 +1,696 @@
+/* ==================== 图片播放器核心样式 ==================== */
+.image-player-window {
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    z-index: 20000;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(30, 31, 34, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-width: 260px;
+    min-height: 260px;
+}
+
+.image-player-window.locked {
+    border-color: rgba(114, 137, 218, 0.5);
+    box-shadow: 0 4px 20px rgba(114, 137, 218, 0.2);
+    cursor: default;
+}
+
+/* ==================== 标题栏样式 ==================== */
+.image-player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 8px;
+    height: 30px;
+    background: rgba(43, 45, 49, 0.7);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: move;
+    user-select: none;
+    transition: background 0.3s;
+}
+
+.image-player-header .title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: #f0f0f0;
+    font-size: 13px;
+}
+
+.image-player-header .window-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.image-player-header .window-controls button {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    color: #b0b0b0;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 11px;
+}
+
+.image-player-header .window-controls .toggle-info.active,
+.image-player-header .window-controls .toggle-video-controls.active {
+    background: rgba(114, 137, 218, 0.3);
+    color: #7289da;
+}
+
+.image-player-header .window-controls button:hover {
+    background: rgba(114, 137, 218, 0.3);
+    color: #7289da;
+    transform: scale(1.08);
+}
+
+/* ==================== 媒体内容区域（图片+视频通用） ==================== */
+.image-player-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+}
+
+.image-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.loading-animation {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #b0b0b0;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 5px 10px;
+    border-radius: 6px;
+}
+
+.image-player-img {
+    max-width: 100%;
+    max-height: 100%;
+    transition: opacity 0.4s;
+    object-fit: contain;
+    display: none;
+}
+
+.image-player-img.active {
+    display: block;
+}
+
+/* 视频元素样式 */
+.image-player-video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: none;
+}
+
+.image-player-video.active {
+    display: block;
+}
+
+/* 过渡效果（仅图片生效） */
+.fade-transition {
+    transition: opacity 0.5s ease-in-out;
+}
+
+.slide-transition {
+    transition: transform 0.5s ease-in-out;
+}
+
+.zoom-transition {
+    transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+}
+
+/* 媒体信息（图片/视频通用） */
+.image-info {
+    padding: 2px 4px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    text-align: center;
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 10;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+/* ==================== 控制栏样式 ==================== */
+.image-player-controls {
+    position: relative;
+    display: flex;
+    padding: 4px;
+    background: rgba(43, 45, 49, 0.8);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    height: 40px;
+    gap: 4px;
+    align-items: center;
+    box-sizing: border-box;
+    justify-content: space-between;
+}
+
+.control-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: rgba(114, 137, 218, 0.3);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+}
+
+.control-btn:hover {
+    background: rgba(114, 137, 218, 0.5);
+    transform: scale(1.08);
+}
+
+.control-btn.mode-switch {
+    background: rgba(96, 82, 159, 0.3);
+}
+
+.control-btn.mode-switch:hover {
+    background: rgba(96, 82, 159, 0.5);
+}
+
+.control-btn.active {
+    background: rgba(67, 181, 129, 0.5);
+    box-shadow: 0 0 0 2px rgba(67, 181, 129, 0.7);
+}
+
+.control-btn.active:hover {
+    background: rgba(67, 181, 129, 0.7);
+}
+
+.control-text {
+    text-align: center;
+    color: #a0a0a0;
+    font-size: 11px;
+    padding: 0 6px;
+    min-width: 80px;
+}
+
+.controls-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+/* ==================== 大小调整手柄 ==================== */
+.resize-handle {
+    position: absolute;
+    bottom: 1px;
+    right: 1px;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
+    z-index: 20;
+    background:
+        linear-gradient(135deg, transparent 0%, transparent 70%,
+            rgba(114, 137, 218, 0.5) 70%, rgba(114, 137, 218, 0.5) 100%);
+    border-radius: 2px;
+}
+
+/* ==================== 设置面板样式 ==================== */
+.image-player-settings {
+    margin-bottom: 10px;
+    padding: 6px;
+}
+
+.settings-group {
+    margin-bottom: 8px;
+    padding: 8px;
+    background: rgba(30, 31, 34, 0.5);
+    border-radius: 6px;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.settings-row label {
+    min-width: 80px;
+    color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+}
+
+.settings-row input[type="text"],
+.settings-row input[type="number"],
+.settings-row select {
+    flex: 1;
+    min-width: 140px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid #3d3f44;
+    background: #2b2d31;
+    color: #e0e0f0;
+    font-size: 11px;
+    transition: border 0.3s;
+}
+
+.settings-row input:focus,
+.settings-row select:focus {
+    border-color: #7289da;
+    outline: none;
+}
+
+.settings-action-row {
+    display: flex;
+    gap: 5px;
+    margin-top: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.menu-button {
+    padding: 6px 8px;
+    background: linear-gradient(to right, #5f78d3, #7289da);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+    font-weight: 500;
+    font-size: 11px;
+}
+
+.menu-button:hover {
+    background: linear-gradient(to right, #7280db, #8390e5);
+    transform: translateY(-1px);
+}
+
+/* ==================== 状态指示器 ==================== */
+.service-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #d0d0d0;
+    font-weight: 500;
+    padding: 4px 0;
+    font-size: 11px;
+}
+
+.service-status i {
+    font-size: 13px;
+}
+
+.status-success {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+.status-error {
+    color: #f44336;
+    font-weight: 600;
+}
+
+.checkbox_label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11px;
+}
+
+.checkbox_label input[type="checkbox"] {
+    margin: 0;
+}
+
+/* ==================== 设置面板折叠效果 ==================== */
+.extension_settings.inline-drawer {
+    margin-top: 0.7em;
+    position: relative;
+    border: 1px solid var(--smart-bubble-border);
+    border-radius: var(--block-radius);
+    background: var(--smart-bubble-bg);
+    color: var(--smart-bubble-text);
+}
+
+.inline-drawer-toggle {
+    cursor: pointer;
+    padding: .5em .7em;
+}
+
+.inline-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.inline-drawer-header b {
+    font-size: 1.0em;
+    font-weight: 600;
+    color: var(--smart-bubble-text);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.inline-drawer-icon {
+    color: var(--smart-bubble-text);
+    transition: transform 0.3s;
+}
+
+.inline-drawer-content {
+    overflow: hidden;
+    display: none;
+    padding: 0.7em;
+    background: var(--input-background);
+    border-radius: 0 0 var(--block-radius) var(--block-radius);
+}
+
+.inline-drawer.is-open .inline-drawer-content {
+    display: block;
+}
+
+.inline-drawer.is-open .inline-drawer-icon .glyphicon-chevron-down {
+    transform: rotate(180deg);
+}
+
+/* ==================== 功能切换按钮组 ==================== */
+.function-toggle-group {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.function-toggle {
+    flex: 1;
+    padding: 6px;
+    border-radius: 5px;
+    background: rgba(43, 45, 49, 0.5);
+    border: 1px solid #3d3f44;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.function-toggle.active {
+    background: rgba(67, 181, 129, 0.3);
+    border-color: rgba(67, 181, 129, 0.7);
+}
+
+.function-toggle i {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.function-toggle span {
+    font-size: 10px;
+    color: #d0d0d0;
+}
+
+/* ==================== 视频控制栏样式（新增） ==================== */
+.video-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 4px 8px;
+    background: rgba(43, 45, 49, 0.9);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    z-index: 15;
+    display: none;
+}
+
+.progress-container {
+    width: 100%;
+    height: 6px;
+    margin-bottom: 4px;
+    cursor: pointer;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-loaded {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.progress-played {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: #7289da;
+    border-radius: 3px;
+    transition: width 0.1s linear;
+}
+
+.progress-handle {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.progress-bar:hover .progress-handle {
+    opacity: 1;
+}
+
+.video-control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+}
+
+.video-control-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #b0b0b0;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.video-control-btn:hover {
+    background: rgba(114, 137, 218, 0.3);
+    color: #7289da;
+}
+
+.video-control-btn.active {
+    color: #7289da;
+    background: rgba(114, 137, 218, 0.2);
+}
+
+.volume-slider-container {
+    width: 80px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.volume-slider {
+    width: 100%;
+    height: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    outline: none;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #7289da;
+    cursor: pointer;
+    margin-top: -3px;
+}
+
+.time-display {
+    color: #b0b0b0;
+    font-size: 10px;
+    min-width: 80px;
+    text-align: right;
+    margin-left: auto;
+}
+
+/* ==================== 媒体筛选按钮组（新增） ==================== */
+.media-filter-group {
+    display: flex;
+    gap: 2px;
+}
+
+.media-filter-btn {
+    width: 26px;
+    height: 26px;
+    background: rgba(43, 45, 49, 0.7);
+}
+
+.media-filter-btn.active {
+    background: rgba(114, 137, 218, 0.5);
+    box-shadow: none;
+}
+
+/* ==================== 边框隐藏模式（新增） ==================== */
+.image-player-window.no-border {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+.image-player-window.no-border .image-player-header,
+.image-player-window.no-border .image-player-controls,
+.image-player-window.no-border .resize-handle {
+    display: none;
+}
+
+.image-player-window.no-border .image-player-body {
+    padding: 0;
+}
+
+.image-player-window.no-border .image-container {
+    padding-bottom: 40px;
+    box-sizing: border-box;
+}
+
+.image-player-window.no-border .video-controls {
+    bottom: -40px;
+    transition: bottom 0.3s ease;
+}
+
+.image-player-window.no-border .image-container:hover .video-controls {
+    bottom: 0;
+}
+
+.image-player-window.no-border .image-info {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-player-window.no-border .image-container:hover .image-info {
+    opacity: 1;
+}
+
+/* ==================== 新增样式 ==================== */
+.dragging {
+    opacity: 0.8;
+    cursor: move;
+}
+
+.resizing {
+    cursor: nwse-resize;
+}
+
+/* 扩展菜单按钮样式 */
+.extensions-menu {
+    position: fixed;
+    top: 50px;
+    right: 10px;
+    z-index: 10000;
+    background: rgba(30, 31, 34, 0.9);
+    border-radius: 8px;
+    padding: 5px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.list-group-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.list-group-item:hover {
+    background: rgba(114, 137, 218, 0.2);
+}
+
+.flex-container {
+    display: flex;
+    align-items: center;
+}
+
+.flexGap5 {
+    gap: 5px;
+}
