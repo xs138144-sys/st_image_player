@@ -149,9 +149,25 @@ const createLegacyApiAdapter = () => {
     fetchMediaList: (filterType) => deps.mediaApi.fetchMediaList(filterType),
     refreshMediaList: (filterType) => deps.mediaApi.refreshMediaList(filterType),
     cleanupInvalidMedia: () => deps.mediaApi.cleanupInvalidMedia(),
-    updateMediaSizeLimit: (newLimit) => deps.configApi.updateMediaSizeLimit(newLimit),
-    startServicePolling: () => deps.configApi.startServicePolling(),
-    stopServicePolling: () => deps.configApi.stopServicePolling(),
+    updateMediaSizeLimit: (newLimit) => {
+      if (deps.configApi && typeof deps.configApi.updateMediaSizeLimit === 'function') {
+        return deps.configApi.updateMediaSizeLimit(newLimit);
+      }
+      console.warn('[legacyApi] configApi未就绪，无法更新大小限制');
+      return false;
+    },
+    startServicePolling: () => {
+      if (deps.configApi && typeof deps.configApi.startServicePolling === 'function') {
+        return deps.configApi.startServicePolling();
+      }
+      console.warn('[legacyApi] configApi未就绪，无法启动轮询');
+    },
+    stopServicePolling: () => {
+      if (deps.configApi && typeof deps.configApi.stopServicePolling === 'function') {
+        return deps.configApi.stopServicePolling();
+      }
+      console.warn('[legacyApi] configApi未就绪，无法停止轮询');
+    },
     
     // 其他函数
     init: () => {
