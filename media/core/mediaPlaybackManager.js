@@ -266,3 +266,26 @@ export const seekToTime = (mediaType, timeInSeconds, mediaElements) => {
 
   return false;
 };
+
+/**
+ * 跳转媒体（供外部调用的接口）
+ */
+export const seekMedia = (timeInSeconds, mediaElements, currentMedia) => {
+  if (!mediaElements || !currentMedia) {
+    console.warn('[mediaPlaybackManager] 跳转失败: 媒体元素或当前媒体未初始化');
+    return false;
+  }
+
+  if (typeof timeInSeconds !== 'number' || timeInSeconds < 0) {
+    console.warn('[mediaPlaybackManager] 跳转失败: 无效的时间值');
+    return false;
+  }
+
+  // 只有视频和音频可以跳转
+  if (currentMedia.type !== 'video' && currentMedia.type !== 'audio') {
+    console.warn('[mediaPlaybackManager] 跳转失败: 只有视频和音频支持跳转');
+    return false;
+  }
+
+  return seekToTime(currentMedia.type, timeInSeconds, mediaElements);
+};

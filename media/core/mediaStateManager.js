@@ -206,4 +206,80 @@ export const setCurrentMedia = (media, index) => {
   mediaState.mediaType = media?.type || null;
 };
 
+/**
+ * 播放下一个媒体
+ */
+export const playNextMedia = () => {
+  const mediaList = getMediaList();
+  if (mediaList.length === 0) {
+    console.warn('[mediaStateManager] 无法播放下一个媒体: 媒体列表为空');
+    return false;
+  }
+
+  const currentIndex = getCurrentIndex();
+  let nextIndex;
+
+  // 根据播放模式确定下一个索引
+  if (getPlaybackStatus().playMode === 'random') {
+    // 随机模式：随机选择一个索引
+    nextIndex = Math.floor(Math.random() * mediaList.length);
+  } else {
+    // 顺序模式：当前索引+1，如果到末尾则回到开头
+    nextIndex = (currentIndex + 1) % mediaList.length;
+  }
+
+  // 设置新的当前媒体
+  const nextMedia = mediaList[nextIndex];
+  setCurrentMedia(nextMedia, nextIndex);
+
+  console.log(`[mediaStateManager] 切换到下一个媒体: ${nextMedia?.name || '未知媒体'} (索引: ${nextIndex})`);
+  
+  // 发布媒体切换事件
+  EventBus.emit('mediaChanged', { 
+    media: nextMedia, 
+    index: nextIndex,
+    direction: 'next'
+  });
+
+  return true;
+};
+
+/**
+ * 播放上一个媒体
+ */
+export const playPreviousMedia = () => {
+  const mediaList = getMediaList();
+  if (mediaList.length === 0) {
+    console.warn('[mediaStateManager] 无法播放上一个媒体: 媒体列表为空');
+    return false;
+  }
+
+  const currentIndex = getCurrentIndex();
+  let prevIndex;
+
+  // 根据播放模式确定上一个索引
+  if (getPlaybackStatus().playMode === 'random') {
+    // 随机模式：随机选择一个索引
+    prevIndex = Math.floor(Math.random() * mediaList.length);
+  } else {
+    // 顺序模式：当前索引-1，如果到开头则回到末尾
+    prevIndex = currentIndex <= 0 ? mediaList.length - 1 : currentIndex - 1;
+  }
+
+  // 设置新的当前媒体
+  const prevMedia = mediaList[prevIndex];
+  setCurrentMedia(prevMedia, prevIndex);
+
+  console.log(`[mediaStateManager] 切换到上一个媒体: ${prevMedia?.name || '未知媒体'} (索引: ${prevIndex})`);
+  
+  // 发布媒体切换事件
+  EventBus.emit('mediaChanged', { 
+    media: prevMedia, 
+    index: prevIndex,
+    direction: 'previous'
+  });
+
+  return true;
+};
+
 export default mediaState;

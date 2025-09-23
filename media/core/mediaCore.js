@@ -1,12 +1,28 @@
 import { deps } from "../../core/deps.js";
 import { initMediaElements, removeMediaElements, getMediaElements } from "./mediaElementManager.js";
 import { registerMediaEvents, unregisterMediaEvents } from "./mediaEventManager.js";
-import { loadSavedState, saveCurrentState, setMediaList, getMediaList, setPlayMode, setAutoSwitchMode, setVolume, setVideoVolume } from "./mediaStateManager.js";
+import { 
+  loadSavedState, 
+  saveCurrentState, 
+  setMediaList, 
+  getMediaList, 
+  setPlayMode, 
+  setAutoSwitchMode, 
+  setVolume, 
+  setVideoVolume, 
+  setVideoLoop,
+  getCurrentIndex, 
+  getCurrentMedia, 
+  getPlaybackStatus,
+  playNextMedia,
+  playPreviousMedia
+} from "./mediaStateManager.js";
 import { 
   playMedia as playbackPlayMedia, 
   pauseMedia as playbackPauseMedia,
   resumeMedia as playbackResumeMedia,
-  stopAllMedia as playbackStopAllMedia
+  stopAllMedia as playbackStopAllMedia,
+  seekMedia as playbackSeekMedia
 } from "./mediaPlaybackManager.js";
 import { startStatusCheckTimer, clearAllTimers } from "./mediaTimerManager.js";
 import { checkMediaStatus, checkAutoSwitch, getCurrentTime, getDuration, getBufferedInfo } from "./mediaStatusChecker.js";
@@ -89,51 +105,51 @@ export const cleanupMediaCore = () => {
 /**
  * 获取媒体列表
  */
-export const getMediaList = () => {
-  return [...mediaState.mediaList];
-};
+// export const getMediaList = () => {
+//   return [...mediaState.mediaList];
+// };
 
 /**
  * 设置播放模式
  */
-export const setPlayMode = (mode) => {
-  mediaState.playMode = mode;
-  console.log(`[mediaCore] 播放模式设置为: ${mode}`);
-  EventBus.emit('mediaStateChanged', { ...mediaState });
-};
+// export const setPlayMode = (mode) => {
+//   mediaState.playMode = mode;
+//   console.log(`[mediaCore] 播放模式设置为: ${mode}`);
+//   EventBus.emit('mediaStateChanged', { ...mediaState });
+// };
 
 /**
  * 设置自动切换模式
  */
-export const setAutoSwitchMode = (mode) => {
-  mediaState.autoSwitchMode = mode;
-  console.log(`[mediaCore] 自动切换模式设置为: ${mode}`);
-  EventBus.emit('mediaStateChanged', { ...mediaState });
-};
+// export const setAutoSwitchMode = (mode) => {
+//   mediaState.autoSwitchMode = mode;
+//   console.log(`[mediaCore] 自动切换模式设置为: ${mode}`);
+//   EventBus.emit('mediaStateChanged', { ...mediaState });
+// };
 
 /**
  * 设置音量
  */
-export const setVolume = (volume) => {
-  mediaState.volume = volume;
-  if (mediaElements.audio) {
-    mediaElements.audio.volume = volume;
-  }
-  console.log(`[mediaCore] 音量设置为: ${volume}`);
-  EventBus.emit('mediaStateChanged', { ...mediaState });
-};
+// export const setVolume = (volume) => {
+//   mediaState.volume = volume;
+//   if (mediaElements.audio) {
+//     mediaElements.audio.volume = volume;
+//   }
+//   console.log(`[mediaCore] 音量设置为: ${volume}`);
+//   EventBus.emit('mediaStateChanged', { ...mediaState });
+// };
 
 /**
  * 设置视频音量
  */
-export const setVideoVolume = (volume) => {
-  mediaState.videoVolume = volume;
-  if (mediaElements.video) {
-    mediaElements.video.volume = volume;
-  }
-  console.log(`[mediaCore] 视频音量设置为: ${volume}`);
-  EventBus.emit('mediaStateChanged', { ...mediaState });
-};
+// export const setVideoVolume = (volume) => {
+//   mediaState.videoVolume = volume;
+//   if (mediaElements.video) {
+//     mediaElements.video.volume = volume;
+//   }
+//   console.log(`[mediaCore] 视频音量设置为: ${volume}`);
+//   EventBus.emit('mediaStateChanged', { ...mediaState });
+// };
 
 /**
  * 播放媒体
@@ -195,37 +211,37 @@ export const stopAllMedia = () => {
 /**
  * 检查媒体状态
  */
-export const checkMediaStatus = () => {
-  return checkMediaStatus(mediaElements, mediaState.currentMedia);
-};
+// export const checkMediaStatus = () => {
+//   return checkMediaStatus(mediaElements, mediaState.currentMedia, mediaState.mediaList, mediaState.playMode, mediaState.autoSwitchMode);
+// };
 
 /**
  * 检查自动切换
  */
-export const checkAutoSwitch = () => {
-  return checkAutoSwitch(mediaElements, mediaState.currentMedia, mediaState.mediaList, mediaState.playMode, mediaState.autoSwitchMode);
-};
+// export const checkAutoSwitch = () => {
+//   return checkAutoSwitch(mediaElements, mediaState.currentMedia, mediaState.mediaList, mediaState.playMode, mediaState.autoSwitchMode);
+// };
 
 /**
  * 获取当前时间
  */
-export const getCurrentTime = () => {
-  return getCurrentTime(mediaElements, mediaState.currentMedia);
-};
+// export const getCurrentTime = () => {
+//   return getCurrentTime(mediaElements, mediaState.currentMedia);
+// };
 
 /**
  * 获取总时长
  */
-export const getDuration = () => {
-  return getDuration(mediaElements, mediaState.currentMedia);
-};
+// export const getDuration = () => {
+//   return getDuration(mediaElements, mediaState.currentMedia);
+// };
 
 /**
  * 获取缓冲信息
  */
-export const getBufferedInfo = () => {
-  return getBufferedInfo(mediaElements, mediaState.currentMedia);
-};
+// export const getBufferedInfo = () => {
+//   return getBufferedInfo(mediaElements, mediaState.currentMedia);
+// };
 
 /**
  * 获取当前媒体状态
@@ -237,6 +253,33 @@ export const getMediaState = () => {
 /**
  * 获取媒体元素
  */
-export const getMediaElements = () => {
-  return { ...mediaElements };
+// export const getMediaElements = () => {
+//   return { ...mediaElements };
+// };
+
+/**
+ * 跳转媒体
+ */
+export const seekMedia = (timeInSeconds) => {
+  if (!mediaState.currentMedia) {
+    console.warn('[mediaCore] 跳转失败: 没有当前媒体');
+    return false;
+  }
+
+  return playbackSeekMedia(timeInSeconds, mediaElements, mediaState.currentMedia);
+};
+
+// 重新导出从其他模块导入的函数
+export { 
+  getCurrentIndex, 
+  getCurrentMedia, 
+  getMediaList, 
+  getPlaybackStatus,
+  playNextMedia,
+  playPreviousMedia,
+  setAutoSwitchMode,
+  setPlayMode,
+  setVideoLoop,
+  setVideoVolume,
+  setVolume
 };

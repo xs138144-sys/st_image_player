@@ -60,10 +60,17 @@ export const init = async () => {
   console.log(`[websocket] 尝试连接SocketIO: ${serviceUrl}`);
 
   try {
-    // 动态加载SocketIO客户端库
+    // 动态加载SocketIO客户端库 - 使用更健壮的方式
     if (typeof io === 'undefined') {
       console.log(`[websocket] 动态加载SocketIO客户端库`);
-      await loadSocketIOLibrary();
+      try {
+        await loadSocketIOLibrary();
+        // 等待一小段时间确保库完全加载
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (e) {
+        console.error(`[websocket] SocketIO库加载失败，跳过WebSocket初始化:`, e);
+        return; // 库加载失败时直接返回，不抛出错误
+      }
     }
 
     // 创建SocketIO连接
