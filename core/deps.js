@@ -100,7 +100,12 @@ const deps = {
 
   // 修复设置获取方法
   get settings() {
-    const settingsModule = this.getModule('settings') || this.getModule('modules/settings/settingsManager');
+    // 尝试多种可能的模块名称
+    const settingsModule = this.getModule('settings') || 
+                          this.getModule('modules/settings/settingsManager') ||
+                          this.getModule('modules/settings') ||
+                          this.getModule('settingsManager');
+    
     if (!settingsModule || typeof settingsModule.get !== 'function') {
       console.warn('[deps] settings模块未正确加载，使用回退方案');
       return {
