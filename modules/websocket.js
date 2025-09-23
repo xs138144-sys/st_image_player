@@ -7,6 +7,7 @@ let heartbeatInterval = null;
 let isManualClose = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
+let isSocketIOLoaded = false;
 
 /**
  * 动态加载SocketIO客户端库
@@ -16,6 +17,7 @@ const loadSocketIOLibrary = () => {
     // 检查是否已经加载
     if (typeof io !== 'undefined') {
       console.log(`[websocket] SocketIO库已加载`);
+      isSocketIOLoaded = true;
       resolve();
       return;
     }
@@ -26,6 +28,7 @@ const loadSocketIOLibrary = () => {
     
     script.onload = () => {
       console.log(`[websocket] SocketIO客户端库加载成功`);
+      isSocketIOLoaded = true;
       resolve();
     };
     
@@ -254,6 +257,15 @@ export const checkAndFixConnection = () => {
   
   return false;
 };
+
+// 延迟初始化WebSocket连接，避免阻塞模块加载
+setTimeout(() => {
+  const settings = deps.settings?.get?.();
+  if (settings?.serviceUrl) {
+    console.log(`[websocket] 延迟初始化WebSocket连接`);
+    init();
+  }
+}, 3000);
 
 // 添加定时检查连接状态
 setInterval(() => {
