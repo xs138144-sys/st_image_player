@@ -15,9 +15,32 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 在SillyTavern环境中，始终使用相对路径
-    // 这样浏览器会自动使用当前页面的基础路径，避免指向错误的HTTP服务器
-    console.log(`[moduleLoader] 使用相对路径作为基础URL`);
+    // 在SillyTavern环境中，从当前脚本URL推断扩展根目录
+    const scripts = document.querySelectorAll('script[src*="st_image_player"]');
+    
+    if (scripts.length > 0) {
+      const scriptUrl = scripts[0].src;
+      console.log(`[moduleLoader] 检测到脚本URL: ${scriptUrl}`);
+      
+      // 提取扩展根目录（移除core/部分）
+      const coreIndex = scriptUrl.indexOf('/core/');
+      if (coreIndex !== -1) {
+        const extensionRoot = scriptUrl.substring(0, coreIndex) + '/';
+        console.log(`[moduleLoader] 检测到扩展根目录: ${extensionRoot}`);
+        return extensionRoot;
+      }
+      
+      // 尝试其他可能的路径模式
+      const stIndex = scriptUrl.indexOf('/st_image_player/');
+      if (stIndex !== -1) {
+        const extensionRoot = scriptUrl.substring(0, stIndex + '/st_image_player/'.length);
+        console.log(`[moduleLoader] 检测到扩展根目录: ${extensionRoot}`);
+        return extensionRoot;
+      }
+    }
+    
+    // 如果无法检测，使用相对路径（可能会失败）
+    console.warn(`[moduleLoader] 无法检测扩展根目录，使用相对路径`);
     return '';
   }
 
@@ -38,13 +61,13 @@ export class ModuleLoader {
       
       console.log(`[moduleLoader] 相对路径: ${modulePath}`);
       
-      // 在SillyTavern中，直接使用相对路径（baseUrl为空字符串时）
+      // 在SillyTavern中，需要基于扩展根目录构建完整URL
       const baseUrl = this._getExtensionBaseUrl();
       let fullUrl;
       if (baseUrl) {
         fullUrl = new URL(modulePath, baseUrl).href;
       } else {
-        // 如果baseUrl是空字符串，直接使用相对路径
+        // 如果baseUrl是空字符串，直接使用相对路径（可能会失败）
         fullUrl = modulePath;
       }
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
