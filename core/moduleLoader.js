@@ -100,8 +100,18 @@ export class ModuleLoader {
       if (baseUrl) {
         fullUrl = new URL(modulePath, baseUrl).href;
       } else {
-        // 如果baseUrl是空字符串，直接使用相对路径（可能会失败）
-        fullUrl = modulePath;
+        // 如果baseUrl是空字符串（开发环境），需要从当前脚本URL推断完整路径
+        const scripts = document.querySelectorAll('script[src*="st_image_player"]');
+        if (scripts.length > 0) {
+          const scriptUrl = scripts[0].src;
+          const scriptDir = scriptUrl.substring(0, scriptUrl.lastIndexOf('/') + 1);
+          fullUrl = new URL(modulePath, scriptDir).href;
+          console.log(`[moduleLoader] 开发环境推断路径: ${fullUrl}`);
+        } else {
+          // 如果无法推断，使用相对路径
+          fullUrl = modulePath;
+          console.warn(`[moduleLoader] 无法推断开发环境路径，使用相对路径: ${fullUrl}`);
+        }
       }
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
