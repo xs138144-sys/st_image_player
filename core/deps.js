@@ -104,19 +104,19 @@ const deps = {
       return {
         get: () => ({}), // 返回空对象的回退函数
         save: () => console.warn('settings.save不可用'),
-        migrateSettings: () => console.warn('settings.migrateSettings不可用') // 修复拼写错误
+        migrateSettings: () => console.warn('settings.migrateSettings不可用')
       };
     }
     return settingsModule;
   },
 
-  // 修复API获取方法
+  // 修复API获取方法 - 修正函数名拼写
   get api() {
     const apiModule = this.getModule('api');
-    if (!apiModule || typeof apiModule.checkServiceStatus !== 'function') { // 修复拼写错误
+    if (!apiModule || typeof apiModule.checkServiceStatus !== 'function') {
       console.warn('[deps] api模块未正确加载，使用回退方案');
       return {
-        checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }), // 修复拼写错误
+        checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }),
         fetchMediaList: () => Promise.resolve([]),
         refreshMediaList: () => Promise.resolve([])
       };
