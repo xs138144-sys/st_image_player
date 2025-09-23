@@ -103,9 +103,10 @@ export class ModuleLoader {
         } else if (moduleName.startsWith('media/')) {
           // 媒体模块：media/mediaPlayer.js -> /scripts/extensions/third-party/st_image_player/media/mediaPlayer.js
           fullUrl = `${baseUrl}${moduleName}.js`;
-        } else if (moduleName.startsWith('modules/')) {
-          // 带modules前缀的模块：modules/settings/settingsManager -> /scripts/extensions/third-party/st_image_player/modules/settings/settingsManager.js
-          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else if (moduleName.startsWith('settings/')) {
+          // settings模块：settings/settingsManager -> /scripts/extensions/third-party/st_image_player/modules/settings/settingsManager.js
+          const actualPath = moduleName.replace('settings/', 'modules/settings/');
+          fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.startsWith('api/')) {
           // API模块：api/mediaApi -> /scripts/extensions/third-party/st_image_player/modules/api/mediaApi.js
           const actualPath = moduleName.replace('api/', 'modules/api/');
