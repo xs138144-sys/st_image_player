@@ -44,6 +44,14 @@ export class ModuleLoader {
         return extensionRoot;
       }
       
+      // 检查本地安装但通过Python HTTP服务器访问的情况
+      if (scriptUrl.includes('/scripts/extensions/third-party/') && 
+          (scriptUrl.includes('localhost:8000') || scriptUrl.includes('127.0.0.1:8000'))) {
+        const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
+        console.log(`[moduleLoader] 检测到本地安装（通过HTTP服务器）: ${extensionRoot}`);
+        return extensionRoot;
+      }
+      
       // 检查开发环境（Python HTTP服务器）
       if (scriptUrl.includes('localhost:8000') || scriptUrl.includes('127.0.0.1:8000')) {
         // 在开发环境中，使用相对路径，让浏览器自动处理

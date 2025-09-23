@@ -6,13 +6,8 @@ import { deps } from "../../core/deps.js";
 export const init = () => {
   console.log(`[configApi] 配置API模块初始化完成`);
   
-  // 延迟检查settings模块，避免初始化时的依赖问题
-  setTimeout(() => {
-    // 安全检查：确保settings模块已完全初始化
-    if (!deps.settings || typeof deps.settings.get !== 'function') {
-      console.warn(`[configApi] settings模块未完全初始化，部分功能可能受限`);
-    }
-  }, 100);
+  // 配置API模块不依赖settings模块的立即初始化
+  // 所有依赖settings的功能都会在运行时动态检查
 };
 
 export const cleanup = () => {
