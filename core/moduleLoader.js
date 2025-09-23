@@ -57,16 +57,9 @@ export class ModuleLoader {
       let modulePath;
       
       // 处理模块路径逻辑
-      if (moduleName.startsWith('modules/') || moduleName.startsWith('media/') || moduleName.startsWith('ui/')) {
-        // 如果模块名已经包含目录前缀，直接使用
-        modulePath = `${moduleName}.js`;
-      } else if (moduleName.includes('/')) {
-        // 对于子目录模块，确保路径正确
-        modulePath = `${moduleName}.js`;
-      } else {
-        // 对于根目录模块，默认放在modules目录
-        modulePath = `modules/${moduleName}.js`;
-      }
+      // 注意：moduleName已经包含了完整的相对路径（如'modules/timeUtils'）
+      // 直接添加.js扩展名即可，不需要额外添加目录前缀
+      modulePath = `${moduleName}.js`;
       
       console.log(`[moduleLoader] 相对路径: ${modulePath}`);
       
