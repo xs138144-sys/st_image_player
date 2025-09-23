@@ -9,6 +9,42 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let isSocketIOLoaded = false;
 
+// 安全的toastr调用方法
+const safeToastr = {
+  info: (message) => {
+    if (deps.toastr && typeof deps.toastr.info === 'function') {
+      deps.toastr.info(message);
+    } else {
+      console.log(`[toastr] ${message}`);
+    }
+  },
+  success: (message) => {
+    if (deps.toastr && typeof deps.toastr.success === 'function') {
+      deps.toastr.success(message);
+    } else {
+      console.log(`[toastr] ${message}`);
+    }
+  },
+  error: (message) => {
+    if (deps.toastr && typeof deps.toastr.error === 'function') {
+      deps.toastr.error(message);
+    } else {
+      console.error(`[toastr] ${message}`);
+    }
+  }
+};
+
+// 安全的EventBus调用方法
+const safeEventBus = {
+  emit: (event, data) => {
+    if (deps.EventBus && typeof deps.EventBus.emit === 'function') {
+      deps.EventBus.emit(event, data);
+    } else {
+      console.log(`[EventBus] ${event}:`, data);
+    }
+  }
+};
+
 /**
  * 动态加载SocketIO客户端库
  */
@@ -34,7 +70,7 @@ const loadSocketIOLibrary = () => {
     
     script.onerror = (error) => {
       console.error(`[websocket] SocketIO客户端库加载失败:`, error);
-      deps.toastr.error("SocketIO库加载失败，请检查网络");
+      safeToastr.error("SocketIO库加载失败，请检查网络");
       reject(error);
     };
     
@@ -46,8 +82,8 @@ const loadSocketIOLibrary = () => {
  * 初始化SocketIO连接
  */
 export const init = async () => {
-  const settings = deps.settings.get();
-  if (!settings.serviceUrl) {
+  const settings = deps.settings?.get?.();
+  if (!settings?.serviceUrl) {
     console.warn(`[websocket] 未配置服务地址，无法初始化SocketIO`);
     return;
   }
@@ -84,26 +120,26 @@ export const init = async () => {
 
     socket.on('connect', () => {
       console.log(`[websocket] SocketIO连接成功: ${serviceUrl}`);
-      deps.toastr.success("媒体实时同步已启用");
+      safeToastr.success("媒体实时同步已启用");
       reconnectAttempts = 0; // 重置重连计数
 
       // 启动心跳机制
       startHeartbeat();
 
-      deps.EventBus.emit("websocketConnected");
+      safeEventBus.emit("websocketConnected");
       isManualClose = false;
     });
 
     socket.on('init', (data) => {
       console.log(`[websocket] 收到初始化消息，媒体总数: ${data.total_count}`);
-      deps.EventBus.emit("websocketInitialized", data);
+      safeEventBus.emit("websocketInitialized", data);
     });
 
     socket.on('media_updated', (data) => {
       console.log(`[websocket] 收到媒体更新消息:`, data);
-      deps.EventBus.emit("websocketMessage", data);
-      deps.EventBus.emit("mediaListUpdated", data);
-      deps.EventBus.emit("requestRefreshMediaList");
+      safeEventBus.emit("websocketMessage", data);
+      safeEventBus.emit("mediaListUpdated", data);
+      safeEventBus.emit("requestRefreshMediaList");
     });
 
     socket.on('pong', (data) => {
@@ -121,22 +157,22 @@ export const init = async () => {
         reconnectAttempts++;
         const delay = Math.min(30000, Math.pow(2, reconnectAttempts) * 1000); // 指数退避
         console.log(`[websocket] 将在${delay / 1000}秒后重试 (尝试 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-        deps.toastr.info(`媒体同步已断开，${delay / 1000}秒后重连...`);
+        safeToastr.info(`媒体同步已断开，${delay / 1000}秒后重连...`);
 
         reconnectTimer = setTimeout(() => {
           init();
         }, delay);
       } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
         console.log(`[websocket] 达到最大重连次数，停止重连`);
-        deps.toastr.error("媒体同步连接失败，请检查服务状态");
+        safeToastr.error("媒体同步连接失败，请检查服务状态");
       }
 
-      deps.EventBus.emit("websocketDisconnected");
+      safeEventBus.emit("websocketDisconnected");
     });
 
     socket.on('connect_error', (error) => {
       console.error(`[websocket] SocketIO连接错误:`, error);
-      deps.toastr.error("媒体同步连接出错");
+      safeToastr.error("媒体同步连接出错");
     });
 
   } catch (e) {
