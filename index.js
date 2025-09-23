@@ -1,10 +1,7 @@
 import { deps } from "./core/deps.js";
-import { ModuleLoader } from "./core/moduleLoader.js";
+import { moduleLoader } from "./core/moduleLoader.js";
 
 const EXT_ID = "st_image_player";
-
-// 创建模块加载器实例
-const moduleLoader = new ModuleLoader(deps);
 
 // 需加载的模块列表（按依赖顺序排列）
 const MODULES = [
