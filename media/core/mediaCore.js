@@ -84,15 +84,7 @@ export const cleanupMediaCore = () => {
   console.log('[mediaCore] 媒体核心模块清理完成');
 };
 
-/**
- * 设置媒体列表
- */
-export const setMediaList = (list) => {
-  mediaState.mediaList = list;
-  mediaState.currentIndex = -1;
-  console.log(`[mediaCore] 设置媒体列表，共 ${list.length} 个项目`);
-  EventBus.emit('mediaStateChanged', { ...mediaState });
-};
+
 
 /**
  * 获取媒体列表
