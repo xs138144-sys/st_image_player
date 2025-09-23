@@ -15,23 +15,10 @@ export class ModuleLoader {
    * 获取SillyTavern环境中的扩展根目录URL
    */
   _getExtensionBaseUrl() {
-    // 在调试模式下，根据当前页面URL智能推断扩展路径
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      // 如果当前页面路径包含st_image_player，说明服务器在项目根目录运行
-      if (window.location.pathname.includes('st_image_player')) {
-        const baseUrl = window.location.origin + '/st_image_player/';
-        console.log(`[moduleLoader] 调试模式，检测到项目路径: ${baseUrl}`);
-        return baseUrl;
-      } else {
-        // 否则使用根路径
-        const baseUrl = window.location.origin + '/';
-        console.log(`[moduleLoader] 调试模式，使用根路径: ${baseUrl}`);
-        return baseUrl;
-      }
-    }
+    // 在SillyTavern中，扩展脚本是通过相对路径加载的，不是通过HTTP服务器
+    // 使用相对路径作为基础URL，这样import()会使用当前页面的基础路径
     
-    // 在SillyTavern中，扩展脚本运行在特定的路径下
-    // 尝试从当前脚本的URL推断扩展根目录
+    // 首先尝试从当前脚本URL推断扩展路径
     const scripts = document.querySelectorAll('script[src*="st_image_player"]');
     if (scripts.length > 0) {
       const scriptSrc = scripts[0].src;
@@ -54,17 +41,9 @@ export class ModuleLoader {
       }
     }
     
-    // 如果无法检测，尝试多种可能的SillyTavern扩展路径
-    const possiblePaths = [
-      '/scripts/extensions/third-party/st_image_player/', // 本地安装路径
-      '/data/default-user/extensions/st_image_player/',   // GitHub在线安装路径
-      '/'  // 最后尝试根路径
-    ];
-    
-    // 返回第一个可能的路径
-    const defaultPath = window.location.origin + possiblePaths[0];
-    console.log(`[moduleLoader] 使用默认扩展路径: ${defaultPath}`);
-    return defaultPath;
+    // 如果无法检测，使用相对路径（空字符串），让浏览器使用当前页面的基础路径
+    console.log(`[moduleLoader] 使用相对路径作为基础URL`);
+    return '';
   }
 
   /**
