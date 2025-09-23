@@ -38,9 +38,15 @@ export class ModuleLoader {
       
       console.log(`[moduleLoader] 相对路径: ${modulePath}`);
       
-      // 在SillyTavern中，需要基于扩展根目录构建完整URL
+      // 在SillyTavern中，直接使用相对路径（baseUrl为空字符串时）
       const baseUrl = this._getExtensionBaseUrl();
-      const fullUrl = new URL(modulePath, baseUrl).href;
+      let fullUrl;
+      if (baseUrl) {
+        fullUrl = new URL(modulePath, baseUrl).href;
+      } else {
+        // 如果baseUrl是空字符串，直接使用相对路径
+        fullUrl = modulePath;
+      }
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
       // 使用完整的URL进行导入（带超时机制）
