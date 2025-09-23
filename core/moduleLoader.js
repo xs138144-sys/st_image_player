@@ -26,15 +26,19 @@ export class ModuleLoader {
       const scriptUrl = scripts[0].src;
       console.log(`[moduleLoader] 检测到脚本URL: ${scriptUrl}`);
       
-      // 检查GitHub安装路径
-      if (scriptUrl.includes('/data/default-user/extensions/')) {
+      // 检查GitHub安装路径（确保不是开发服务器）
+      if (scriptUrl.includes('/data/default-user/extensions/') && 
+          !scriptUrl.includes('localhost:8000') && 
+          !scriptUrl.includes('127.0.0.1:8000')) {
         const extensionRoot = '/data/default-user/extensions/st_image_player/';
         console.log(`[moduleLoader] 检测到GitHub安装路径: ${extensionRoot}`);
         return extensionRoot;
       }
       
-      // 检查本地安装路径
-      if (scriptUrl.includes('/scripts/extensions/third-party/')) {
+      // 检查本地安装路径（确保不是开发服务器）
+      if (scriptUrl.includes('/scripts/extensions/third-party/') && 
+          !scriptUrl.includes('localhost:8000') && 
+          !scriptUrl.includes('127.0.0.1:8000')) {
         const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
         console.log(`[moduleLoader] 检测到本地安装路径: ${extensionRoot}`);
         return extensionRoot;
