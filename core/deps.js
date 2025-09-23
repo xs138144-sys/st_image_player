@@ -134,17 +134,44 @@ const deps = {
 
   // 新增：服务API快捷访问
   get serviceApi() {
-    return this.getModule('modules/api/serviceApi') || this.api;
+    // 延迟加载，避免循环依赖
+    const module = this.getModule('modules/api/serviceApi');
+    if (module) return module;
+    
+    // 回退方案
+    return {
+      checkServiceStatus: () => Promise.resolve({ active: false, error: 'serviceApi模块未加载' }),
+      validateDirectory: () => Promise.resolve({ valid: false, error: 'serviceApi模块未加载' }),
+      updateScanDirectory: () => Promise.resolve(false)
+    };
   },
 
   // 新增：媒体API快捷访问
   get mediaApi() {
-    return this.getModule('modules/api/mediaApi') || this.api;
+    // 延迟加载，避免循环依赖
+    const module = this.getModule('modules/api/mediaApi');
+    if (module) return module;
+    
+    // 回退方案
+    return {
+      fetchMediaList: () => Promise.resolve([]),
+      refreshMediaList: () => Promise.resolve([]),
+      getMediaInfo: () => Promise.resolve(null)
+    };
   },
 
   // 新增：配置API快捷访问
   get configApi() {
-    return this.getModule('modules/api/configApi') || this.api;
+    // 延迟加载，避免循环依赖
+    const module = this.getModule('modules/api/configApi');
+    if (module) return module;
+    
+    // 回退方案
+    return {
+      updateMediaSizeLimit: () => Promise.resolve(false),
+      startServicePolling: () => {},
+      stopServicePolling: () => {}
+    };
   },
 
   // 新增：时间工具快捷访问
