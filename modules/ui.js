@@ -191,8 +191,24 @@ const createExtensionButton = () => {
 
   // 绑定按钮事件
   $(`#ext_menu_${EXTENSION_ID}`).on("click", () => {
-    $("#extensions-settings-button").trigger("click");
-    $(`#${SETTINGS_PANEL_ID}`).scrollIntoView({
+    // 确保扩展设置容器存在
+    ensureExtensionsSettingsContainer();
+    
+    // 根据当前状态显示正确的设置面板
+    const settings = get();
+    if (settings.masterEnabled) {
+      // 如果总开关启用，显示完整设置面板
+      $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
+      createSettingsPanel();
+    } else {
+      // 如果总开关禁用，显示最小化设置面板
+      $(`#${SETTINGS_PANEL_ID}`).remove();
+      createMinimalSettingsPanel();
+    }
+    
+    // 滚动到设置面板
+    const panelId = settings.masterEnabled ? SETTINGS_PANEL_ID : `${SETTINGS_PANEL_ID}-minimal`;
+    $(`#${panelId}`).scrollIntoView({
       behavior: "smooth",
       block: "center",
     });
