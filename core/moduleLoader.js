@@ -17,7 +17,8 @@ export class ModuleLoader {
   async loadModule(moduleName, retries = 3) {
     try {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
-      // 修复路径处理逻辑 - 移除重复的"modules"前缀
+      
+      // 在SillyTavern环境中，模块路径需要相对于扩展根目录
       let modulePath;
       if (moduleName.startsWith('modules/')) {
         // 如果模块名已经包含modules/前缀，直接使用
@@ -29,6 +30,8 @@ export class ModuleLoader {
         // 对于根目录模块
         modulePath = `./modules/${moduleName}.js`;
       }
+      
+      // 在SillyTavern中，import使用相对路径，但需要确保路径正确
       const module = await import(modulePath);
 
       // 检查模块是否有效
