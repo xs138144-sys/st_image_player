@@ -12,36 +12,11 @@ export class ModuleLoader {
   }
 
   /**
-   * 获取SillyTavern环境中的扩展根目录URL
+   * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 在SillyTavern中，扩展脚本是通过相对路径加载的，不是通过HTTP服务器
-    // 使用相对路径作为基础URL，这样import()会使用当前页面的基础路径
-    
-    // 首先尝试从当前脚本URL推断扩展路径
-    const scripts = document.querySelectorAll('script[src*="st_image_player"]');
-    if (scripts.length > 0) {
-      const scriptSrc = scripts[0].src;
-      console.log(`[moduleLoader] 检测到脚本URL: ${scriptSrc}`);
-      
-      // 安全地移除core/目录部分，获取扩展根目录
-      const coreIndex = scriptSrc.indexOf('/core/');
-      if (coreIndex !== -1) {
-        const extensionPath = scriptSrc.substring(0, coreIndex) + '/';
-        console.log(`[moduleLoader] 检测到扩展根目录: ${extensionPath}`);
-        return extensionPath;
-      } else {
-        // 如果没有找到/core/，尝试其他可能的路径模式
-        const stIndex = scriptSrc.indexOf('/st_image_player/');
-        if (stIndex !== -1) {
-          const extensionPath = scriptSrc.substring(0, stIndex + '/st_image_player/'.length);
-          console.log(`[moduleLoader] 检测到扩展根目录: ${extensionPath}`);
-          return extensionPath;
-        }
-      }
-    }
-    
-    // 如果无法检测，使用相对路径（空字符串），让浏览器使用当前页面的基础路径
+    // 在SillyTavern环境中，始终使用相对路径
+    // 这样浏览器会自动使用当前页面的基础路径，避免指向错误的HTTP服务器
     console.log(`[moduleLoader] 使用相对路径作为基础URL`);
     return '';
   }
