@@ -88,6 +88,11 @@ export const init = () => {
       // 启用状态下创建UI
       if (settings.masterEnabled) {
         createPlayerWindow();
+        
+        // 确保SillyTavern扩展设置容器存在
+        ensureExtensionsSettingsContainer();
+        
+        // 创建设置面板
         createSettingsPanel();
 
         // 检查服务就绪后显示初始媒体
@@ -1185,5 +1190,23 @@ const updateStatusDisplay = (status) => {
   if (status.directory) {
     $panel.find("#scan-directory").val(status.directory);
     $panel.find(".setting-value:contains('媒体目录:')").text(status.directory);
+  }
+};
+
+/**
+ * 确保SillyTavern扩展设置容器存在
+ */
+const ensureExtensionsSettingsContainer = () => {
+  const $ = deps.jQuery;
+  if (!$) return;
+  
+  // 检查扩展设置容器是否存在
+  if (!$("#extensions_settings").length) {
+    // 创建扩展设置容器
+    $("body").append(`
+      <div id="extensions_settings" class="extensions-settings-container">
+      </div>
+    `);
+    console.log(`[ui] 创建扩展设置容器`);
   }
 };

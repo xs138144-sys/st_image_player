@@ -115,6 +115,11 @@ const initExtension = async () => {
       deps.toastr.success("媒体播放器扩展已加载就绪");
     }
     deps.EventBus.emit("extensionInitialized");
+
+    // 触发设置面板创建事件（SillyTavern标准注册机制）
+    if (deps.EventBus && typeof deps.EventBus.emit === "function") {
+      deps.EventBus.emit("requestCreateSettingsPanel");
+    }
   } catch (e) {
     console.error(`[index] 扩展初始化全局错误:`, e);
     if (deps.toastr && typeof deps.toastr.error === "function") {
