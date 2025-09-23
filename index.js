@@ -46,7 +46,7 @@ const initExtension = async () => {
 
     // 检查关键模块加载状态
     const criticalModules = [
-      "modules/settings", 
+      "modules/settings/settingsManager", 
       "modules/api/serviceApi", 
       "modules/domUtils"
     ];

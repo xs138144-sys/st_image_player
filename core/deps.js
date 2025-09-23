@@ -124,8 +124,6 @@ const deps = {
     // 尝试多种可能的模块名称（按优先级排序）
     const settingsModule = this.getModule('settings/settingsManager') || 
                           this.getModule('modules/settings/settingsManager') || 
-                          this.getModule('settings') ||
-                          this.getModule('modules/settings') ||
                           this.getModule('settingsManager');
     
     if (!settingsModule || typeof settingsModule.get !== 'function') {
