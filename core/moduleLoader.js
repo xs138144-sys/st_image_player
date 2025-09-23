@@ -15,11 +15,11 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 模块加载器核心和模块之间的路径是固定的
-    // 模块加载器核心和ST主核心之间的路径也是固定的
-    // 使用相对路径，让浏览器基于当前脚本位置自动解析
-    console.log(`[moduleLoader] 使用相对路径，基于当前脚本位置解析`);
-    return '';
+    // 使用绝对路径，避免任何路径推断问题
+    // 在SillyTavern中，扩展的路径是固定的
+    const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
+    console.log(`[moduleLoader] 使用绝对路径: ${extensionRoot}`);
+    return extensionRoot;
   }
 
   /**
@@ -32,23 +32,13 @@ export class ModuleLoader {
       // 在SillyTavern环境中，模块路径需要相对于扩展根目录
       let modulePath;
       
-      // 处理模块路径逻辑
-      // 注意：moduleName已经包含了完整的相对路径（如'modules/timeUtils'）
-      // 直接添加.js扩展名即可，不需要额外添加目录前缀
-      // 在SillyTavern扩展中，路径结构是固定的：/scripts/extensions/third-party/st_image_player/
-      modulePath = `${moduleName}.js`;
-      
-      console.log(`[moduleLoader] 相对路径: ${modulePath}`);
-      
-      // 在SillyTavern中，需要基于扩展根目录构建完整URL
+      // 构建模块完整路径
+      // 使用绝对路径，避免任何路径解析问题
       const baseUrl = this._getExtensionBaseUrl();
-      let fullUrl;
-      if (baseUrl) {
-        fullUrl = new URL(modulePath, baseUrl).href;
-      } else {
-        // 如果baseUrl是空字符串，直接使用相对路径（可能会失败）
-        fullUrl = modulePath;
-      }
+      const fullUrl = `${baseUrl}${moduleName}.js`;
+      
+      console.log(`[moduleLoader] 模块路径: ${moduleName}`);
+      console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
       // 使用完整的URL进行导入（带超时机制）
