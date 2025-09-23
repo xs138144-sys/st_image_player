@@ -133,13 +133,19 @@ export class ModuleLoader {
     
     const loadResults = {};
 
-    // 按顺序加载模块
+    // 按顺序加载模块，但使用更健壮的错误处理
     for (const moduleName of moduleList) {
-      const success = await this.loadModule(moduleName);
-      loadResults[moduleName] = success;
+      try {
+        const success = await this.loadModule(moduleName);
+        loadResults[moduleName] = success;
 
-      if (!success) {
-        console.warn(`[moduleLoader] 模块${moduleName}加载失败，继续加载其他模块`);
+        if (!success) {
+          console.warn(`[moduleLoader] 模块${moduleName}加载失败，继续加载其他模块`);
+        }
+      } catch (e) {
+        console.error(`[moduleLoader] 模块${moduleName}加载过程中发生未捕获错误:`, e);
+        loadResults[moduleName] = false;
+        // 继续加载其他模块，不中断流程
       }
     }
 
