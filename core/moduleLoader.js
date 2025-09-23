@@ -15,11 +15,12 @@ export class ModuleLoader {
    * 获取SillyTavern环境中的扩展根目录URL
    */
   _getExtensionBaseUrl() {
-    // 在调试模式下，直接使用当前服务器的根路径
+    // 在调试模式下，尝试多种可能的路径
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      const baseUrl = window.location.origin + '/st_image_player/';
-      console.log(`[moduleLoader] 调试模式，使用根路径: ${baseUrl}`);
-      return baseUrl;
+      // 尝试直接使用当前路径（适用于Python HTTP服务器在项目根目录）
+      const currentPath = window.location.origin + '/';
+      console.log(`[moduleLoader] 调试模式，尝试路径: ${currentPath}`);
+      return currentPath;
     }
     
     // 在SillyTavern中，扩展脚本运行在特定的路径下
