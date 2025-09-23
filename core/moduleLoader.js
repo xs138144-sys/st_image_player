@@ -15,11 +15,38 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 使用绝对路径，避免任何路径推断问题
-    // 在SillyTavern中，扩展的路径是固定的
-    const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
-    console.log(`[moduleLoader] 使用绝对路径: ${extensionRoot}`);
-    return extensionRoot;
+    // 检测当前环境：SillyTavern还是独立测试
+    // 更智能的环境检测：检查是否在测试页面中运行
+    // 检测SillyTavern环境
+    const isSillyTavern = typeof window !== 'undefined' && 
+        (window.SillyTavern || 
+         window.location?.pathname?.includes('/scripts/extensions/') ||
+         window.location?.pathname?.includes('/extensions/'));
+         
+    // 检测测试环境
+    const isTestEnvironment = typeof window !== 'undefined' && window.location && 
+        (window.location.pathname.includes('/test_module_loading.html') || 
+         window.location.pathname.includes('test_module_loading.html') ||
+         (typeof window.runTest === 'function'));
+    
+    console.log(`[moduleLoader] 环境检测 - ST: ${isSillyTavern}, 测试: ${isTestEnvironment}, 路径: ${window.location?.pathname}`);
+    
+    if (isSillyTavern) {
+      // SillyTavern环境 - 使用绝对路径
+      const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
+      console.log(`[moduleLoader] SillyTavern环境，使用绝对路径: ${extensionRoot}`);
+      return extensionRoot;
+    } else if (isTestEnvironment) {
+      // 测试环境 - 使用相对路径
+      const extensionRoot = '../';
+      console.log(`[moduleLoader] 测试环境，使用相对路径: ${extensionRoot}`);
+      return extensionRoot;
+    } else {
+      // 默认环境（可能是其他环境）- 使用相对路径
+      const extensionRoot = '../';
+      console.log(`[moduleLoader] 默认环境，使用相对路径: ${extensionRoot}`);
+      return extensionRoot;
+    }
   }
 
   /**
@@ -33,9 +60,44 @@ export class ModuleLoader {
       let modulePath;
       
       // 构建模块完整路径
-      // 使用绝对路径，避免任何路径解析问题
+      // 在测试环境中，模块位于 modules/ 目录下
+      // 在SillyTavern环境中，模块位于扩展根目录下
       const baseUrl = this._getExtensionBaseUrl();
-      const fullUrl = `${baseUrl}${moduleName}.js`;
+      
+      let fullUrl;
+      if (baseUrl === '../') {
+        // 测试环境：模块路径处理
+        // 测试环境：模块位于相对路径下
+        // 工具模块位于 modules/ 目录下，UI模块位于 ui/ 目录下，媒体模块位于 media/ 目录下
+        // settings和API模块位于 modules/ 的子目录中
+        if (moduleName.startsWith('ui/')) {
+          // UI模块：ui/ui.js -> ../ui/ui.js
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else if (moduleName.startsWith('media/')) {
+          // 媒体模块：media/mediaPlayer.js -> ../media/mediaPlayer.js
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else if (moduleName.startsWith('settings/')) {
+          // settings模块：settings/settingsManager -> ../modules/settings/settingsManager.js
+          // 模块名称是 "settings/settingsManager"，实际文件在 "modules/settings/settingsManager.js"
+          const actualPath = moduleName.replace('settings/', 'modules/settings/');
+          fullUrl = `${baseUrl}${actualPath}.js`;
+        } else if (moduleName.startsWith('api/')) {
+          // API模块：api/serviceApi -> ../modules/api/serviceApi.js
+          // 模块名称是 "api/serviceApi"，实际文件在 "modules/api/serviceApi.js"
+          const actualPath = moduleName.replace('api/', 'modules/api/');
+          fullUrl = `${baseUrl}${actualPath}.js`;
+        } else if (moduleName.includes('/')) {
+          // 其他带路径的模块
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else {
+          // 工具模块：timeUtils -> ../modules/timeUtils.js
+          fullUrl = `${baseUrl}modules/${moduleName}.js`;
+        }
+      } else {
+        // SillyTavern环境：模块位于扩展根目录下
+        // 所有模块都在扩展根目录下，不需要额外的路径前缀
+        fullUrl = `${baseUrl}${moduleName}.js`;
+      }
       
       console.log(`[moduleLoader] 模块路径: ${moduleName}`);
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);

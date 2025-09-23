@@ -173,34 +173,17 @@ export const createSettingsPanel = () => {
           <h4 class="section-title">媒体配置</h4>
           
           <div class="setting-row">
-            <span class="setting-label">图片最大大小 (MB)</span>
+            <span class="setting-label">媒体大小限制 (MB)</span>
             <div class="setting-control">
-              <input type="number" id="image-max-size" value="${settings.mediaConfig.image_max_size_mb}" min="1" max="50">
+              <input type="number" id="media-size-limit" value="${settings.mediaSizeLimit || 10}" min="1" max="50">
             </div>
           </div>
 
           <div class="setting-row">
-            <span class="setting-label">视频最大大小 (MB)</span>
-            <div class="setting-control">
-              <input type="number" id="video-max-size" value="${settings.mediaConfig.video_max_size_mb}" min="10" max="500">
-            </div>
-          </div>
-
-          <div class="setting-row">
-            <span class="setting-label">预加载图片</span>
+            <span class="setting-label">预加载媒体</span>
             <div class="setting-control">
               <label class="toggle-switch">
-                <input type="checkbox" id="preload-images" ${settings.mediaConfig.preload_strategy.image ? 'checked' : ''}>
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setting-row">
-            <span class="setting-label">预加载视频</span>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" id="preload-videos" ${settings.mediaConfig.preload_strategy.video ? 'checked' : ''}>
+                <input type="checkbox" id="preload-media" ${settings.preload ? 'checked' : ''}>
                 <span class="toggle-slider"></span>
               </label>
             </div>
@@ -310,11 +293,8 @@ const handleCheckboxChange = (e) => {
       settings.videoLoop = checked;
       EventBus.emit('requestUpdateVideoLoop', { loop: checked });
       break;
-    case 'preload-images':
-      settings.mediaConfig.preload_strategy.image = checked;
-      break;
-    case 'preload-videos':
-      settings.mediaConfig.preload_strategy.video = checked;
+    case 'preload-media':
+      settings.preload = checked;
       break;
   }
 
@@ -400,11 +380,8 @@ const handleInputChange = (e) => {
     case 'websocket-timeout':
       settings.websocket_timeout = parseInt(value) || 10000;
       break;
-    case 'image-max-size':
-      settings.mediaConfig.image_max_size_mb = parseInt(value) || 5;
-      break;
-    case 'video-max-size':
-      settings.mediaConfig.video_max_size_mb = parseInt(value) || 100;
+    case 'media-size-limit':
+      settings.mediaSizeLimit = parseInt(value) || 10;
       break;
   }
 
@@ -461,14 +438,8 @@ const resetSettings = () => {
       isPlaying: false,
       serviceDirectory: "",
       serviceUrl: "http://127.0.0.1:9000",
-      mediaConfig: {
-        image_max_size_mb: 5,
-        video_max_size_mb: 100,
-        preload_strategy: {
-          image: true,
-          video: false
-        }
-      },
+      mediaSizeLimit: 10,
+      preload: true,
       pollingInterval: 30000,
       websocket_timeout: 10000,
       transitionEffect: "fade",

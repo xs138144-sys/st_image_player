@@ -95,13 +95,35 @@ const deps = {
    * 快捷访问常用模块
    */
   get utils() {
-    return this.getModule('utils') || this.getModule('modules/timeUtils') || this.getModule('modules/domUtils') || {};
+    return this.getModule('utils') || this.getModule('modules/utils') || this.getModule('modules/timeUtils') || this.getModule('modules/domUtils') || {
+      // 安全的回退实现
+      formatTime: (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      },
+      getSafeToastr: () => this.toastr,
+      getSafeGlobal: (key, defaultValue) => window[key] !== undefined ? window[key] : defaultValue,
+      safeJQuery: (selector) => this.jQuery ? this.jQuery(selector) : null,
+      debounce: (func, wait) => {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+    };
   },
 
   // 修复设置获取方法
   get settings() {
     // 尝试多种可能的模块名称（按优先级排序）
-    const settingsModule = this.getModule('modules/settings/settingsManager') || 
+    const settingsModule = this.getModule('settings/settingsManager') || 
+                          this.getModule('modules/settings/settingsManager') || 
                           this.getModule('settings') ||
                           this.getModule('modules/settings') ||
                           this.getModule('settingsManager');
@@ -110,7 +132,7 @@ const deps = {
       console.warn('[deps] settings模块未正确加载，使用回退方案');
       return {
         get: () => ({
-          serviceUrl: "http://127.0.0.1:9000",
+          serviceUrl: "http://localhost:8000",
           serviceDirectory: "",
           mediaSizeLimit: 10,
           pollingInterval: 30000
@@ -125,14 +147,12 @@ const deps = {
 
   // 修复API获取方法 - 支持新的API模块结构
   get api() {
-    const apiModule = this.getModule('api') || {};
-    const serviceApi = this.getModule('modules/api/serviceApi') || {};
-    const mediaApi = this.getModule('modules/api/mediaApi') || {};
-    const configApi = this.getModule('modules/api/configApi') || {};
+    const serviceApi = this.getModule('api/serviceApi') || this.getModule('modules/api/serviceApi') || {};
+    const mediaApi = this.getModule('api/mediaApi') || this.getModule('modules/api/mediaApi') || {};
+    const configApi = this.getModule('api/configApi') || this.getModule('modules/api/configApi') || {};
     
     // 合并所有API功能
     return {
-      ...apiModule,
       ...serviceApi,
       ...mediaApi,
       ...configApi,
@@ -146,7 +166,7 @@ const deps = {
   // 新增：服务API快捷访问
   get serviceApi() {
     // 延迟加载，避免循环依赖
-    const module = this.getModule('modules/api/serviceApi');
+    const module = this.getModule('api/serviceApi') || this.getModule('modules/api/serviceApi');
     if (module) return module;
     
     // 回退方案
@@ -160,7 +180,7 @@ const deps = {
   // 新增：媒体API快捷访问
   get mediaApi() {
     // 延迟加载，避免循环依赖
-    const module = this.getModule('modules/api/mediaApi');
+    const module = this.getModule('api/mediaApi') || this.getModule('modules/api/mediaApi');
     if (module) return module;
     
     // 回退方案
@@ -174,7 +194,7 @@ const deps = {
   // 新增：配置API快捷访问
   get configApi() {
     // 延迟加载，避免循环依赖
-    const module = this.getModule('modules/api/configApi');
+    const module = this.getModule('api/configApi') || this.getModule('modules/api/configApi');
     if (module) return module;
     
     // 回退方案
@@ -187,12 +207,12 @@ const deps = {
 
   // 新增：时间工具快捷访问
   get timeUtils() {
-    return this.getModule('modules/timeUtils') || this.utils;
+    return this.getModule('timeUtils') || this.getModule('modules/timeUtils') || this.utils;
   },
 
   // 新增：DOM工具快捷访问
   get domUtils() {
-    return this.getModule('modules/domUtils') || this.utils;
+    return this.getModule('domUtils') || this.getModule('modules/domUtils') || this.utils;
   },
 
   get EventBus() {
@@ -227,4 +247,8 @@ const deps = {
   }
 };
 
+// 全局导出，兼容SillyTavern环境
+window.deps = deps;
+
+// ES6模块导出（用于模块化环境）
 export { deps };
