@@ -81,8 +81,22 @@ export class ModuleLoader {
       const fullUrl = new URL(modulePath, baseUrl).href;
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
-      // 使用完整的URL进行导入
-      const module = await import(/* webpackIgnore: true */ fullUrl);
+      // 使用完整的URL进行导入（带超时机制）
+      console.log(`[moduleLoader] 开始导入模块: ${fullUrl}`);
+      let module;
+      try {
+        // 添加超时机制，防止import卡住
+        const importPromise = import(/* webpackIgnore: true */ fullUrl);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`模块导入超时: ${moduleName}`)), 5000)
+        );
+        
+        module = await Promise.race([importPromise, timeoutPromise]);
+        console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
+      } catch (importError) {
+        console.error(`[moduleLoader] 模块导入失败: ${moduleName}`, importError);
+        throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
+      }
 
       // 检查模块是否有效
       if (!module || typeof module !== 'object') {
