@@ -62,7 +62,10 @@ cors = CORS(
     },
 )
 
-socketio = SocketIO(app, async_mode='threading')
+socketio = SocketIO(app, async_mode='threading', cors_allowed_origins=os.getenv(
+    "CORS_ORIGINS",
+    "http://127.0.0.1:8000,http://localhost:8000,http://127.0.0.1:9001,http://localhost:9001"
+).split(","))
 
 # 日志配置
 logging.basicConfig(
@@ -613,6 +616,49 @@ def handle_filter_media(data):
 # ------------------------------
 # REST API接口
 # ------------------------------
+@app.route("/validate-directory", methods=["POST", "OPTIONS"])
+def validate_directory():
+    """验证目录路径是否有效"""
+    try:
+        # 处理OPTIONS预检请求
+        if request.method == "OPTIONS":
+            response = jsonify({"status": "ok"})
+            response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+            response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+            response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+            return response
+        
+        data = request.json or {}
+        directory_path = data.get("path", "")
+        
+        if not directory_path:
+            return jsonify({"valid": False, "error": "目录路径不能为空"}), 400
+        
+        # 检查目录是否存在
+        if not os.path.exists(directory_path):
+            return jsonify({"valid": False, "error": f"目录不存在: {directory_path}"}), 404
+        
+        # 检查是否为目录
+        if not os.path.isdir(directory_path):
+            return jsonify({"valid": False, "error": f"路径不是目录: {directory_path}"}), 400
+        
+        # 检查目录可读性
+        try:
+            test_file = os.path.join(directory_path, ".test_access")
+            with open(test_file, "w") as f:
+                f.write("test")
+            os.remove(test_file)
+        except PermissionError:
+            return jsonify({"valid": False, "error": f"无权限访问目录: {directory_path}"}), 403
+        except Exception:
+            return jsonify({"valid": False, "error": f"目录不可写: {directory_path}"}), 403
+        
+        return jsonify({"valid": True, "message": "目录验证成功"})
+        
+    except Exception as e:
+        logging.error(f"目录验证接口错误: {str(e)}", exc_info=True)
+        return jsonify({"valid": False, "error": str(e)}), 500
+
 @app.route("/scan", methods=["POST"])
 def trigger_scan():
     """触发媒体扫描（支持更新目录和大小限制）"""

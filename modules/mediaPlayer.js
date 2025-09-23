@@ -480,7 +480,7 @@ export const showMedia = async (direction) => {
       }
 
       const media = mediaList[currentMediaIndex];
-      mediaUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
+      mediaUrl = `${settings.serviceUrl}/media/${encodeURIComponent(
         media.rel_path
       )}`;
       mediaName = media.name;
