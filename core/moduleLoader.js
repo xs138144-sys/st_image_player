@@ -15,11 +15,10 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 使用相对路径，让浏览器基于当前脚本位置自动解析
-    // 当前脚本位置: /scripts/extensions/third-party/st_image_player/core/moduleLoader.js
-    // 模块路径相对于扩展根目录: ../../
-    console.log(`[moduleLoader] 使用相对路径，基于当前脚本位置解析`);
-    return '../../';
+    // 在SillyTavern环境中，直接使用模块名，让ST的模块系统处理路径
+    // ST会自动将模块名解析为正确的路径
+    console.log(`[moduleLoader] 使用SillyTavern模块路径解析`);
+    return '';
   }
 
   /**
@@ -29,16 +28,12 @@ export class ModuleLoader {
     try {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
       
-      // 在SillyTavern环境中，模块路径需要相对于扩展根目录
-      let modulePath;
-      
-      // 构建模块完整路径
-      // 使用绝对路径，避免任何路径解析问题
+      // 在SillyTavern环境中，直接使用模块名
+      // ST的模块系统会自动处理路径解析
       const baseUrl = this._getExtensionBaseUrl();
       const fullUrl = `${baseUrl}${moduleName}.js`;
       
-      console.log(`[moduleLoader] 模块路径: ${moduleName}`);
-      console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
+      console.log(`[moduleLoader] 模块名: ${moduleName}`);
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
       // 使用完整的URL进行导入（带超时机制）
