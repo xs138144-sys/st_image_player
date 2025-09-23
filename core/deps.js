@@ -142,6 +142,15 @@ const deps = {
         update: (updates) => ({ ...updates })
       };
     }
+    
+    // 确保使用我们自己的保存机制，而不是ST的saveSettingsDebounced
+    if (settingsModule.save && typeof settingsModule.save === 'function') {
+      const originalSave = settingsModule.save;
+      settingsModule.save = function() {
+        return originalSave.apply(this, arguments);
+      };
+    }
+    
     return settingsModule;
   },
 

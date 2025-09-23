@@ -201,8 +201,12 @@ export const createSettingsPanel = () => {
 
     // 添加到SillyTavern扩展设置容器
     ensureExtensionsSettingsContainer();
-    $("#extensionsSettings").append(panelHtml);
-    console.log(`[settingsPanel] 设置面板创建完成`);
+    if (panelHtml && typeof panelHtml === 'string') {
+      $("#extensionsSettings").append(panelHtml);
+      console.log(`[settingsPanel] 设置面板创建完成`);
+    } else {
+      console.error('[settingsPanel] panelHtml 无效，无法创建设置面板');
+    }
 
     // 绑定事件
     bindSettingsEvents();
