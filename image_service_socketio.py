@@ -24,6 +24,14 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set, Any
 import fnmatch
 
+# 增强的MIME类型检测支持
+try:
+    import magic
+    HAS_MAGIC = True
+except ImportError:
+    HAS_MAGIC = False
+    logging.warning("python-magic库未安装，使用备用MIME类型检测")
+
 # 添加资源路径检测
 if getattr(sys, "frozen", False):
     BASE_DIR = sys._MEIPASS
@@ -247,6 +255,9 @@ class ConfigManager:
         try:
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
+            # 强制同步写入磁盘
+            f.flush()
+            os.fsync(f.fileno())
             return config
         except Exception as e:
             logging.error(f"保存配置失败: {str(e)}", exc_info=True)
@@ -318,6 +329,9 @@ class MediaState:
         self.media_db = []  # 存储媒体文件信息
         self.last_scan_time = 0  # 上次扫描时间戳
         self.scan_in_progress = False  # 扫描是否正在进行
+        self.scan_progress = 0.0  # 扫描进度百分比
+        self.scan_total = 0  # 总文件数
+        self.scan_current = 0  # 当前扫描文件数
 
     def update_media(self, new_media):
         """更新媒体库"""
@@ -386,9 +400,54 @@ class MediaState:
         with self.lock:
             return self.scan_in_progress
 
+    def set_scan_progress(self, total, current):
+        """设置扫描进度"""
+        with self.lock:
+            self.scan_total = total
+            self.scan_current = current
+            if total > 0:
+                self.scan_progress = min(100.0, (current / total) * 100)
+
+    def get_scan_progress(self):
+        """获取扫描进度"""
+        with self.lock:
+            return {
+                'progress': self.scan_progress,
+                'total': self.scan_total,
+                'current': self.scan_current,
+                'in_progress': self.scan_in_progress
+            }
+
 
 # 全局媒体状态实例
 media_state = MediaState()
+
+
+def get_mime_type_enhanced(file_path):
+    """增强的MIME类型检测"""
+    if HAS_MAGIC:
+        try:
+            return magic.from_file(file_path, mime=True)
+        except Exception:
+            pass
+    
+    # 备用方案：使用文件扩展名和系统mimetypes
+    file_ext = os.path.splitext(file_path)[1].lower()
+    mime_type = config_mgr.get_mime_type(file_ext) or mimetypes.guess_type(file_path)[0]
+    
+    if not mime_type:
+        # 智能回退逻辑
+        image_exts = config_mgr.get_media_config("image").get("extensions", ())
+        video_exts = config_mgr.get_media_config("video").get("extensions", ())
+        
+        if file_ext in image_exts:
+            mime_type = "image/jpeg"
+        elif file_ext in video_exts:
+            mime_type = "video/mp4"
+        else:
+            mime_type = "application/octet-stream"
+    
+    return mime_type
 
 
 class MediaManager:
@@ -411,11 +470,27 @@ class MediaManager:
             image_cfg = config_mgr.get_media_config("image")
             video_cfg = config_mgr.get_media_config("video")
 
+            # 计算总文件数用于进度跟踪
+            total_files = 0
+            for root, dirs, files in os.walk(scan_dir):
+                # 跳过隐藏目录
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+                total_files += len(files)
+
+            # 设置扫描进度初始值
+            media_state.set_scan_progress(0, total_files, 0)
+
+            processed_files = 0
             for root, dirs, files in os.walk(scan_dir):
                 # 跳过隐藏目录
                 dirs[:] = [d for d in dirs if not d.startswith(".")]
 
                 for file in files:
+                    processed_files += 1
+                    # 更新扫描进度
+                    progress_percent = int((processed_files / total_files) * 100) if total_files > 0 else 0
+                    media_state.set_scan_progress(progress_percent, total_files, processed_files)
+
                     # 检查忽略模式
                     if any(fnmatch.fnmatch(file, pattern) for pattern in config_mgr.ignore_patterns):
                         continue
@@ -481,6 +556,8 @@ class MediaManager:
             })
         finally:
             media_state.set_scan_in_progress(False)
+            # 扫描完成后重置进度
+            media_state.set_scan_progress(100, 0, 0)
 
 
 class FileSystemMonitor(FileSystemEventHandler):
@@ -643,15 +720,22 @@ def validate_directory():
             return jsonify({"valid": False, "error": f"路径不是目录: {directory_path}"}), 400
         
         # 检查目录可读性
+        test_file = None
         try:
             test_file = os.path.join(directory_path, ".test_access")
             with open(test_file, "w") as f:
                 f.write("test")
-            os.remove(test_file)
         except PermissionError:
             return jsonify({"valid": False, "error": f"无权限访问目录: {directory_path}"}), 403
         except Exception:
             return jsonify({"valid": False, "error": f"目录不可写: {directory_path}"}), 403
+        finally:
+            # 确保测试文件被删除
+            if test_file and os.path.exists(test_file):
+                try:
+                    os.remove(test_file)
+                except Exception:
+                    logging.warning(f"无法删除测试文件: {test_file}")
         
         return jsonify({"valid": True, "message": "目录验证成功"})
         
@@ -697,16 +781,24 @@ def get_media():
         media_list = media_state.get_media_list(media_type, limit, offset)
         counts = media_state.get_counts()
 
-        # 添加分页信息
+        # 修复分页逻辑：考虑媒体类型过滤
+        if media_type == "all":
+            total_count = counts["total"]
+        elif media_type == "image":
+            total_count = counts["image"]
+        elif media_type == "video":
+            total_count = counts["video"]
+        else:
+            total_count = len(media_state.get_media_list(media_type))
+
+        # 正确的has_more计算
+        has_more = (offset + limit) < total_count if limit > 0 else False
+
         pagination = {
-            "total": (
-                counts["total"]
-                if media_type == "all"
-                else len(media_state.get_media_list(media_type))
-            ),
+            "total": total_count,
             "limit": limit,
             "offset": offset,
-            "has_more": (offset + limit) < counts["total"] if limit > 0 else False,
+            "has_more": has_more,
         }
 
         return jsonify(
@@ -760,6 +852,10 @@ def get_media_file(rel_path):
         rel_path = urllib.parse.unquote(rel_path)
         scan_dir = os.path.realpath(config_mgr.get_scan_dir())
         full_path = os.path.normpath(os.path.join(scan_dir, rel_path))
+        
+        # 修复Windows路径分隔符问题
+        full_path = full_path.replace('\\', '/')
+        scan_dir_norm = scan_dir.replace('\\', '/')
 
         # 多重安全检查
         if not os.path.exists(full_path):
@@ -770,8 +866,9 @@ def get_media_file(rel_path):
             logging.warning(f"非法文件类型: {rel_path}")
             return jsonify({"error": "路径不合法"}), 403
 
-        if not os.path.normcase(full_path).startswith(os.path.normcase(scan_dir)):
-            logging.warning(f"路径越界尝试: {rel_path} → {full_path} (scan_dir: {scan_dir})")
+        # 使用规范化后的路径进行检查
+        if not os.path.normcase(full_path).startswith(os.path.normcase(scan_dir_norm)):
+            logging.warning(f"路径越界尝试: {rel_path} → {full_path} (scan_dir: {scan_dir_norm})")
             return jsonify({"error": "路径不合法"}), 403
 
         # 新增符号链接检查
@@ -782,22 +879,8 @@ def get_media_file(rel_path):
         if not os.path.exists(full_path) or not os.path.isfile(full_path):
             return jsonify({"error": "文件不存在"}), 404
 
-        # 确定MIME类型
-        file_ext = os.path.splitext(full_path)[1].lower()
-        mime_type = (
-            config_mgr.get_mime_type(file_ext) or mimetypes.guess_type(full_path)[0]
-        )
-        if not mime_type:
-            # 更健壮的MIME类型回退逻辑
-            image_exts = config_mgr.get_media_config("image").get("extensions", ())
-            video_exts = config_mgr.get_media_config("video").get("extensions", ())
-
-            if file_ext.lower() in image_exts:
-                mime_type = "image/jpeg"  # 默认图片类型
-            elif file_ext.lower() in video_exts:
-                mime_type = "video/mp4"  # 默认视频类型
-            else:
-                mime_type = "application/octet-stream"
+        # 使用增强的MIME类型检测
+        mime_type = get_mime_type_enhanced(full_path)
 
         return send_file(full_path, mimetype=mime_type)
     except Exception as e:
@@ -840,6 +923,7 @@ def service_status():
     try:
         config = config_mgr.save()
         counts = media_state.get_counts()
+        scan_progress = media_state.get_scan_progress()
         return jsonify(
             {
                 "active": True,
@@ -847,6 +931,9 @@ def service_status():
                     file_monitor.observer and file_monitor.observer.is_alive()
                 ),
                 "scan_in_progress": media_state.is_scan_in_progress(),
+                "scan_progress": scan_progress['progress'],
+                "scan_total": scan_progress['total'],
+                "scan_current": scan_progress['current'],
                 "directory": config_mgr.get_scan_dir(),
                 "total_count": counts["total"],
                 "image_count": counts["image"],
@@ -889,6 +976,13 @@ def handle_config():
             if "ignore_patterns" in data:
                 config_mgr.ignore_patterns = data["ignore_patterns"]
             config_mgr.save()
+            
+            # 通知前端配置已更新
+            socketio.emit('config_updated', {
+                'type': 'config_updated',
+                'config': config_mgr.save()
+            })
+            
             return jsonify({"status": "配置已更新"})
         except Exception as e:
             logging.error(f"配置更新错误: {str(e)}", exc_info=True)
@@ -902,7 +996,59 @@ def handle_config():
 @app.route("/health", methods=["GET"])
 def health_check():
     """健康检查接口"""
-    return jsonify({"status": "healthy", "timestamp": time.time()})
+    try:
+        config = config_mgr.save()
+        counts = media_state.get_counts()
+        scan_progress = media_state.get_scan_progress()
+        return jsonify(
+            {
+                "status": "healthy",
+                "last_updated": time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.localtime(config.get("last_updated", 0))
+                ),
+                "scan_in_progress": media_state.is_scan_in_progress(),
+                "scan_progress": scan_progress['progress'],
+                "scan_total": scan_progress['total'],
+                "scan_current": scan_progress['current'],
+                "directory": config_mgr.get_scan_dir(),
+                "total_count": counts["total"],
+                "image_count": counts["image"],
+                "video_count": counts["video"],
+            }
+        )
+    except Exception as e:
+        logging.error(f"健康检查接口错误: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/scan-progress", methods=["GET"])
+def get_scan_progress():
+    """获取扫描进度"""
+    try:
+        progress = media_state.get_scan_progress()
+        return jsonify(progress)
+    except Exception as e:
+        logging.error(f"扫描进度接口错误: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ping", methods=["GET"])
+def ping():
+    """服务状态监控接口"""
+    try:
+        start_time = time.time()
+        # 简单的数据库连接检查（如果有的话）
+        # 这里可以添加其他健康检查逻辑
+        response_time = (time.time() - start_time) * 1000  # 毫秒
+        
+        return jsonify({
+            "status": "ok", 
+            "response_time_ms": round(response_time, 2),
+            "timestamp": time.time()
+        })
+    except Exception as e:
+        logging.error(f"ping接口错误: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 # ------------------------------
