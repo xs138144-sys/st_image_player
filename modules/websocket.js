@@ -55,6 +55,13 @@ export const init = () => {
           return;
         }
 
+        // 处理初始化消息
+        if (data.type === "init") {
+          console.log(`[websocket] 收到初始化消息，媒体总数: ${data.total_count}`);
+          deps.EventBus.emit("websocketInitialized", data);
+          return;
+        }
+
         deps.EventBus.emit("websocketMessage", data);
 
         if (data.type === "media_updated") {
