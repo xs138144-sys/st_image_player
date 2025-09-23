@@ -14,7 +14,7 @@ if (!extension_settings[EXTENSION_ID]) {
     lastPlayed: null,
     volume: 0.8,
     masterEnabled: true,
-    isWindowVisible: true,
+    isWindowVisible: false,
     playMode: "random",
     autoSwitchMode: "detect",
     showVideoControls: true,

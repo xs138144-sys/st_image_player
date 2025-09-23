@@ -23,8 +23,6 @@ const loadSocketIOLibrary = () => {
     // 创建script标签加载SocketIO
     const script = document.createElement('script');
     script.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
-    // 移除integrity校验以避免浏览器阻止加载
-    script.crossOrigin = 'anonymous';
     
     script.onload = () => {
       console.log(`[websocket] SocketIO客户端库加载成功`);

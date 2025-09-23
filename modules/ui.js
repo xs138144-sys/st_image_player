@@ -342,6 +342,11 @@ export const createPlayerWindow = async () => {
     bindVideoControls();
     bindPlayerControls(); // 绑定新增控制栏事件
 
+    // 根据设置决定是否显示播放器
+    if (!settings.isWindowVisible) {
+      $(`#${PLAYER_WINDOW_ID}`).hide();
+    }
+
     // 初始化筛选状态同步
     const filterBtn = $(`#${PLAYER_WINDOW_ID} .media-filter-btn[data-type="${settings.mediaFilter}"]`);
     filterBtn.addClass("active");
