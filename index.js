@@ -61,6 +61,25 @@ const initExtension = async () => {
 
     // 初始化完成通知
     console.log(`[index] 所有模块加载完成`);
+    
+    // 添加详细的模块加载成功提示
+    const successfulModules = Object.keys(loadResults).filter(m => loadResults[m]);
+    const failedModules = Object.keys(loadResults).filter(m => !loadResults[m]);
+    
+    console.log(`✅ 媒体播放器扩展初始化成功！`);
+    console.log(`📦 已成功加载 ${successfulModules.length}/${MODULES.length} 个模块`);
+    console.log(`🎯 关键模块状态: ${failedCritical.length === 0 ? '全部正常' : '部分失败'}`);
+    
+    if (successfulModules.length > 0) {
+      console.log(`✅ 成功加载的模块: ${successfulModules.join(', ')}`);
+    }
+    
+    if (failedModules.length > 0) {
+      console.log(`⚠️  加载失败的模块: ${failedModules.join(', ')}`);
+    }
+    
+    console.log(`🚀 媒体播放器扩展已完全就绪，可以正常使用！`);
+    
     if (deps.toastr && typeof deps.toastr.success === "function") {
       deps.toastr.success("媒体播放器扩展已加载就绪");
     }
