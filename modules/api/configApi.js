@@ -71,11 +71,23 @@ export const startServicePolling = () => {
   // 启动新轮询
   window.servicePollingInterval = setInterval(async () => {
     try {
-      // 动态获取serviceApi，避免循环依赖
-      const serviceApi = deps.getModule('modules/api/serviceApi');
-      if (serviceApi && typeof serviceApi.checkServiceStatus === 'function') {
-        const status = await serviceApi.checkServiceStatus();
-        deps.EventBus.emit("serviceStatusUpdate", status);
+      // 直接实现服务状态检查，避免循环依赖
+      const settings = deps.settings.get();
+      if (!settings.serviceUrl) return;
+      
+      const res = await fetch(`${settings.serviceUrl}/status`);
+      if (res.ok) {
+        const status = await res.json();
+        deps.EventBus.emit("serviceStatusUpdate", {
+          active: status.active,
+          observerActive: status.observer_active || false,
+          totalCount: status.total_count || 0,
+          imageCount: status.image_count || 0,
+          videoCount: status.video_count || 0,
+          directory: status.directory || "",
+          mediaConfig: status.media_config || {},
+          error: null,
+        });
       }
     } catch (e) {
       console.error(`[configApi] 服务状态轮询失败:`, e);
