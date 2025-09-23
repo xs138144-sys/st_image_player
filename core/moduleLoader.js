@@ -12,6 +12,27 @@ export class ModuleLoader {
   }
 
   /**
+   * 获取SillyTavern环境中的扩展根目录URL
+   */
+  _getExtensionBaseUrl() {
+    // 在SillyTavern中，扩展脚本运行在特定的路径下
+    // 尝试从当前脚本的URL推断扩展根目录
+    const scripts = document.querySelectorAll('script[src*="st_image_player"]');
+    if (scripts.length > 0) {
+      const scriptSrc = scripts[0].src;
+      // 移除core/目录部分，获取扩展根目录
+      const extensionPath = scriptSrc.substring(0, scriptSrc.indexOf('/core/')) + '/';
+      console.log(`[moduleLoader] 检测到扩展根目录: ${extensionPath}`);
+      return extensionPath;
+    }
+    
+    // 如果无法检测，使用默认的SillyTavern扩展路径
+    const defaultPath = window.location.origin + '/scripts/extensions/third-party/st_image_player/';
+    console.log(`[moduleLoader] 使用默认扩展路径: ${defaultPath}`);
+    return defaultPath;
+  }
+
+  /**
    * 动态加载单个模块（带重试机制）
    */
   async loadModule(moduleName, retries = 3) {
@@ -19,31 +40,29 @@ export class ModuleLoader {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
       
       // 在SillyTavern环境中，模块路径需要相对于扩展根目录
-      // 扩展根目录：http://127.0.0.1:8000/scripts/extensions/third-party/st_image_player/
-      // 模块文件实际位置：在扩展目录的对应子目录中
-      
       let modulePath;
-      if (moduleName.startsWith('modules/')) {
-        // 如果模块名已经包含modules/前缀，直接使用（移除重复的modules/）
+      
+      // 处理模块路径逻辑
+      if (moduleName.startsWith('modules/') || moduleName.startsWith('media/') || moduleName.startsWith('ui/')) {
+        // 如果模块名已经包含目录前缀，直接使用
         modulePath = `./${moduleName}.js`;
       } else if (moduleName.includes('/')) {
         // 对于子目录模块，确保路径正确
-        modulePath = `./modules/${moduleName}.js`;
+        modulePath = `./${moduleName}.js`;
       } else {
-        // 对于根目录模块
+        // 对于根目录模块，默认放在modules目录
         modulePath = `./modules/${moduleName}.js`;
       }
       
-      // 在SillyTavern中，import使用相对路径，但需要确保路径正确
-      // 注意：SillyTavern扩展脚本运行在http://127.0.0.1:8000/scripts/extensions/third-party/st_image_player/
-      // 因此相对路径需要相对于扩展根目录
-      console.log(`[moduleLoader] 加载路径: ${modulePath}`);
+      console.log(`[moduleLoader] 相对路径: ${modulePath}`);
       
-      // 添加调试信息，显示完整的URL路径
-      const fullUrl = new URL(modulePath, window.location.href).href;
+      // 在SillyTavern中，需要基于扩展根目录构建完整URL
+      const baseUrl = this._getExtensionBaseUrl();
+      const fullUrl = new URL(modulePath, baseUrl).href;
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
-      const module = await import(modulePath);
+      // 使用完整的URL进行导入
+      const module = await import(/* webpackIgnore: true */ fullUrl);
 
       // 检查模块是否有效
       if (!module || typeof module !== 'object') {
