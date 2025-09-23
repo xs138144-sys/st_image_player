@@ -87,11 +87,43 @@ const createLegacySettingsAdapter = () => {
     init: () => console.log(`[legacySettings] 旧settings模块适配器初始化`),
     cleanup: () => console.log(`[legacySettings] 旧settings模块适配器清理`),
     
-    get: (key) => deps.settings.get(key),
-    update: (updates) => deps.settings.update(updates),
-    save: (settings) => deps.settings.save(settings),
-    reset: () => deps.settings.reset(),
-    isInitialized: () => deps.settings.isInitialized(),
+    get: (key) => {
+      // 避免循环依赖，直接访问底层设置存储
+      const settingsModule = deps.getModule('modules/settings/settingsManager') || deps.getModule('settings');
+      if (settingsModule && typeof settingsModule.get === 'function') {
+        return settingsModule.get(key);
+      }
+      console.warn('[legacySettings] 无法获取设置，使用回退方案');
+      return {};
+    },
+    update: (updates) => {
+      const settingsModule = deps.getModule('modules/settings/settingsManager') || deps.getModule('settings');
+      if (settingsModule && typeof settingsModule.update === 'function') {
+        return settingsModule.update(updates);
+      }
+      console.warn('[legacySettings] 无法更新设置');
+    },
+    save: (settings) => {
+      const settingsModule = deps.getModule('modules/settings/settingsManager') || deps.getModule('settings');
+      if (settingsModule && typeof settingsModule.save === 'function') {
+        return settingsModule.save(settings);
+      }
+      console.warn('[legacySettings] 无法保存设置');
+    },
+    reset: () => {
+      const settingsModule = deps.getModule('modules/settings/settingsManager') || deps.getModule('settings');
+      if (settingsModule && typeof settingsModule.reset === 'function') {
+        return settingsModule.reset();
+      }
+      console.warn('[legacySettings] 无法重置设置');
+    },
+    isInitialized: () => {
+      const settingsModule = deps.getModule('modules/settings/settingsManager') || deps.getModule('settings');
+      if (settingsModule && typeof settingsModule.isInitialized === 'function') {
+        return settingsModule.isInitialized();
+      }
+      return false;
+    },
     
     migrateSettings: () => {
       console.warn(`[legacySettings] migrateSettings 函数需要从原settings.js迁移`);
