@@ -177,10 +177,15 @@ export const init = async () => {
 
   } catch (e) {
     console.error(`[websocket] 初始化错误:`, e);
-    // 10秒后重试
-    reconnectTimer = setTimeout(() => {
-      init();
-    }, 10000);
+    // 10秒后重试，但只在未达到最大重连次数时重试
+    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      reconnectTimer = setTimeout(() => {
+        init();
+      }, 10000);
+    } else {
+      console.log(`[websocket] 达到最大重连次数，停止重连`);
+      safeToastr.error("媒体同步连接失败，请检查服务状态");
+    }
   }
 };
 

@@ -200,7 +200,7 @@ export class ModuleLoader {
     let cleanupFunction = moduleObj.cleanup || moduleObj.default?.cleanup;
     if (typeof cleanupFunction !== "function") {
       console.warn(`[moduleLoader] 模块 ${moduleName} 缺少cleanup()方法，将使用默认清理函数`);
-      cleanupFunction = () => { console.log(`[${moduleName}] 默认清理完成`) };
+      cleanupFunction = async () => { console.log(`[${moduleName}] 默认清理完成`) };
     }
 
     // 确保模块对象有正确的方法
