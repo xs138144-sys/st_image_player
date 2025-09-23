@@ -17,7 +17,7 @@ export class ModuleLoader {
   _getExtensionBaseUrl() {
     // 在调试模式下，直接使用当前服务器的根路径
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      const baseUrl = window.location.origin + '/';
+      const baseUrl = window.location.origin + '/st_image_player/';
       console.log(`[moduleLoader] 调试模式，使用根路径: ${baseUrl}`);
       return baseUrl;
     }
