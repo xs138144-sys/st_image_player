@@ -17,7 +17,15 @@ export class ModuleLoader {
   async loadModule(moduleName, retries = 3) {
     try {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
-      const modulePath = moduleName.includes('/') ? `./${moduleName}.js` : `./modules/${moduleName}.js`;
+      // 修复路径处理逻辑
+      let modulePath;
+      if (moduleName.includes('/')) {
+        // 对于子目录模块，确保路径正确
+        modulePath = `./modules/${moduleName}.js`;
+      } else {
+        // 对于根目录模块
+        modulePath = `./modules/${moduleName}.js`;
+      }
       const module = await import(modulePath);
 
       // 检查模块是否有效
