@@ -15,11 +15,11 @@ export class ModuleLoader {
    * 获取扩展的基础URL（在SillyTavern环境中）
    */
   _getExtensionBaseUrl() {
-    // 使用绝对路径，避免任何路径推断问题
-    // 在SillyTavern中，扩展的路径是固定的
-    const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
-    console.log(`[moduleLoader] 使用绝对路径: ${extensionRoot}`);
-    return extensionRoot;
+    // 使用相对路径，让浏览器基于当前脚本位置自动解析
+    // 当前脚本位置: /scripts/extensions/third-party/st_image_player/core/moduleLoader.js
+    // 模块路径相对于扩展根目录: ../
+    console.log(`[moduleLoader] 使用相对路径，基于当前脚本位置解析`);
+    return '../';
   }
 
   /**
@@ -48,14 +48,15 @@ export class ModuleLoader {
         // 添加超时机制，防止import卡住
         const importPromise = import(/* webpackIgnore: true */ fullUrl);
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`模块导入超时: ${moduleName}`)), 5000)
+          setTimeout(() => reject(new Error(`模块导入超时: ${moduleName}`)), 3000)
         );
         
         module = await Promise.race([importPromise, timeoutPromise]);
         console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
       } catch (importError) {
         console.error(`[moduleLoader] 模块导入失败: ${moduleName}`, importError);
-        throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
+        // 不抛出错误，让重试机制处理
+        throw importError;
       }
 
       // 检查模块是否有效
