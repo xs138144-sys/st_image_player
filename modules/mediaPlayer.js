@@ -626,25 +626,26 @@ export const showMedia = async (direction) => {
     }
     settings.isMediaLoading = false;
     save();
-  }
-  if (retryCount < MAX_RETRIES) {
-    retryCount++;
-    console.log(`[mediaPlayer] 加载失败，重试 ${retryCount}/${MAX_RETRIES}`);
+    
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      console.log(`[mediaPlayer] 加载失败，重试 ${retryCount}/${MAX_RETRIES}`);
 
-    // 延迟后重试
-    setTimeout(() => {
-      showMedia(direction);
-    }, 1000 * retryCount); // 指数退避
-  } else {
-    // 达到最大重试次数
-    console.error(`[mediaPlayer] 媒体加载失败，达到最大重试次数`);
-    if (deps.toastr && typeof deps.toastr.error === "function") {
-      deps.toastr.error(`媒体加载失败: ${e.message}`);
+      // 延迟后重试
+      setTimeout(() => {
+        showMedia(direction);
+      }, 1000 * retryCount); // 指数退避
+    } else {
+      // 达到最大重试次数
+      console.error(`[mediaPlayer] 媒体加载失败，达到最大重试次数`);
+      if (deps.toastr && typeof deps.toastr.error === "function") {
+        deps.toastr.error(`媒体加载失败: ${e.message}`);
+      }
+
+      retryCount = 0;
+      settings.isMediaLoading = false;
+      save();
     }
-
-    retryCount = 0;
-    settings.isMediaLoading = false;
-    save();
   }
 }
 
