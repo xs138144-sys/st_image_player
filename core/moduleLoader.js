@@ -1,5 +1,3 @@
-import { deps } from "./deps.js";
-
 const EXT_ID = "st_image_player";
 
 /**
@@ -9,6 +7,30 @@ export class ModuleLoader {
   constructor() {
     this.loadedModules = new Map();
     this.cleanupListeners = [];
+  }
+
+  /**
+   * 安全获取deps对象（避免循环依赖）
+   */
+  _getDeps() {
+    // 尝试从全局获取deps
+    if (window.deps && typeof window.deps.registerModule === 'function') {
+      return window.deps;
+    }
+    
+    // 如果全局deps不存在，创建一个简单的回退版本
+    console.warn('[moduleLoader] deps对象未找到，使用回退版本');
+    return {
+      registerModule: (name, module) => {
+        console.log(`[moduleLoader] 回退注册模块: ${name}`);
+        if (!window.deps) window.deps = { modules: {} };
+        if (!window.deps.modules) window.deps.modules = {};
+        window.deps.modules[name] = module;
+      },
+      getModule: (name) => {
+        return window.deps?.modules?.[name] || null;
+      }
+    };
   }
 
   /**
@@ -226,6 +248,7 @@ export class ModuleLoader {
 
       // 注册模块到依赖管理器
       const registeredName = this._getRegisteredModuleName(moduleName);
+      const deps = this._getDeps();
       deps.registerModule(registeredName, moduleObj);
 
       // 注册模块清理事件
@@ -352,16 +375,37 @@ export class ModuleLoader {
   }
 
   _registerModuleCleanup(moduleName, moduleObj) {
-    const removeCleanupListener = deps.EventBus.on(
-      "extensionDisable",
-      moduleObj.cleanup
-    );
-    this.cleanupListeners.push(removeCleanupListener);
+    const deps = this._getDeps();
+    
+    // 安全地注册清理事件（如果EventBus可用）
+    if (deps.EventBus && typeof deps.EventBus.on === 'function') {
+      const removeCleanupListener = deps.EventBus.on(
+        "extensionCleanup",
+        () => {
+          console.log(`[moduleLoader] 清理模块: ${moduleName}`);
+          if (typeof moduleObj.cleanup === "function") {
+            moduleObj.cleanup();
+          }
+        }
+      );
+      
+      this.cleanupListeners.push(removeCleanupListener);
+    } else {
+      console.warn(`[moduleLoader] EventBus不可用，无法为模块${moduleName}注册清理事件`);
+    }
   }
 
+  /**
+   * 显示模块加载错误
+   */
   _showModuleLoadError(moduleName, error) {
+    const deps = this._getDeps();
+    
+    // 安全地显示错误信息
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`模块${moduleName}加载失败: ${error.message}`);
+    } else {
+      console.error(`[moduleLoader] 模块${moduleName}加载失败:`, error);
     }
   }
 
