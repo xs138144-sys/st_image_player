@@ -79,8 +79,20 @@ export class ModuleLoader {
         }
       } else {
         // SillyTavern环境：模块位于扩展根目录下
-        // 修复：简化路径构建逻辑，直接使用模块名称
-        fullUrl = `${baseUrl}${moduleName}.js`;
+        // 修复：确保路径构建正确，处理模块名称中的前缀
+        if (moduleName.startsWith('modules/')) {
+          // 如果模块名称已经包含modules/前缀，直接使用
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else if (moduleName.startsWith('api/')) {
+          // api模块需要映射到modules/api/路径
+          fullUrl = `${baseUrl}modules/${moduleName}.js`;
+        } else if (moduleName.startsWith('settings/')) {
+          // settings模块需要映射到modules/settings/路径
+          fullUrl = `${baseUrl}modules/${moduleName}.js`;
+        } else {
+          // 其他模块直接使用
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        }
       }
       
       console.log(`[moduleLoader] 模块路径: ${moduleName}`);
@@ -105,6 +117,12 @@ export class ModuleLoader {
         if (importError.message.includes('Failed to fetch') || importError.message.includes('Loading chunk')) {
           console.error(`[moduleLoader] 模块文件不存在或路径错误: ${fullUrl}`);
           console.error(`[moduleLoader] 请检查文件是否存在: ${moduleName}.js`);
+        } else if (importError.message.includes('Unexpected token')) {
+          console.error(`[moduleLoader] 模块语法错误: ${moduleName}`);
+          console.error(`[moduleLoader] 请检查模块文件是否有语法错误`);
+        } else if (importError.message.includes('Cannot find module')) {
+          console.error(`[moduleLoader] 模块依赖错误: ${moduleName}`);
+          console.error(`[moduleLoader] 请检查模块的导入依赖是否正确`);
         }
         
         throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
