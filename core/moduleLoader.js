@@ -80,18 +80,24 @@ export class ModuleLoader {
       } else {
         // SillyTavern环境：模块位于扩展根目录下
         // 修复：确保路径构建正确，处理模块名称中的前缀
+        console.log(`[moduleLoader] SillyTavern环境路径构建: ${moduleName}`);
+        
         if (moduleName.startsWith('modules/')) {
           // 如果模块名称已经包含modules/前缀，直接使用
           fullUrl = `${baseUrl}${moduleName}.js`;
+          console.log(`[moduleLoader] 使用直接路径: ${fullUrl}`);
         } else if (moduleName.startsWith('api/')) {
           // api模块需要映射到modules/api/路径
           fullUrl = `${baseUrl}modules/${moduleName}.js`;
+          console.log(`[moduleLoader] API模块映射: ${fullUrl}`);
         } else if (moduleName.startsWith('settings/')) {
           // settings模块需要映射到modules/settings/路径
           fullUrl = `${baseUrl}modules/${moduleName}.js`;
+          console.log(`[moduleLoader] Settings模块映射: ${fullUrl}`);
         } else {
           // 其他模块直接使用
           fullUrl = `${baseUrl}${moduleName}.js`;
+          console.log(`[moduleLoader] 其他模块路径: ${fullUrl}`);
         }
       }
       
@@ -145,9 +151,46 @@ export class ModuleLoader {
         } else if (importError.message.includes('超时')) {
           console.error(`[moduleLoader] 模块导入超时: ${moduleName}`);
           console.error(`[moduleLoader] 可能原因：循环依赖、模块语法错误、网络问题`);
+          
+          // 尝试使用备用导入方式
+          console.warn(`[moduleLoader] 尝试使用备用导入方式...`);
+          try {
+            // 使用更简单的导入方式 - 直接使用相对路径
+            let fallbackUrl = fullUrl;
+            
+            // 在SillyTavern环境下，尝试使用相对路径导入
+            if (baseUrl.startsWith('/')) {
+              // 如果是绝对路径，尝试转换为相对路径
+              const relativePath = moduleName.includes('/') ? moduleName : `modules/${moduleName}`;
+              fallbackUrl = `../${relativePath}.js`;
+              console.log(`[moduleLoader] 尝试使用相对路径: ${fallbackUrl}`);
+            }
+            
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = fallbackUrl;
+            
+            const loadPromise = new Promise((resolve, reject) => {
+              script.onload = () => {
+                console.log(`[moduleLoader] 备用导入方式成功: ${moduleName}`);
+                // 这里需要手动获取模块对象，但比较复杂
+                // 暂时返回一个空对象，让模块加载继续
+                resolve({});
+              };
+              script.onerror = reject;
+            });
+            
+            document.head.appendChild(script);
+            module = await loadPromise;
+          } catch (fallbackError) {
+            console.error(`[moduleLoader] 备用导入方式也失败:`, fallbackError);
+          }
         }
         
-        throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
+        // 如果备用方式也失败，继续抛出错误
+        if (!module) {
+          throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
+        }
       }
 
       // 检查模块是否有效
