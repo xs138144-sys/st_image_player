@@ -56,72 +56,51 @@ export class ModuleLoader {
     try {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
       
-      // 在SillyTavern环境中，模块路径需要相对于扩展根目录
-      let modulePath;
-      
       // 构建模块完整路径
-      // 在测试环境中，模块位于 modules/ 目录下
-      // 在SillyTavern环境中，模块位于扩展根目录下
       const baseUrl = this._getExtensionBaseUrl();
       
       let fullUrl;
       if (baseUrl === '../') {
         // 测试环境：模块路径处理
-        // 测试环境：模块位于相对路径下
-        // 工具模块位于 modules/ 目录下，UI模块位于 ui/ 目录下，媒体模块位于 media/ 目录下
-        // settings和API模块位于 modules/ 的子目录中
         if (moduleName.startsWith('ui/')) {
-          // UI模块：ui/ui.js -> ../ui/ui.js
           fullUrl = `${baseUrl}${moduleName}.js`;
         } else if (moduleName.startsWith('media/')) {
-          // 媒体模块：media/mediaPlayer.js -> ../media/mediaPlayer.js
           fullUrl = `${baseUrl}${moduleName}.js`;
         } else if (moduleName.startsWith('settings/')) {
-          // settings模块：settings/settingsManager -> ../modules/settings/settingsManager.js
-          // 模块名称是 "settings/settingsManager"，实际文件在 "modules/settings/settingsManager.js"
           const actualPath = moduleName.replace('settings/', 'modules/settings/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.startsWith('api/')) {
-          // API模块：api/serviceApi -> ../modules/api/serviceApi.js
-          // 模块名称是 "api/serviceApi"，实际文件在 "modules/api/serviceApi.js"
           const actualPath = moduleName.replace('api/', 'modules/api/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.includes('/')) {
-          // 其他带路径的模块
           fullUrl = `${baseUrl}${moduleName}.js`;
         } else {
-          // 工具模块：timeUtils -> ../modules/timeUtils.js
           fullUrl = `${baseUrl}modules/${moduleName}.js`;
         }
       } else {
         // SillyTavern环境：模块位于扩展根目录下
-        // 在ST环境中，模块文件都在扩展根目录下，但模块名称可能包含路径
-        // 需要根据模块类型正确处理路径
-        if (moduleName.startsWith('ui/')) {
-          // UI模块：ui/ui.js -> /scripts/extensions/third-party/st_image_player/ui/ui.js
+        // 修复：正确处理 modules/ 前缀的模块名称
+        if (moduleName.startsWith('modules/')) {
+          // 模块名称已经是完整路径，直接使用
+          fullUrl = `${baseUrl}${moduleName}.js`;
+        } else if (moduleName.startsWith('ui/')) {
           fullUrl = `${baseUrl}${moduleName}.js`;
         } else if (moduleName.startsWith('media/')) {
-          // 媒体模块：media/mediaPlayer.js -> /scripts/extensions/third-party/st_image_player/media/mediaPlayer.js
           fullUrl = `${baseUrl}${moduleName}.js`;
         } else if (moduleName.startsWith('settings/')) {
-          // settings模块：settings/settingsManager -> /scripts/extensions/third-party/st_image_player/modules/settings/settingsManager.js
           const actualPath = moduleName.replace('settings/', 'modules/settings/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.startsWith('api/')) {
-          // API模块：api/mediaApi -> /scripts/extensions/third-party/st_image_player/modules/api/mediaApi.js
           const actualPath = moduleName.replace('api/', 'modules/api/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.includes('/')) {
-          // 其他带路径的模块
           fullUrl = `${baseUrl}${moduleName}.js`;
         } else {
-          // 工具模块：timeUtils -> /scripts/extensions/third-party/st_image_player/modules/timeUtils.js
           fullUrl = `${baseUrl}modules/${moduleName}.js`;
         }
       }
       
       console.log(`[moduleLoader] 模块路径: ${moduleName}`);
-      console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
       // 使用完整的URL进行导入（带超时机制）
@@ -138,6 +117,13 @@ export class ModuleLoader {
         console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
       } catch (importError) {
         console.error(`[moduleLoader] 模块导入失败: ${moduleName}`, importError);
+        
+        // 提供更详细的错误信息
+        if (importError.message.includes('Failed to fetch') || importError.message.includes('Loading chunk')) {
+          console.error(`[moduleLoader] 模块文件不存在或路径错误: ${fullUrl}`);
+          console.error(`[moduleLoader] 请检查文件是否存在: ${moduleName}.js`);
+        }
+        
         throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
       }
 
