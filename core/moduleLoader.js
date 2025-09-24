@@ -82,8 +82,8 @@ export class ModuleLoader {
           const actualPath = moduleName.replace('settings/', 'modules/settings/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.startsWith('api/')) {
-          // API模块：api/serviceApi -> ../modules/api/serviceApi.js
-          // 模块名称是 "api/serviceApi"，实际文件在 "modules/api/serviceApi.js"
+          // API模块：api/configApi -> ../modules/api/configApi.js
+          // 模块名称是 "api/configApi"，实际文件在 "modules/api/configApi.js"
           const actualPath = moduleName.replace('api/', 'modules/api/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.includes('/')) {
@@ -108,7 +108,7 @@ export class ModuleLoader {
           const actualPath = moduleName.replace('settings/', 'modules/settings/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.startsWith('api/')) {
-          // API模块：api/mediaApi -> /scripts/extensions/third-party/st_image_player/modules/api/mediaApi.js
+          // API模块：api/configApi -> /scripts/extensions/third-party/st_image_player/modules/api/configApi.js
           const actualPath = moduleName.replace('api/', 'modules/api/');
           fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.includes('/')) {
