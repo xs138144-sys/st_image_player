@@ -213,6 +213,17 @@ export class ModuleLoader {
         throw new Error(`模块初始化失败: ${moduleName} - ${initError.message}`);
       }
 
+      // 特殊处理websocket模块：调用initializeModule方法
+      if (moduleName === 'modules/websocket' && typeof moduleObj.initializeModule === 'function') {
+        console.log(`[moduleLoader] 调用websocket模块的initializeModule方法`);
+        try {
+          moduleObj.initializeModule();
+          console.log(`[moduleLoader] websocket模块延迟初始化完成`);
+        } catch (e) {
+          console.error(`[moduleLoader] websocket模块延迟初始化失败:`, e);
+        }
+      }
+
       // 注册模块到依赖管理器
       const registeredName = this._getRegisteredModuleName(moduleName);
       deps.registerModule(registeredName, moduleObj);

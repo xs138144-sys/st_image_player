@@ -8,6 +8,8 @@ let isManualClose = false;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let isSocketIOLoaded = false;
+let isModuleInitialized = false;
+let connectionCheckInterval = null;
 
 // 安全的toastr调用方法
 const safeToastr = {
@@ -82,6 +84,8 @@ const loadSocketIOLibrary = () => {
  * 初始化SocketIO连接
  */
 export const init = async () => {
+  console.log(`[websocket] 开始初始化WebSocket模块`);
+  
   const settings = deps.settings?.get?.();
   if (!settings?.serviceUrl) {
     console.warn(`[websocket] 未配置服务地址，无法初始化SocketIO`);
@@ -253,6 +257,7 @@ export const cleanup = () => {
   // 清理连接检查定时器
   if (connectionCheckInterval) {
     clearInterval(connectionCheckInterval);
+    connectionCheckInterval = null;
   }
   
   console.log(`[websocket] 资源清理完成`);
@@ -309,18 +314,34 @@ export const checkAndFixConnection = () => {
   return false;
 };
 
-// 延迟初始化WebSocket连接，避免阻塞模块加载
-setTimeout(() => {
-  const settings = deps.settings?.get?.();
-  if (settings?.serviceUrl) {
-    console.log(`[websocket] 延迟初始化WebSocket连接`);
-    init();
+/**
+ * 模块初始化完成后的延迟初始化
+ */
+export const initializeModule = () => {
+  if (isModuleInitialized) {
+    console.log(`[websocket] 模块已初始化，跳过重复初始化`);
+    return;
   }
-}, 3000);
+  
+  isModuleInitialized = true;
+  console.log(`[websocket] WebSocket模块初始化完成`);
+  
+  // 延迟初始化WebSocket连接，避免阻塞模块加载
+  setTimeout(() => {
+    const settings = deps.settings?.get?.();
+    if (settings?.serviceUrl) {
+      console.log(`[websocket] 延迟初始化WebSocket连接`);
+      init();
+    }
+  }, 3000);
 
-// 添加定时检查连接状态（仅在连接断开时重连）
-const connectionCheckInterval = setInterval(() => {
-  if (!isManualClose) {
-    checkAndFixConnection();
-  }
-}, 30000); // 每30秒检查一次连接状态
+  // 添加定时检查连接状态（仅在连接断开时重连）
+  connectionCheckInterval = setInterval(() => {
+    if (!isManualClose) {
+      checkAndFixConnection();
+    }
+  }, 30000); // 每30秒检查一次连接状态
+};
+
+// 模块导入完成后立即标记为初始化完成
+console.log(`[websocket] WebSocket模块导入完成`);
