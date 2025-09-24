@@ -110,8 +110,22 @@ export class ModuleLoader {
         );
         
         console.log(`[moduleLoader] 等待模块导入完成...`);
-        module = await Promise.race([importPromise, timeoutPromise]);
-        console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
+        
+        // 添加导入状态监控
+        const importStartTime = Date.now();
+        const checkImportStatus = setInterval(() => {
+          const elapsed = Date.now() - importStartTime;
+          console.log(`[moduleLoader] 导入已进行 ${elapsed}ms`);
+        }, 1000);
+        
+        try {
+          module = await Promise.race([importPromise, timeoutPromise]);
+          clearInterval(checkImportStatus);
+          console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
+        } catch (raceError) {
+          clearInterval(checkImportStatus);
+          throw raceError;
+        }
       } catch (importError) {
         console.error(`[moduleLoader] 模块导入失败: ${moduleName}`, importError);
         
@@ -128,6 +142,9 @@ export class ModuleLoader {
         } else if (importError.message.includes('import')) {
           console.error(`[moduleLoader] 模块导入语句错误: ${moduleName}`);
           console.error(`[moduleLoader] 请检查模块的import语句是否正确`);
+        } else if (importError.message.includes('超时')) {
+          console.error(`[moduleLoader] 模块导入超时: ${moduleName}`);
+          console.error(`[moduleLoader] 可能原因：循环依赖、模块语法错误、网络问题`);
         }
         
         throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
