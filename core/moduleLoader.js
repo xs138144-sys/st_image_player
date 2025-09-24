@@ -157,7 +157,8 @@ export class ModuleLoader {
       console.log(`[moduleLoader] 模块加载完成: ${moduleName}`);
 
       // 注册模块到依赖管理器
-      deps.registerModule(moduleName, moduleObj);
+      const registeredName = this._getRegisteredModuleName(moduleName);
+      deps.registerModule(registeredName, moduleObj);
 
       // 注册模块清理事件
       this._registerModuleCleanup(moduleName, moduleObj);
@@ -294,6 +295,24 @@ export class ModuleLoader {
     if (deps.toastr && typeof deps.toastr.error === "function") {
       deps.toastr.error(`模块${moduleName}加载失败: ${error.message}`);
     }
+  }
+
+  /**
+   * 获取模块注册名称（统一名称格式）
+   */
+  _getRegisteredModuleName(moduleName) {
+    console.log(`[moduleLoader] 原始模块名称: ${moduleName}`);
+    
+    // 统一模块名称格式
+    let registeredName = moduleName;
+    
+    // 移除多余的 modules/ 前缀
+    if (moduleName.startsWith('modules/')) {
+      registeredName = moduleName.replace('modules/', '');
+    }
+    
+    console.log(`[moduleLoader] 注册模块名称: ${registeredName}`);
+    return registeredName;
   }
 }
 
