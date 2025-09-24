@@ -79,24 +79,19 @@ export class ModuleLoader {
         }
       } else {
         // SillyTavern环境：模块位于扩展根目录下
-        // 修复：正确处理 modules/ 前缀的模块名称
+        // 修复：需要添加正确的路径前缀
         if (moduleName.startsWith('modules/')) {
-          // 模块名称已经是完整路径，直接使用
+          // 如果模块名称已经包含modules/前缀，直接使用
           fullUrl = `${baseUrl}${moduleName}.js`;
-        } else if (moduleName.startsWith('ui/')) {
-          fullUrl = `${baseUrl}${moduleName}.js`;
-        } else if (moduleName.startsWith('media/')) {
-          fullUrl = `${baseUrl}${moduleName}.js`;
-        } else if (moduleName.startsWith('settings/')) {
-          const actualPath = moduleName.replace('settings/', 'modules/settings/');
-          fullUrl = `${baseUrl}${actualPath}.js`;
         } else if (moduleName.startsWith('api/')) {
-          const actualPath = moduleName.replace('api/', 'modules/api/');
-          fullUrl = `${baseUrl}${actualPath}.js`;
-        } else if (moduleName.includes('/')) {
-          fullUrl = `${baseUrl}${moduleName}.js`;
-        } else {
+          // API模块需要映射到modules/api/路径
           fullUrl = `${baseUrl}modules/${moduleName}.js`;
+        } else if (moduleName.startsWith('settings/')) {
+          // 设置模块需要映射到modules/settings/路径
+          fullUrl = `${baseUrl}modules/${moduleName}.js`;
+        } else {
+          // 其他模块直接使用
+          fullUrl = `${baseUrl}${moduleName}.js`;
         }
       }
       
