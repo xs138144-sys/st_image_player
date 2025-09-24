@@ -96,6 +96,7 @@ export class ModuleLoader {
       }
       
       console.log(`[moduleLoader] 模块路径: ${moduleName}`);
+      console.log(`[moduleLoader] 基础URL: ${baseUrl}`);
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
       // 使用完整的URL进行导入（带超时机制）
@@ -108,6 +109,7 @@ export class ModuleLoader {
           setTimeout(() => reject(new Error(`模块导入超时: ${moduleName}`)), 5000)
         );
         
+        console.log(`[moduleLoader] 等待模块导入完成...`);
         module = await Promise.race([importPromise, timeoutPromise]);
         console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
       } catch (importError) {
@@ -123,6 +125,9 @@ export class ModuleLoader {
         } else if (importError.message.includes('Cannot find module')) {
           console.error(`[moduleLoader] 模块依赖错误: ${moduleName}`);
           console.error(`[moduleLoader] 请检查模块的导入依赖是否正确`);
+        } else if (importError.message.includes('import')) {
+          console.error(`[moduleLoader] 模块导入语句错误: ${moduleName}`);
+          console.error(`[moduleLoader] 请检查模块的import语句是否正确`);
         }
         
         throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
@@ -139,9 +144,14 @@ export class ModuleLoader {
       // 确保模块有必要的接口方法
       this._validateModuleInterface(moduleObj, moduleName);
 
-      // 初始化模块
-      await moduleObj.init();
-      console.log(`[moduleLoader] 模块加载完成: ${moduleName}`);
+      // 初始化模块（添加错误处理）
+      try {
+        await moduleObj.init();
+        console.log(`[moduleLoader] 模块加载完成: ${moduleName}`);
+      } catch (initError) {
+        console.error(`[moduleLoader] 模块初始化失败: ${moduleName}`, initError);
+        throw new Error(`模块初始化失败: ${moduleName} - ${initError.message}`);
+      }
 
       // 注册模块到依赖管理器
       const registeredName = this._getRegisteredModuleName(moduleName);
