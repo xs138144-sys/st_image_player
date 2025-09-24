@@ -122,6 +122,7 @@ export class ModuleLoader {
       
       console.log(`[moduleLoader] 模块路径: ${moduleName}`);
       console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
+      console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
       
       // 使用完整的URL进行导入（带超时机制）
       console.log(`[moduleLoader] 开始导入模块: ${fullUrl}`);
