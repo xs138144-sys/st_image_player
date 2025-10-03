@@ -139,7 +139,7 @@ function initializeDeps() {
 function loadModuleLoader() {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = './core/moduleLoader.js';
+    script.src = 'core/moduleLoader.js'; // 修正路径，去掉前面的./
     script.type = 'module';
     
     script.onload = () => {
@@ -165,7 +165,7 @@ function loadModuleLoader() {
 function loadDepsModule(moduleLoader) {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = './core/deps.js';
+    script.src = 'core/deps.js'; // 修正路径，去掉前面的./
     script.type = 'module';
     
     script.onload = () => {
@@ -209,7 +209,7 @@ async function startExtension() {
     
     // 5. 加载主入口文件
     const mainScript = document.createElement('script');
-    mainScript.src = './index.js';
+    mainScript.src = 'index.js'; // 修正路径，去掉前面的./
     mainScript.type = 'module';
     
     mainScript.onload = () => {
