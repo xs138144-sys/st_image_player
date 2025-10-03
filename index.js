@@ -143,6 +143,10 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
+  // 关键修复：设置复选框初始状态
+  const settings = getExtensionSettings();
+  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop('checked', settings.masterEnabled);
+
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
@@ -156,6 +160,10 @@ const createMinimalSettingsPanel = () => {
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
         initExtension();
         toastr.success("媒体播放器扩展已启用");
+      } else {
+        // 禁用扩展
+        disableExtension();
+        toastr.info("媒体播放器扩展已禁用");
       }
     }
   );
@@ -2639,7 +2647,13 @@ jQuery(() => {
           document.getElementById("extensions_settings");
         if (finalDOMReady) {
           console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
-          initExtension();
+          const settings = getExtensionSettings();
+          // 关键修复：超时时也要检查总开关状态
+          if (settings.masterEnabled) {
+            initExtension();
+          } else {
+            createMinimalSettingsPanel();
+          }
         } else {
           console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
           toastr.error("扩展初始化失败,核心DOM未加载");
