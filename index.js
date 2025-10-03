@@ -659,7 +659,15 @@ const createPlayerWindow = async () => {
                         <i class="fa-solid fa-video"></i>
                     </button>
                 </div>
-                <div class="resize-handle"></div>
+                <!-- 8个拉伸手柄 - 4个角和4个边 -->
+                <div class="resize-handle top-left"></div>
+                <div class="resize-handle top-right"></div>
+                <div class="resize-handle bottom-left"></div>
+                <div class="resize-handle bottom-right"></div>
+                <div class="resize-handle top"></div>
+                <div class="resize-handle bottom"></div>
+                <div class="resize-handle left"></div>
+                <div class="resize-handle right"></div>
             </div>
         </div>
     `;
@@ -727,7 +735,6 @@ const adjustVideoControlsLayout = () => {
 const setupWindowEvents = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const header = win.find(".image-player-header")[0];
-  const resizeHandle = win.find(".resize-handle")[0];
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
   const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
@@ -743,16 +750,28 @@ const setupWindowEvents = () => {
     };
   });
 
-  // 2. 窗口调整大小
-  resizeHandle.addEventListener("mousedown", (e) => {
-    if (settings.isLocked || settings.hideBorder) return;
-    e.preventDefault();
-    resizeData = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startWidth: win.width(),
-      startHeight: win.height(),
-    };
+  // 2. 窗口调整大小 - 为8个拉伸手柄添加事件监听
+  const resizeHandles = win.find(".resize-handle");
+  resizeHandles.each(function() {
+    this.addEventListener("mousedown", (e) => {
+      if (settings.isLocked || settings.hideBorder) return;
+      e.preventDefault();
+      
+      const handleClass = this.className.replace("resize-handle ", "");
+      const winOffset = win.offset();
+      const winWidth = win.width();
+      const winHeight = win.height();
+      
+      resizeData = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: winWidth,
+        startHeight: winHeight,
+        startLeft: winOffset.left,
+        startTop: winOffset.top,
+        handleType: handleClass
+      };
+    });
   });
 
   // 3. 全局鼠标移动
@@ -768,9 +787,55 @@ const setupWindowEvents = () => {
     if (resizeData) {
       const diffX = e.clientX - resizeData.startX;
       const diffY = e.clientY - resizeData.startY;
-      const newWidth = Math.max(300, resizeData.startWidth + diffX);
-      const newHeight = Math.max(200, resizeData.startHeight + diffY);
-      win.css({ width: `${newWidth}px`, height: `${newHeight}px` });
+      let newWidth = resizeData.startWidth;
+      let newHeight = resizeData.startHeight;
+      let newLeft = resizeData.startLeft;
+      let newTop = resizeData.startTop;
+      
+      // 根据手柄类型计算新的位置和大小
+      switch (resizeData.handleType) {
+        case 'top-left':
+          newWidth = Math.max(300, resizeData.startWidth - diffX);
+          newHeight = Math.max(200, resizeData.startHeight - diffY);
+          newLeft = resizeData.startLeft + diffX;
+          newTop = resizeData.startTop + diffY;
+          break;
+        case 'top-right':
+          newWidth = Math.max(300, resizeData.startWidth + diffX);
+          newHeight = Math.max(200, resizeData.startHeight - diffY);
+          newTop = resizeData.startTop + diffY;
+          break;
+        case 'bottom-left':
+          newWidth = Math.max(300, resizeData.startWidth - diffX);
+          newHeight = Math.max(200, resizeData.startHeight + diffY);
+          newLeft = resizeData.startLeft + diffX;
+          break;
+        case 'bottom-right':
+          newWidth = Math.max(300, resizeData.startWidth + diffX);
+          newHeight = Math.max(200, resizeData.startHeight + diffY);
+          break;
+        case 'top':
+          newHeight = Math.max(200, resizeData.startHeight - diffY);
+          newTop = resizeData.startTop + diffY;
+          break;
+        case 'bottom':
+          newHeight = Math.max(200, resizeData.startHeight + diffY);
+          break;
+        case 'left':
+          newWidth = Math.max(300, resizeData.startWidth - diffX);
+          newLeft = resizeData.startLeft + diffX;
+          break;
+        case 'right':
+          newWidth = Math.max(300, resizeData.startWidth + diffX);
+          break;
+      }
+      
+      win.css({
+        width: `${newWidth}px`,
+        height: `${newHeight}px`,
+        left: `${newLeft}px`,
+        top: `${newTop}px`
+      });
       adjustVideoControlsLayout();
     }
     if (progressDrag && settings.customVideoControls.showProgress) {
