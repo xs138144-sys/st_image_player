@@ -28,19 +28,12 @@ const getExtensionSettings = () => {
   // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
   const globalSettings = getSafeGlobal("extension_settings", {});
   
-  // 修复：仅在页面加载时检查一次，避免干扰用户操作
+  // 修复：完全移除强制修复逻辑，尊重用户设置
   if (globalSettings[EXTENSION_ID]) {
     const savedSettings = globalSettings[EXTENSION_ID];
     
-    // 只在页面加载时修复一次，避免干扰用户启用操作
-    if (typeof savedSettings._fixedOnLoad === 'undefined') {
-      if (savedSettings.masterEnabled !== false) {
-        savedSettings.masterEnabled = false;
-        savedSettings._fixedOnLoad = true; // 标记已修复
-        saveSafeSettings();
-        console.log(`[${EXTENSION_ID}] 页面加载时修复masterEnabled状态为false`);
-      }
-    }
+    // 关键修复：不再强制设置masterEnabled，完全尊重用户保存的设置
+    console.log(`[${EXTENSION_ID}] 加载用户设置: masterEnabled=${savedSettings.masterEnabled}`);
     
     return savedSettings;
   }
