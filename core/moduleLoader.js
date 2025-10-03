@@ -54,9 +54,9 @@ export class ModuleLoader {
     console.log(`[moduleLoader] 环境检测 - ST: ${isSillyTavern}, 测试: ${isTestEnvironment}, 路径: ${window.location?.pathname}`);
     
     if (isSillyTavern) {
-      // SillyTavern环境 - 使用绝对路径
-      const extensionRoot = '/scripts/extensions/third-party/st_image_player/';
-      console.log(`[moduleLoader] SillyTavern环境，使用绝对路径: ${extensionRoot}`);
+      // SillyTavern环境 - 使用相对路径（修复路径问题）
+      const extensionRoot = '../';
+      console.log(`[moduleLoader] SillyTavern环境，使用相对路径: ${extensionRoot}`);
       return extensionRoot;
     } else if (isTestEnvironment) {
       // 测试环境 - 使用相对路径

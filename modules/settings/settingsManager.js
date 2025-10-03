@@ -4,7 +4,23 @@ import { deps } from "../../core/deps.js";
  * 设置管理器模块 - 负责设置的定义、获取和更新
  */
 export const init = () => {
-  console.log(`[settingsManager] 设置管理器初始化完成`);
+  console.log(`[settingsManager] 设置管理器开始初始化`);
+  
+  // 确保设置已正确初始化
+  try {
+    // 检查是否已有设置，如果没有则初始化默认设置
+    if (!isInitialized()) {
+      console.log(`[settingsManager] 初始化默认设置`);
+      reset(); // 重置为默认设置
+    } else {
+      console.log(`[settingsManager] 设置已存在，跳过初始化`);
+    }
+    
+    console.log(`[settingsManager] 设置管理器初始化完成`);
+  } catch (error) {
+    console.error(`[settingsManager] 初始化过程中出现错误:`, error);
+    // 即使出错也继续，确保模块能正常加载
+  }
 };
 
 export const cleanup = () => {
