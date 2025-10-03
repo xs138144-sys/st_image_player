@@ -34,7 +34,7 @@ const getExtensionSettings = () => {
 
   // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
   const defaultSettings = {
-    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+    masterEnabled: false, // 修复：默认禁用扩展，避免刷新后自动启用
     enabled: true, // 播放器启用状态
     serviceUrl: "http://localhost:9000",
     playMode: "random",
