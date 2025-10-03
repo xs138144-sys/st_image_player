@@ -1603,13 +1603,14 @@ const updateStatusDisplay = () => {
 
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
-  // 总开关禁用：不创建设置面板
-  if (!settings.masterEnabled) return;
   
+  // 关键修复：移除总开关检查，确保设置面板总是被创建
   // 如果设置面板已存在，先移除再重新创建（确保启用时能显示完整面板）
   if ($(`#${SETTINGS_PANEL_ID}`).length) {
     $(`#${SETTINGS_PANEL_ID}`).remove();
   }
+  
+  console.log(`[${EXTENSION_ID}] 创建设置面板，masterEnabled=${settings.masterEnabled}`);
 
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
