@@ -27,12 +27,23 @@ const toastr = getSafeToastr();
 const getExtensionSettings = () => {
   // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
   const globalSettings = getSafeGlobal("extension_settings", {});
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+  
+  // 彻底修复：确保masterEnabled状态正确，即使有已保存的设置
   if (globalSettings[EXTENSION_ID]) {
-    return globalSettings[EXTENSION_ID];
+    const savedSettings = globalSettings[EXTENSION_ID];
+    
+    // 强制修复：无论之前是什么状态，都设置为false
+    if (savedSettings.masterEnabled !== false) {
+      savedSettings.masterEnabled = false;
+      // 立即保存修复后的设置
+      saveSafeSettings();
+      console.log(`[${EXTENSION_ID}] 强制修复masterEnabled状态为false`);
+    }
+    
+    return savedSettings;
   }
 
-  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  // 仅当完全无配置时，才创建默认设置
   const defaultSettings = {
     masterEnabled: false, // 修复：默认禁用扩展，避免刷新后自动启用
     enabled: true, // 播放器启用状态
