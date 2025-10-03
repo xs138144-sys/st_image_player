@@ -85,8 +85,8 @@ const getExtensionSettings = () => {
   // 关键修复：仅在第一次使用时保存默认设置
   if (typeof globalSettings._firstTimeSetup === 'undefined') {
     globalSettings._firstTimeSetup = true;
-    saveSafeSettings();
     console.log(`[${EXTENSION_ID}] 第一次使用，保存默认设置`);
+    saveSafeSettings();
   }
   
   return defaultSettings;
@@ -94,23 +94,41 @@ const getExtensionSettings = () => {
 
 const saveSafeSettings = () => {
   const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  
+  // 确保全局设置对象存在
+  if (typeof window.extension_settings === "undefined") {
+    window.extension_settings = {};
+  }
+  
+  // 确保扩展设置存在
+  if (!window.extension_settings[EXTENSION_ID]) {
+    window.extension_settings[EXTENSION_ID] = getExtensionSettings();
+  }
+  
   // 关键：通过 SillyTavern 核心函数保存设置到本地存储
   if (saveFn && typeof saveFn === "function") {
     console.log(`[${EXTENSION_ID}] 开始保存设置...`);
     saveFn();
     console.log(`[${EXTENSION_ID}] 设置保存函数已调用`);
     
-    // 检查设置是否真的保存了
-    setTimeout(() => {
-      const globalSettings = getSafeGlobal("extension_settings", {});
-      if (globalSettings[EXTENSION_ID]) {
-        console.log(`[${EXTENSION_ID}] 设置已确认保存: masterEnabled=${globalSettings[EXTENSION_ID].masterEnabled}`, globalSettings[EXTENSION_ID]);
-      } else {
-        console.error(`[${EXTENSION_ID}] 设置保存失败: 设置对象不存在`);
-      }
-    }, 100);
+    // 立即检查设置是否保存成功
+    const globalSettings = getSafeGlobal("extension_settings", {});
+    if (globalSettings[EXTENSION_ID]) {
+      console.log(`[${EXTENSION_ID}] 设置已确认保存: masterEnabled=${globalSettings[EXTENSION_ID].masterEnabled}`);
+    } else {
+      console.error(`[${EXTENSION_ID}] 设置保存失败: 设置对象不存在`);
+    }
   } else {
     console.error(`[${EXTENSION_ID}] 保存函数不存在: saveFn=`, saveFn);
+    
+    // 备用方案：直接使用localStorage保存
+    try {
+      const settings = getExtensionSettings();
+      localStorage.setItem(`st_image_player_settings`, JSON.stringify(settings));
+      console.log(`[${EXTENSION_ID}] 使用localStorage保存设置: masterEnabled=${settings.masterEnabled}`);
+    } catch (error) {
+      console.error(`[${EXTENSION_ID}] localStorage保存失败:`, error);
+    }
   }
 };
 
