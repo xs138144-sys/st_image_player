@@ -1,7 +1,7 @@
-// moduleLoader.js - 兼容SillyTavern环境的模块加载器
+// moduleLoader.js - 简化的模块加载器，使用ES6动态import()
 
 /**
- * 模块加载器 - 使用传统脚本标签加载方式，兼容SillyTavern环境
+ * 简化的模块加载器 - 使用ES6动态import()
  */
 class ModuleLoader {
   constructor() {
@@ -22,11 +22,11 @@ class ModuleLoader {
       }
 
       // 构建模块路径
-      let modulePath = this._buildModulePath(moduleName);
+      const modulePath = this._buildModulePath(moduleName);
       console.log(`[moduleLoader] 开始加载模块: ${moduleName} (路径: ${modulePath})`);
 
-      // 使用传统脚本标签加载方式
-      const moduleObj = await this._loadScript(modulePath, moduleName);
+      // 使用ES6动态import()加载模块
+      const moduleObj = await this._importModule(modulePath, moduleName);
       
       if (!moduleObj) {
         throw new Error(`模块加载失败: ${moduleName}`);
@@ -57,111 +57,40 @@ class ModuleLoader {
   }
 
   /**
-   * 使用脚本标签加载模块
+   * 使用ES6动态import()加载模块
    */
-  _loadScript(modulePath, moduleName) {
-    return new Promise((resolve, reject) => {
-      // 特殊处理deps.js模块
-      if (moduleName === 'deps') {
-        console.log(`[moduleLoader] 加载deps.js模块`);
-        
-        // 检查是否已经存在全局deps对象
-        if (window.deps && window.deps.registerModule) {
-          console.log('[moduleLoader] deps.js已存在，直接返回');
-          resolve(window.deps);
-          return;
-        }
-        
-        // 构建deps.js路径
-        const depsPath = './deps.js';
-        
-        // 加载deps.js
-        this._loadScript(depsPath, moduleName)
-          .then(() => {
-            // 等待deps对象初始化
-            const checkDeps = () => {
-              if (window.deps && window.deps.registerModule) {
-                console.log('[moduleLoader] deps.js加载成功');
-                resolve(window.deps);
-              } else {
-                setTimeout(checkDeps, 100);
-              }
-            };
-            checkDeps();
-          })
-          .catch(reject);
-        return;
-      }
-
-      // 检查是否已经通过其他方式加载了模块
-      const globalModule = this._checkGlobalModule(moduleName);
-      if (globalModule) {
-        console.log(`[moduleLoader] 模块已全局存在: ${moduleName}`);
-        resolve(globalModule);
-        return;
-      }
-
-      // 创建脚本标签
-      const script = document.createElement('script');
-      script.src = modulePath;
-      script.type = 'module'; // 使用module类型支持ES6导入
+  async _importModule(modulePath, moduleName) {
+    try {
+      // 使用动态import()加载模块
+      const module = await import(modulePath);
       
-      // 设置超时
-      const timeoutId = setTimeout(() => {
-        reject(new Error(`模块加载超时: ${moduleName}`));
-        script.remove();
-      }, 10000); // 10秒超时
-
-      script.onload = () => {
-        clearTimeout(timeoutId);
-        
-        // 检查模块是否已导出到全局对象
-        const moduleObj = this._checkGlobalModule(moduleName);
-        if (moduleObj) {
-          resolve(moduleObj);
-        } else {
-          reject(new Error(`模块未正确导出: ${moduleName}`));
+      // 检查模块是否包含默认导出
+      if (module && module.default) {
+        return module.default;
+      }
+      
+      // 如果没有默认导出，返回整个模块对象
+      return module;
+    } catch (error) {
+      console.error(`[moduleLoader] 动态导入失败: ${modulePath}`, error);
+      
+      // 尝试备用路径
+      const fallbackPath = this._buildFallbackPath(modulePath);
+      if (fallbackPath !== modulePath) {
+        console.log(`[moduleLoader] 尝试备用路径: ${fallbackPath}`);
+        try {
+          const module = await import(fallbackPath);
+          if (module && module.default) {
+            return module.default;
+          }
+          return module;
+        } catch (fallbackError) {
+          console.error(`[moduleLoader] 备用路径也失败: ${fallbackPath}`, fallbackError);
         }
-      };
-
-      script.onerror = (error) => {
-        clearTimeout(timeoutId);
-        reject(new Error(`脚本加载失败: ${moduleName} - ${error}`));
-      };
-
-      // 添加到文档
-      document.head.appendChild(script);
-    });
-  }
-
-  /**
-   * 检查全局模块
-   */
-  _checkGlobalModule(moduleName) {
-    // 根据模块名称检查不同的全局对象
-    const moduleKey = this._getModuleGlobalKey(moduleName);
-    
-    // 检查window对象
-    if (window[moduleKey]) {
-      return window[moduleKey];
+      }
+      
+      throw error;
     }
-    
-    // 检查deps对象
-    const deps = this._getDeps();
-    if (deps && deps.getModule) {
-      const module = deps.getModule(moduleName);
-      if (module) return module;
-    }
-    
-    return null;
-  }
-
-  /**
-   * 获取模块的全局键名
-   */
-  _getModuleGlobalKey(moduleName) {
-    // 将路径转换为有效的变量名
-    return moduleName.replace(/[\/\-]/g, '_');
   }
 
   /**
@@ -178,6 +107,23 @@ class ModuleLoader {
     } else {
       return `./modules/${moduleName}.js`;
     }
+  }
+
+  /**
+   * 构建备用路径
+   */
+  _buildFallbackPath(modulePath) {
+    // 尝试移除../前缀
+    if (modulePath.startsWith('../')) {
+      return modulePath.substring(3);
+    }
+    
+    // 尝试添加../前缀
+    if (!modulePath.startsWith('../')) {
+      return `../${modulePath}`;
+    }
+    
+    return modulePath;
   }
 
   /**
@@ -199,9 +145,9 @@ class ModuleLoader {
 
     // 确保有cleanup方法
     if (typeof moduleObj.cleanup !== 'function') {
-      moduleObj.cleanup = async () => {
+      console.warn(`[moduleLoader] 模块 ${moduleName} 没有cleanup方法，提供默认实现`);
+      moduleObj.cleanup = () => {
         console.log(`[moduleLoader] 默认cleanup方法执行: ${moduleName}`);
-        return true;
       };
     }
   }
@@ -211,167 +157,117 @@ class ModuleLoader {
    */
   async _initializeModule(moduleObj, moduleName) {
     try {
-      await moduleObj.init();
-      console.log(`[moduleLoader] 模块初始化成功: ${moduleName}`);
-    } catch (initError) {
-      console.error(`[moduleLoader] 模块初始化失败: ${moduleName}`, initError);
-      // 即使初始化失败也继续，标记错误状态
-      moduleObj._initError = initError;
-    }
-
-    // websocket特殊处理
-    if (moduleName === 'modules/websocket' && typeof moduleObj.waitForConnection === 'function') {
-      try {
-        await moduleObj.waitForConnection();
-        console.log(`[moduleLoader] websocket连接建立成功`);
-      } catch (wsError) {
-        console.error(`[moduleLoader] websocket连接失败:`, wsError);
+      // 特殊处理websocket模块
+      if (moduleName === 'modules/websocket') {
+        console.log(`[moduleLoader] 初始化websocket模块`);
+        // websocket模块需要等待连接
+        if (moduleObj.waitForConnection && typeof moduleObj.waitForConnection === 'function') {
+          await moduleObj.waitForConnection();
+        }
       }
+
+      // 调用模块的init方法
+      const initResult = await moduleObj.init();
+      
+      if (initResult === false) {
+        throw new Error(`模块初始化失败: ${moduleName}`);
+      }
+
+      console.log(`[moduleLoader] 模块初始化成功: ${moduleName}`);
+    } catch (error) {
+      console.error(`[moduleLoader] 模块初始化失败: ${moduleName}`, error);
+      throw error;
     }
   }
 
   /**
-   * 注册模块
+   * 注册模块到依赖管理器
    */
   _registerModule(moduleName, moduleObj) {
-    const registeredName = this._getRegisteredModuleName(moduleName);
-    const deps = this._getDeps();
-    
-    if (deps && deps.registerModule) {
-      deps.registerModule(registeredName, moduleObj);
-    }
-    
+    // 标记模块为已加载
     this.loadedModules.set(moduleName, moduleObj);
-    this._registerModuleCleanup(moduleName, moduleObj);
-  }
 
-  /**
-   * 获取注册的模块名称
-   */
-  _getRegisteredModuleName(moduleName) {
-    // 移除路径前缀，保留模块标识
-    return moduleName.replace(/^(modules|media|ui)\//, '');
-  }
-
-  /**
-   * 获取deps对象
-   */
-  _getDeps() {
-    return window.deps || null;
-  }
-
-  /**
-   * 注册模块清理监听器
-   */
-  _registerModuleCleanup(moduleName, moduleObj) {
-    if (typeof moduleObj.cleanup === 'function') {
-      this.cleanupListeners.push(() => {
-        try {
-          moduleObj.cleanup();
-        } catch (e) {
-          console.error(`[moduleLoader] 模块清理失败: ${moduleName}`, e);
-        }
-      });
+    // 注册到全局deps对象
+    if (window.deps && typeof window.deps.registerModule === 'function') {
+      window.deps.registerModule(moduleName, moduleObj);
+    } else {
+      console.warn(`[moduleLoader] deps对象不可用，无法注册模块: ${moduleName}`);
     }
-  }
-
-  /**
-   * 批量加载所有模块
-   */
-  async loadAllModules(moduleList) {
-    console.log(`[moduleLoader] 开始加载所有模块（共${moduleList.length}个）`);
-    
-    const loadResults = {};
-
-    for (const moduleName of moduleList) {
-      try {
-        const success = await this.loadModule(moduleName);
-        loadResults[moduleName] = success;
-
-        if (!success) {
-          console.warn(`[moduleLoader] 模块${moduleName}加载失败，继续加载其他模块`);
-        }
-      } catch (e) {
-        console.error(`[moduleLoader] 模块${moduleName}加载过程中发生未捕获错误:`, e);
-        loadResults[moduleName] = false;
-      }
-    }
-
-    return loadResults;
-  }
-
-  /**
-   * 检查关键模块加载状态
-   */
-  checkCriticalModules(loadResults, criticalModules) {
-    const failedCritical = criticalModules.filter(m => !loadResults[m]);
-    if (failedCritical.length > 0) {
-      throw new Error(`关键模块加载失败: ${failedCritical.join(", ")}`);
-    }
-    return true;
-  }
-
-  /**
-   * 清理所有已加载模块
-   */
-  async cleanupAllModules() {
-    console.log(`[moduleLoader] 清理所有模块`);
-    
-    // 执行所有清理监听器
-    for (const removeListener of this.cleanupListeners) {
-      if (typeof removeListener === "function") {
-        removeListener();
-      }
-    }
-    
-    // 清理模块实例
-    for (const [moduleName, moduleObj] of this.loadedModules) {
-      try {
-        if (typeof moduleObj.cleanup === "function") {
-          await moduleObj.cleanup();
-        }
-      } catch (e) {
-        console.error(`[moduleLoader] 模块清理失败: ${moduleName}`, e);
-      }
-    }
-
-    this.loadedModules.clear();
-    this.cleanupListeners = [];
-    console.log(`[moduleLoader] 所有模块清理完成`);
-  }
-
-  /**
-   * 获取已加载模块
-   */
-  getModule(moduleName) {
-    return this.loadedModules.get(moduleName);
-  }
-
-  /**
-   * 获取所有已加载模块
-   */
-  getAllModules() {
-    return Array.from(this.loadedModules.entries());
   }
 
   /**
    * 显示模块加载错误
    */
   _showModuleLoadError(moduleName, error) {
-    console.error(`[moduleLoader] 模块加载错误: ${moduleName}`, error);
+    console.error(`[moduleLoader] 模块 ${moduleName} 加载失败:`, error);
     
-    // 在控制台显示详细错误信息
-    if (window.deps && window.deps.toastr) {
+    // 显示错误提示
+    if (window.deps && window.deps.toastr && typeof window.deps.toastr.error === 'function') {
       window.deps.toastr.error(`模块加载失败: ${moduleName}`);
+    }
+  }
+
+  /**
+   * 批量加载所有模块
+   */
+  async loadAllModules(moduleNames) {
+    console.log(`[moduleLoader] 开始批量加载 ${moduleNames.length} 个模块`);
+    
+    const results = {};
+    
+    for (const moduleName of moduleNames) {
+      try {
+        const success = await this.loadModule(moduleName);
+        results[moduleName] = success;
+      } catch (error) {
+        results[moduleName] = false;
+        console.error(`[moduleLoader] 模块加载失败: ${moduleName}`, error);
+      }
+    }
+    
+    console.log(`[moduleLoader] 批量加载完成，成功: ${Object.values(results).filter(Boolean).length}/${moduleNames.length}`);
+    return results;
+  }
+
+  /**
+   * 清理所有模块
+   */
+  cleanup() {
+    console.log('[moduleLoader] 开始清理所有模块');
+    
+    // 调用所有模块的cleanup方法
+    for (const [moduleName, moduleObj] of this.loadedModules) {
+      try {
+        if (typeof moduleObj.cleanup === 'function') {
+          moduleObj.cleanup();
+        }
+      } catch (error) {
+        console.error(`[moduleLoader] 模块清理失败: ${moduleName}`, error);
+      }
+    }
+    
+    // 清理监听器
+    this.cleanupListeners.forEach(removeListener => {
+      if (typeof removeListener === 'function') {
+        removeListener();
+      }
+    });
+    
+    this.cleanupListeners = [];
+    this.loadedModules.clear();
+    
+    console.log('[moduleLoader] 所有模块清理完成');
+  }
+
+  /**
+   * 添加清理监听器
+   */
+  addCleanupListener(removeListener) {
+    if (typeof removeListener === 'function') {
+      this.cleanupListeners.push(removeListener);
     }
   }
 }
 
-// 创建全局实例
-const moduleLoader = new ModuleLoader();
-
-// 全局导出
-window.moduleLoader = moduleLoader;
-
-// ES6模块导出
-export { moduleLoader };
+// 导出默认实例
+export default new ModuleLoader();

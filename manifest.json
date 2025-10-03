@@ -8,7 +8,7 @@
   "loading_order": 90,
   "extras": ["jquery", "font-awesome"],
   "optional": ["toastr"],
-  "js": "startup.js",
+  "js": "index.js",
   "css": "style.css",
   "module": true,
   "minimum_st_version": "1.10.0",

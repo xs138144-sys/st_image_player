@@ -1,9 +1,7 @@
-// index.js - 媒体播放器扩展主入口文件
-// 使用兼容SillyTavern环境的加载方式
+// index.js - 媒体播放器扩展主入口
 
-// 不再直接导入deps和moduleLoader，通过全局对象访问
-const deps = window.deps;
-const moduleLoader = window.moduleLoader;
+import deps from './core/deps.js';
+import moduleLoader from './core/moduleLoader.js';
 
 const EXT_ID = "st_image_player";
 
