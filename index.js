@@ -155,7 +155,8 @@ const createMinimalSettingsPanel = () => {
       saveSafeSettings();
 
       if (settings.masterEnabled) {
-        // 启用扩展
+        // 启用扩展：立即移除最小面板，然后初始化完整扩展
+        $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
         initExtension();
         toastr.success("媒体播放器扩展已启用");
       }
@@ -1591,12 +1592,17 @@ const updateStatusDisplay = () => {
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.masterEnabled) return;
+  if (!settings.masterEnabled) {
+    console.log(`[${EXTENSION_ID}] 总开关禁用，跳过完整设置面板创建`);
+    return;
+  }
   // 如果完整设置面板已存在，先移除再重新创建
   if ($(`#${SETTINGS_PANEL_ID}`).length) {
+    console.log(`[${EXTENSION_ID}] 移除已存在的完整设置面板`);
     $(`#${SETTINGS_PANEL_ID}`).remove();
   }
 
+  console.log(`[${EXTENSION_ID}] 开始创建完整设置面板HTML结构`);
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const observerStatus = serviceStatus.observerActive ? "已启用" : "已禁用";
@@ -1942,7 +1948,26 @@ const createSettingsPanel = async () => {
         </div>
     `;
 
-  $("#extensions_settings").append(html);
+  console.log(`[${EXTENSION_ID}] 准备插入设置面板HTML到#extensions_settings`);
+  
+  // 确保目标容器存在
+  const container = $("#extensions_settings");
+  if (container.length === 0) {
+    console.error(`[${EXTENSION_ID}] 错误：找不到#extensions_settings容器`);
+    return;
+  }
+  
+  console.log(`[${EXTENSION_ID}] 找到容器，开始插入HTML`);
+  container.append(html);
+  
+  // 验证面板是否成功插入
+  const panel = $(`#${SETTINGS_PANEL_ID}`);
+  if (panel.length === 0) {
+    console.error(`[${EXTENSION_ID}] 错误：设置面板插入失败`);
+    return;
+  }
+  
+  console.log(`[${EXTENSION_ID}] 设置面板HTML插入成功，开始设置事件`);
   setupSettingsEvents();
   console.log(`[${EXTENSION_ID}] 设置面板创建完成`);
 };
@@ -2562,7 +2587,9 @@ const initExtension = async () => {
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
     addMenuButton();
     await createPlayerWindow();
+    console.log(`[${EXTENSION_ID}] 开始创建完整设置面板`);
     await createSettingsPanel();
+    console.log(`[${EXTENSION_ID}] 完整设置面板创建完成`);
     // 3. 初始化服务通信（WebSocket+轮询）
     initWebSocket();
     startPollingService();
