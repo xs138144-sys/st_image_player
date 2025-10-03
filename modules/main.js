@@ -18,8 +18,6 @@ class ImagePlayerExtension {
         this.isInitialized = false;
         this.mediaList = [];
         this.currentMedia = null;
-        
-        this.bindEvents();
     }
 
     // 初始化扩展
@@ -48,6 +46,9 @@ class ImagePlayerExtension {
             this.wsClient = new WebSocketClient(wsUrl, this.eventBus);
             await this.wsClient.connect();
             console.log('[ImagePlayerExtension] WebSocket连接已建立');
+            
+            // 绑定事件（在WebSocket连接建立后）
+            this.bindEvents();
             
             // 4. 加载媒体列表
             await this.loadMediaList();
@@ -90,18 +91,22 @@ class ImagePlayerExtension {
             this.handleConfigChange(newConfig);
         });
         
-        // WebSocket消息事件
-        this.wsClient.on('mediaUpdate', (data) => {
-            this.handleMediaUpdate(data);
-        });
-        
-        this.wsClient.on('directoryUpdate', (data) => {
-            this.handleDirectoryUpdate(data);
-        });
-        
-        this.wsClient.on('serviceStatus', (data) => {
-            this.handleServiceStatus(data);
-        });
+        // WebSocket消息事件（仅在WebSocket客户端可用时绑定）
+        if (this.wsClient) {
+            this.wsClient.on('mediaUpdate', (data) => {
+                this.handleMediaUpdate(data);
+            });
+            
+            this.wsClient.on('directoryUpdate', (data) => {
+                this.handleDirectoryUpdate(data);
+            });
+            
+            this.wsClient.on('serviceStatus', (data) => {
+                this.handleServiceStatus(data);
+            });
+        } else {
+            console.warn('[ImagePlayerExtension] WebSocket客户端不可用，跳过事件绑定');
+        }
         
         // 窗口事件
         this.eventBus.on('windowClosed', () => {
