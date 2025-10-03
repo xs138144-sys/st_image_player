@@ -97,16 +97,8 @@ class ModuleLoader {
    * 构建模块路径
    */
   _buildModulePath(moduleName) {
-    // 根据模块类型构建路径
-    if (moduleName.startsWith('modules/')) {
-      return `./${moduleName}.js`;
-    } else if (moduleName.startsWith('media/')) {
-      return `./${moduleName}.js`;
-    } else if (moduleName.startsWith('ui/')) {
-      return `./${moduleName}.js`;
-    } else {
-      return `./modules/${moduleName}.js`;
-    }
+    // 直接返回模块路径，不需要添加.js后缀（模块名已经包含路径）
+    return `./${moduleName}.js`;
   }
 
   /**

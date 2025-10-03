@@ -1,4 +1,4 @@
-import { deps } from "../core/deps.js";
+import deps from "../core/deps.js";
 
 /**
  * 时间工具模块

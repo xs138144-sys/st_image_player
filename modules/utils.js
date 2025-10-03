@@ -1,4 +1,4 @@
-import { deps } from "../core/deps.js";
+import deps from "../core/deps.js";
 
 // 移除这行，因为 jQuery 可能还未加载
 // const { jQuery: $ } = deps;
