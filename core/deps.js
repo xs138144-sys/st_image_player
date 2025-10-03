@@ -152,63 +152,110 @@ const deps = {
     return settingsModule;
   },
 
-  // 修复API获取方法 - 支持新的API模块结构
+  // 修复API获取方法 - 支持新的API模块结构（延迟加载避免循环依赖）
   get api() {
-    const serviceApi = this.getModule('api/serviceApi') || this.getModule('modules/api/serviceApi') || {};
-    const mediaApi = this.getModule('api/mediaApi') || this.getModule('modules/api/mediaApi') || {};
-    const configApi = this.getModule('api/configApi') || this.getModule('modules/api/configApi') || {};
+    // 延迟获取API模块，避免循环依赖
+    const getServiceApi = () => this.getModule('api/serviceApi') || this.getModule('modules/api/serviceApi') || {};
+    const getMediaApi = () => this.getModule('api/mediaApi') || this.getModule('modules/api/mediaApi') || {};
+    const getConfigApi = () => this.getModule('api/configApi') || this.getModule('modules/api/configApi') || {};
     
-    // 合并所有API功能
+    // 合并所有API功能（使用函数调用延迟加载）
     return {
-      ...serviceApi,
-      ...mediaApi,
-      ...configApi,
-      // 回退方案
-      checkServiceStatus: () => Promise.resolve({ active: false, error: 'API模块未加载' }),
-      fetchMediaList: () => Promise.resolve([]),
-      refreshMediaList: () => Promise.resolve([])
+      // 延迟加载的API方法
+      checkServiceStatus: () => {
+        const serviceApi = getServiceApi();
+        return serviceApi.checkServiceStatus ? serviceApi.checkServiceStatus() : Promise.resolve({ active: false, error: 'API模块未加载' });
+      },
+      fetchMediaList: () => {
+        const mediaApi = getMediaApi();
+        return mediaApi.fetchMediaList ? mediaApi.fetchMediaList() : Promise.resolve([]);
+      },
+      refreshMediaList: () => {
+        const mediaApi = getMediaApi();
+        return mediaApi.refreshMediaList ? mediaApi.refreshMediaList() : Promise.resolve([]);
+      },
+      updateMediaSizeLimit: (newLimit) => {
+        const configApi = getConfigApi();
+        return configApi.updateMediaSizeLimit ? configApi.updateMediaSizeLimit(newLimit) : Promise.resolve(false);
+      },
+      startServicePolling: () => {
+        const configApi = getConfigApi();
+        return configApi.startServicePolling ? configApi.startServicePolling() : null;
+      },
+      stopServicePolling: () => {
+        const configApi = getConfigApi();
+        return configApi.stopServicePolling ? configApi.stopServicePolling() : null;
+      }
     };
   },
 
-  // 新增：服务API快捷访问
+  // 新增：服务API快捷访问（延迟加载避免循环依赖）
   get serviceApi() {
     // 延迟加载，避免循环依赖
-    const module = this.getModule('api/serviceApi') || this.getModule('modules/api/serviceApi');
-    if (module) return module;
+    const getModule = () => this.getModule('api/serviceApi') || this.getModule('modules/api/serviceApi');
     
-    // 回退方案
+    // 返回代理对象，延迟调用实际方法
     return {
-      checkServiceStatus: () => Promise.resolve({ active: false, error: 'serviceApi模块未加载' }),
-      validateDirectory: () => Promise.resolve({ valid: false, error: 'serviceApi模块未加载' }),
-      updateScanDirectory: () => Promise.resolve(false)
+      checkServiceStatus: () => {
+        const module = getModule();
+        return module && module.checkServiceStatus ? module.checkServiceStatus() : Promise.resolve({ active: false, error: 'serviceApi模块未加载' });
+      },
+      validateDirectory: () => {
+        const module = getModule();
+        return module && module.validateDirectory ? module.validateDirectory() : Promise.resolve({ valid: false, error: 'serviceApi模块未加载' });
+      },
+      updateScanDirectory: () => {
+        const module = getModule();
+        return module && module.updateScanDirectory ? module.updateScanDirectory() : Promise.resolve(false);
+      }
     };
   },
 
-  // 新增：媒体API快捷访问
+  // 新增：媒体API快捷访问（延迟加载避免循环依赖）
   get mediaApi() {
     // 延迟加载，避免循环依赖
-    const module = this.getModule('api/mediaApi') || this.getModule('modules/api/mediaApi');
-    if (module) return module;
+    const getModule = () => this.getModule('api/mediaApi') || this.getModule('modules/api/mediaApi');
     
-    // 回退方案
+    // 返回代理对象，延迟调用实际方法
     return {
-      fetchMediaList: () => Promise.resolve([]),
-      refreshMediaList: () => Promise.resolve([]),
-      getMediaInfo: () => Promise.resolve(null)
+      fetchMediaList: () => {
+        const module = getModule();
+        return module && module.fetchMediaList ? module.fetchMediaList() : Promise.resolve([]);
+      },
+      refreshMediaList: () => {
+        const module = getModule();
+        return module && module.refreshMediaList ? module.refreshMediaList() : Promise.resolve([]);
+      },
+      getMediaUrl: () => {
+        const module = getModule();
+        return module && module.getMediaUrl ? module.getMediaUrl() : Promise.resolve('');
+      },
+      deleteMedia: () => {
+        const module = getModule();
+        return module && module.deleteMedia ? module.deleteMedia() : Promise.resolve(false);
+      }
     };
   },
 
-  // 新增：配置API快捷访问
+  // 新增：配置API快捷访问（延迟加载避免循环依赖）
   get configApi() {
     // 延迟加载，避免循环依赖
-    const module = this.getModule('api/configApi') || this.getModule('modules/api/configApi');
-    if (module) return module;
+    const getModule = () => this.getModule('api/configApi') || this.getModule('modules/api/configApi');
     
-    // 回退方案
+    // 返回代理对象，延迟调用实际方法
     return {
-      updateMediaSizeLimit: () => Promise.resolve(false),
-      startServicePolling: () => {},
-      stopServicePolling: () => {}
+      updateMediaSizeLimit: (newLimit) => {
+        const module = getModule();
+        return module && module.updateMediaSizeLimit ? module.updateMediaSizeLimit(newLimit) : Promise.resolve(false);
+      },
+      startServicePolling: () => {
+        const module = getModule();
+        return module && module.startServicePolling ? module.startServicePolling() : null;
+      },
+      stopServicePolling: () => {
+        const module = getModule();
+        return module && module.stopServicePolling ? module.stopServicePolling() : null;
+      }
     };
   },
 
