@@ -8,8 +8,9 @@ let lastMediaRequestTime = 0;
  */
 export const init = () => {
   console.log(`[mediaApi] 媒体API模块初始化完成`);
-  // 注意：不要在init中立即访问deps.settings，因为settings模块可能还在加载中
+  // 完全避免在初始化时访问deps.settings，防止循环依赖
   // 所有对deps.settings的访问都延迟到具体方法调用时
+  console.log(`[mediaApi] 延迟settings访问到方法调用时`);
 };
 
 export const cleanup = () => {

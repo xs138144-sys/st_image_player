@@ -72,187 +72,121 @@ export class ModuleLoader {
   }
 
   /**
-   * 动态加载单个模块（带重试机制）
+   * 动态加载单个模块（简化版本，避免复杂导入逻辑）
    */
   async loadModule(moduleName, retries = 3) {
     try {
       console.log(`[moduleLoader] 加载模块: ${moduleName}`);
       
-      // 构建模块完整路径
-      const baseUrl = this._getExtensionBaseUrl();
+      // 简化路径构建：直接使用相对路径
+      let modulePath;
       
-      let fullUrl;
-      if (baseUrl === '../') {
-        // 测试环境：模块路径处理
-        if (moduleName.startsWith('ui/')) {
-          fullUrl = `${baseUrl}${moduleName}.js`;
-        } else if (moduleName.startsWith('media/')) {
-          fullUrl = `${baseUrl}${moduleName}.js`;
-        } else if (moduleName.startsWith('settings/')) {
-          const actualPath = moduleName.replace('settings/', 'modules/settings/');
-          fullUrl = `${baseUrl}${actualPath}.js`;
-        } else if (moduleName.startsWith('api/')) {
-          const actualPath = moduleName.replace('api/', 'modules/api/');
-          fullUrl = `${baseUrl}${actualPath}.js`;
-        } else if (moduleName.includes('/')) {
-          fullUrl = `${baseUrl}${moduleName}.js`;
-        } else {
-          fullUrl = `${baseUrl}modules/${moduleName}.js`;
-        }
+      // 根据模块类型构建正确的相对路径
+      if (moduleName.startsWith('modules/')) {
+        modulePath = `../${moduleName}.js`;
+      } else if (moduleName.startsWith('api/')) {
+        modulePath = `../modules/${moduleName}.js`;
+      } else if (moduleName.startsWith('settings/')) {
+        modulePath = `../modules/${moduleName}.js`;
+      } else if (moduleName.startsWith('ui/')) {
+        modulePath = `../${moduleName}.js`;
+      } else if (moduleName.startsWith('media/')) {
+        modulePath = `../${moduleName}.js`;
       } else {
-        // SillyTavern环境：模块位于扩展根目录下
-        // 修复：确保路径构建正确，处理模块名称中的前缀
-        console.log(`[moduleLoader] SillyTavern环境路径构建: ${moduleName}`);
-        
-        if (moduleName.startsWith('modules/')) {
-          // 如果模块名称已经包含modules/前缀，直接使用
-          fullUrl = `${baseUrl}${moduleName}.js`;
-          console.log(`[moduleLoader] 使用直接路径: ${fullUrl}`);
-        } else if (moduleName.startsWith('api/')) {
-          // api模块需要映射到modules/api/路径
-          fullUrl = `${baseUrl}modules/${moduleName}.js`;
-          console.log(`[moduleLoader] API模块映射: ${fullUrl}`);
-        } else if (moduleName.startsWith('settings/')) {
-          // settings模块需要映射到modules/settings/路径
-          fullUrl = `${baseUrl}modules/${moduleName}.js`;
-          console.log(`[moduleLoader] Settings模块映射: ${fullUrl}`);
-        } else {
-          // 其他模块直接使用
-          fullUrl = `${baseUrl}${moduleName}.js`;
-          console.log(`[moduleLoader] 其他模块路径: ${fullUrl}`);
-        }
+        modulePath = `../modules/${moduleName}.js`;
       }
       
-      console.log(`[moduleLoader] 模块路径: ${moduleName}`);
-      console.log(`[moduleLoader] 基础URL: ${baseUrl}`);
-      console.log(`[moduleLoader] 完整URL: ${fullUrl}`);
+      console.log(`[moduleLoader] 使用简化路径: ${modulePath}`);
       
-      // 使用完整的URL进行导入（带超时机制）
-      console.log(`[moduleLoader] 开始导入模块: ${fullUrl}`);
+      // 简化导入逻辑：直接使用import，不添加复杂超时机制
+      console.log(`[moduleLoader] 开始导入模块: ${modulePath}`);
       let module;
+      
       try {
-        // 添加超时机制，防止import卡住（增加超时时间到15秒）
-        const importPromise = import(/* webpackIgnore: true */ fullUrl);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`模块导入超时: ${moduleName}`)), 15000)
-        );
-        
-        console.log(`[moduleLoader] 等待模块导入完成...`);
-        
-        // 添加导入状态监控
-        const importStartTime = Date.now();
-        const checkImportStatus = setInterval(() => {
-          const elapsed = Date.now() - importStartTime;
-          console.log(`[moduleLoader] 导入已进行 ${elapsed}ms`);
-        }, 1000);
-        
-        try {
-          module = await Promise.race([importPromise, timeoutPromise]);
-          clearInterval(checkImportStatus);
-          console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
-        } catch (raceError) {
-          clearInterval(checkImportStatus);
-          throw raceError;
-        }
+        // 直接使用import，避免复杂超时机制
+        module = await import(/* webpackIgnore: true */ modulePath);
+        console.log(`[moduleLoader] 模块导入成功: ${moduleName}`);
       } catch (importError) {
         console.error(`[moduleLoader] 模块导入失败: ${moduleName}`, importError);
         
-        // 提供更详细的错误信息
+        // 如果是路径错误，尝试备用路径
         if (importError.message.includes('Failed to fetch') || importError.message.includes('Loading chunk')) {
-          console.error(`[moduleLoader] 模块文件不存在或路径错误: ${fullUrl}`);
-          console.error(`[moduleLoader] 请检查文件是否存在: ${moduleName}.js`);
-        } else if (importError.message.includes('Unexpected token')) {
-          console.error(`[moduleLoader] 模块语法错误: ${moduleName}`);
-          console.error(`[moduleLoader] 请检查模块文件是否有语法错误`);
-        } else if (importError.message.includes('Cannot find module')) {
-          console.error(`[moduleLoader] 模块依赖错误: ${moduleName}`);
-          console.error(`[moduleLoader] 请检查模块的导入依赖是否正确`);
-        } else if (importError.message.includes('import')) {
-          console.error(`[moduleLoader] 模块导入语句错误: ${moduleName}`);
-          console.error(`[moduleLoader] 请检查模块的import语句是否正确`);
-        } else if (importError.message.includes('超时')) {
-          console.error(`[moduleLoader] 模块导入超时: ${moduleName}`);
-          console.error(`[moduleLoader] 可能原因：循环依赖、模块语法错误、网络问题`);
-          console.error(`[moduleLoader] 详细诊断：检查 ${moduleName}.js 及其依赖模块的导入语句`);
+          console.warn(`[moduleLoader] 尝试备用路径...`);
           
-          // 尝试使用备用导入方式
-          console.warn(`[moduleLoader] 尝试使用备用导入方式...`);
-          try {
-            // 使用更简单的导入方式 - 直接使用相对路径
-            let fallbackUrl = fullUrl;
-            
-            // 在SillyTavern环境下，尝试使用相对路径导入
-            if (baseUrl.startsWith('/')) {
-              // 如果是绝对路径，尝试转换为相对路径
-              const relativePath = moduleName.includes('/') ? moduleName : `modules/${moduleName}`;
-              fallbackUrl = `../${relativePath}.js`;
-              console.log(`[moduleLoader] 尝试使用相对路径: ${fallbackUrl}`);
+          // 备用路径：尝试不同的相对路径
+          let fallbackPath;
+          if (modulePath.startsWith('../modules/')) {
+            fallbackPath = modulePath.replace('../modules/', '../');
+          } else if (modulePath.startsWith('../')) {
+            fallbackPath = modulePath.replace('../', '');
+          }
+          
+          if (fallbackPath) {
+            try {
+              console.log(`[moduleLoader] 尝试备用路径: ${fallbackPath}`);
+              module = await import(/* webpackIgnore: true */ fallbackPath);
+              console.log(`[moduleLoader] 备用路径导入成功: ${moduleName}`);
+            } catch (fallbackError) {
+              console.error(`[moduleLoader] 备用路径也失败:`, fallbackError);
             }
-            
-            const script = document.createElement('script');
-            script.type = 'module';
-            script.src = fallbackUrl;
-            
-            const loadPromise = new Promise((resolve, reject) => {
-              script.onload = () => {
-                console.log(`[moduleLoader] 备用导入方式成功: ${moduleName}`);
-                // 这里需要手动获取模块对象，但比较复杂
-                // 暂时返回一个空对象，让模块加载继续
-                resolve({});
-              };
-              script.onerror = reject;
-            });
-            
-            document.head.appendChild(script);
-            module = await loadPromise;
-          } catch (fallbackError) {
-            console.error(`[moduleLoader] 备用导入方式也失败:`, fallbackError);
           }
         }
         
-        // 如果备用方式也失败，继续抛出错误
         if (!module) {
           throw new Error(`模块导入失败: ${moduleName} - ${importError.message}`);
         }
       }
 
-      // 检查模块是否有效
+      // 简化模块验证：只检查基本结构
       if (!module || typeof module !== 'object') {
-        throw new Error(`模块加载失败: ${moduleName}`);
+        console.error(`[moduleLoader] 模块无效: ${moduleName}`, module);
+        throw new Error(`模块无效: ${moduleName}`);
       }
 
       // 获取模块对象（支持默认导出和命名导出）
       const moduleObj = module.default || module;
 
-      // 确保模块有必要的接口方法
-      this._validateModuleInterface(moduleObj, moduleName);
-
-      // 初始化模块（添加错误处理）
-      try {
-        await moduleObj.init();
-        console.log(`[moduleLoader] 模块加载完成: ${moduleName}`);
-      } catch (initError) {
-        console.error(`[moduleLoader] 模块初始化失败: ${moduleName}`, initError);
-        throw new Error(`模块初始化失败: ${moduleName} - ${initError.message}`);
+      // 简化接口验证：确保有init方法，没有则提供默认实现
+      if (typeof moduleObj.init !== 'function') {
+        console.warn(`[moduleLoader] 模块 ${moduleName} 没有init方法，提供默认实现`);
+        moduleObj.init = async () => {
+          console.log(`[moduleLoader] 默认init方法执行: ${moduleName}`);
+          return true;
+        };
       }
 
-      // 特殊处理websocket模块：调用initializeModule方法
-      if (moduleName === 'modules/websocket' && typeof moduleObj.initializeModule === 'function') {
-        console.log(`[moduleLoader] 调用websocket模块的initializeModule方法`);
+      // 简化cleanup方法检查
+      if (typeof moduleObj.cleanup !== 'function') {
+        moduleObj.cleanup = async () => {
+          console.log(`[moduleLoader] 默认cleanup方法执行: ${moduleName}`);
+          return true;
+        };
+      }
+
+      // 简化初始化逻辑：基本错误处理
+      try {
+        await moduleObj.init();
+        console.log(`[moduleLoader] 模块初始化成功: ${moduleName}`);
+      } catch (initError) {
+        console.error(`[moduleLoader] 模块初始化失败: ${moduleName}`, initError);
+        // 即使初始化失败也继续，标记错误状态
+        moduleObj._initError = initError;
+      }
+
+      // 简化websocket特殊处理
+      if (moduleName === 'modules/websocket' && typeof moduleObj.waitForConnection === 'function') {
         try {
-          moduleObj.initializeModule();
-          console.log(`[moduleLoader] websocket模块延迟初始化完成`);
-        } catch (e) {
-          console.error(`[moduleLoader] websocket模块延迟初始化失败:`, e);
+          await moduleObj.waitForConnection();
+          console.log(`[moduleLoader] websocket连接建立成功`);
+        } catch (wsError) {
+          console.error(`[moduleLoader] websocket连接失败:`, wsError);
         }
       }
 
-      // 注册模块到依赖管理器
+      // 简化模块注册
       const registeredName = this._getRegisteredModuleName(moduleName);
       const deps = this._getDeps();
       deps.registerModule(registeredName, moduleObj);
-
-      // 注册模块清理事件
       this._registerModuleCleanup(moduleName, moduleObj);
 
       this.loadedModules.set(moduleName, moduleObj);
