@@ -659,16 +659,16 @@ const createPlayerWindow = async () => {
                         <i class="fa-solid fa-video"></i>
                     </button>
                 </div>
-                <!-- 8个拉伸手柄 - 4个角和4个边 -->
-                <div class="resize-handle top-left"></div>
-                <div class="resize-handle top-right"></div>
-                <div class="resize-handle bottom-left"></div>
-                <div class="resize-handle bottom-right"></div>
-                <div class="resize-handle top"></div>
-                <div class="resize-handle bottom"></div>
-                <div class="resize-handle left"></div>
-                <div class="resize-handle right"></div>
             </div>
+            <!-- 8个拉伸手柄 - 4个角和4个边（放在播放器窗口整体边框上） -->
+            <div class="resize-handle top-left"></div>
+            <div class="resize-handle top-right"></div>
+            <div class="resize-handle bottom-left"></div>
+            <div class="resize-handle bottom-right"></div>
+            <div class="resize-handle top"></div>
+            <div class="resize-handle bottom"></div>
+            <div class="resize-handle left"></div>
+            <div class="resize-handle right"></div>
         </div>
     `;
 
