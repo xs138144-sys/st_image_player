@@ -1,29 +1,6 @@
 // deps.js
-import { EventBus } from './eventBus.js';
 
-// 创建 EventBus 实例
-const eventBusInstance = new EventBus();
-
-// 确保全局对象存在并提供后备方案
-window.extension_settings = window.extension_settings || {};
-if (!window.saveSettingsDebounced) {
-  console.warn('saveSettingsDebounced 不可用，使用默认实现');
-  window.saveSettingsDebounced = (() => {
-    let timeout = null;
-    return () => {
-      if (timeout) clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        try {
-          localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings || {}));
-          console.log('设置已保存到本地存储');
-        } catch (e) {
-          console.error('无法保存设置到本地存储', e);
-        }
-      }, 1000);
-    };
-  })();
-}
-
+// 立即创建基础对象，避免导入时的循环依赖
 const deps = {
   modules: {},
 
@@ -270,7 +247,26 @@ const deps = {
   },
 
   get EventBus() {
-    return eventBusInstance; // 返回实例而不是类
+    // 延迟获取EventBus实例
+    if (this._eventBusInstance) {
+      return this._eventBusInstance;
+    }
+    
+    // 如果EventBus还未初始化，提供回退实现
+    return {
+      on: (event, callback) => {
+        console.warn('EventBus还未初始化，事件监听被忽略:', event);
+        // 存储监听器，等EventBus初始化后重新注册
+        if (!this._pendingEventListeners) this._pendingEventListeners = [];
+        this._pendingEventListeners.push({ event, callback });
+      },
+      emit: (event, data) => {
+        console.warn('EventBus还未初始化，事件发送被忽略:', event, data);
+      },
+      off: (event, callback) => {
+        console.warn('EventBus还未初始化，事件取消监听被忽略:', event);
+      }
+    };
   },
 
   get jQuery() {
@@ -301,8 +297,57 @@ const deps = {
   }
 };
 
+// 延迟初始化函数，避免导入时的循环依赖
+function initializeDeps() {
+  // 导入EventBus（延迟导入避免循环依赖）
+  import('./eventBus.js').then(({ EventBus }) => {
+    // 创建 EventBus 实例
+    const eventBusInstance = new EventBus();
+    
+    // 确保全局对象存在并提供后备方案
+    window.extension_settings = window.extension_settings || {};
+    if (!window.saveSettingsDebounced) {
+      console.warn('saveSettingsDebounced 不可用，使用默认实现');
+      window.saveSettingsDebounced = (() => {
+        let timeout = null;
+        return () => {
+          if (timeout) clearTimeout(timeout);
+          timeout = setTimeout(() => {
+            try {
+              localStorage.setItem('extension_settings', JSON.stringify(window.extension_settings || {}));
+              console.log('设置已保存到本地存储');
+            } catch (e) {
+              console.error('无法保存设置到本地存储', e);
+            }
+          }, 1000);
+        };
+      })();
+    }
+    
+    // 设置EventBus实例
+    deps.EventBus = eventBusInstance;
+    
+    console.log('[deps] 延迟初始化完成');
+  }).catch(error => {
+    console.error('[deps] EventBus导入失败', error);
+    // 提供回退的EventBus实现
+    deps.EventBus = {
+      on: () => console.warn('EventBus不可用'),
+      emit: () => console.warn('EventBus不可用'),
+      off: () => console.warn('EventBus不可用')
+    };
+  });
+}
+
 // 全局导出，兼容SillyTavern环境
 window.deps = deps;
 
 // ES6模块导出（用于模块化环境）
 export { deps };
+
+// 延迟初始化（在模块加载完成后执行）
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeDeps);
+} else {
+  setTimeout(initializeDeps, 0);
+}
