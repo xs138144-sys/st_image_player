@@ -131,10 +131,10 @@ export class ModuleLoader {
       console.log(`[moduleLoader] 开始导入模块: ${fullUrl}`);
       let module;
       try {
-        // 添加超时机制，防止import卡住
+        // 添加超时机制，防止import卡住（增加超时时间到15秒）
         const importPromise = import(/* webpackIgnore: true */ fullUrl);
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`模块导入超时: ${moduleName}`)), 5000)
+          setTimeout(() => reject(new Error(`模块导入超时: ${moduleName}`)), 15000)
         );
         
         console.log(`[moduleLoader] 等待模块导入完成...`);
@@ -173,6 +173,7 @@ export class ModuleLoader {
         } else if (importError.message.includes('超时')) {
           console.error(`[moduleLoader] 模块导入超时: ${moduleName}`);
           console.error(`[moduleLoader] 可能原因：循环依赖、模块语法错误、网络问题`);
+          console.error(`[moduleLoader] 详细诊断：检查 ${moduleName}.js 及其依赖模块的导入语句`);
           
           // 尝试使用备用导入方式
           console.warn(`[moduleLoader] 尝试使用备用导入方式...`);
