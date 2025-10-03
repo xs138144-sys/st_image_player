@@ -27,15 +27,16 @@ const toastr = getSafeToastr();
 const getExtensionSettings = () => {
   // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
   const globalSettings = getSafeGlobal("extension_settings", {});
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+  
+  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的状态）
   if (globalSettings[EXTENSION_ID]) {
     return globalSettings[EXTENSION_ID];
   }
 
-  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  // 仅当完全无配置时，才创建默认设置
   const defaultSettings = {
-    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
-    enabled: true, // 播放器启用状态
+    masterEnabled: false, // 修复：默认总开关为false，避免自动启用
+    enabled: false, // 修复：默认播放器状态为false
     serviceUrl: "http://localhost:9000",
     playMode: "random",
     autoSwitchMode: "timer",
@@ -117,6 +118,8 @@ let wsReconnectTimer = null;
 const createMinimalSettingsPanel = () => {
   if ($(`#${SETTINGS_PANEL_ID}-minimal`).length) return;
 
+  const settings = getExtensionSettings();
+  
   const html = `
     <div id="${SETTINGS_PANEL_ID}-minimal">
       <div class="extension_settings inline-drawer">
@@ -131,7 +134,7 @@ const createMinimalSettingsPanel = () => {
             <!-- 总开关 -->
             <div class="settings-row">
               <label class="checkbox_label" style="min-width:auto;">
-                <input type="checkbox" id="master-enabled-minimal" />
+                <input type="checkbox" id="master-enabled-minimal" ${settings.masterEnabled ? 'checked' : ''} />
                 <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
               </label>
             </div>
@@ -162,6 +165,8 @@ const createMinimalSettingsPanel = () => {
 };
 
 const disableExtension = () => {
+  const settings = getExtensionSettings();
+  
   // 停止所有定时器
   if (pollingTimer) clearTimeout(pollingTimer);
   if (switchTimer) clearTimeout(switchTimer);
@@ -185,6 +190,11 @@ const disableExtension = () => {
   mediaList = [];
   currentMediaIndex = 0;
   serviceStatus = { active: false };
+  
+  // 确保状态正确保存
+  settings.enabled = false;
+  settings.isPlaying = false;
+  saveSafeSettings();
 
   // 创建最小化设置面板以便重新启用
   createMinimalSettingsPanel();
@@ -2639,7 +2649,13 @@ jQuery(() => {
           document.getElementById("extensions_settings");
         if (finalDOMReady) {
           console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
-          initExtension();
+          const settings = getExtensionSettings();
+          // 修复：超时时也要检查总开关状态
+          if (settings.masterEnabled) {
+            initExtension();
+          } else {
+            createMinimalSettingsPanel();
+          }
         } else {
           console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
           toastr.error("扩展初始化失败,核心DOM未加载");
