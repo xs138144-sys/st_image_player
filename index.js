@@ -156,7 +156,6 @@ const createMinimalSettingsPanel = () => {
 
       if (settings.masterEnabled) {
         // 启用扩展
-        $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
         initExtension();
         toastr.success("媒体播放器扩展已启用");
       }
@@ -2534,6 +2533,9 @@ const initExtension = async () => {
   }
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
+    // 0. 移除最小化设置面板（如果存在）
+    $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
+    
     // 1. 初始化全局设置容器（兼容老版本存储）
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
