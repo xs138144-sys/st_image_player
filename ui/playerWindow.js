@@ -384,4 +384,4 @@ class PlayerWindow {
     }
 }
 
-export default PlayerWindow;
+export { PlayerWindow };
