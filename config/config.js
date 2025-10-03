@@ -50,20 +50,28 @@ const DEFAULT_CONFIG = {
 
 // 配置管理类
 class ConfigManager {
-    constructor() {
+    constructor(eventBus = null) {
         this.config = this.loadConfig();
+        this.eventBus = eventBus;
     }
 
     loadConfig() {
-        const globalSettings = window.extension_settings || {};
-        
-        if (globalSettings[EXTENSION_ID]) {
-            return { ...DEFAULT_CONFIG, ...globalSettings[EXTENSION_ID] };
-        }
+        // 检查是否在浏览器环境中
+        if (typeof window !== 'undefined' && window.extension_settings) {
+            const globalSettings = window.extension_settings;
+            
+            if (globalSettings[EXTENSION_ID]) {
+                return { ...DEFAULT_CONFIG, ...globalSettings[EXTENSION_ID] };
+            }
 
-        // 初始化默认配置
-        globalSettings[EXTENSION_ID] = DEFAULT_CONFIG;
-        return DEFAULT_CONFIG;
+            // 初始化默认配置
+            globalSettings[EXTENSION_ID] = DEFAULT_CONFIG;
+            return DEFAULT_CONFIG;
+        } else {
+            // Node.js环境或没有window对象的环境，返回默认配置
+            console.warn('[ConfigManager] 未找到window对象，使用默认配置');
+            return { ...DEFAULT_CONFIG };
+        }
     }
 
     saveConfig() {

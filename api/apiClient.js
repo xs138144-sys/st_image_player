@@ -100,6 +100,22 @@ class APIClient {
             throw error;
         }
     }
+
+    // 获取媒体列表
+    async getMediaList(directories = []) {
+        try {
+            const queryParams = new URLSearchParams();
+            if (directories && directories.length > 0) {
+                queryParams.append('directories', directories.join(','));
+            }
+            
+            const data = await this.request(`/media?${queryParams}`);
+            return data.media || [];
+        } catch (error) {
+            console.error('[API Client] 获取媒体列表失败', error);
+            return [];
+        }
+    }
 }
 
 export { APIClient };
