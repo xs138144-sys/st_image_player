@@ -13,6 +13,12 @@ class PlayerWindow {
         this.isResizing = false;
     }
 
+    // 加载设置
+    async loadSettings() {
+        this.settings = await this.configManager.loadConfig();
+        console.log('[PlayerWindow] 设置加载完成');
+    }
+
     // 初始化播放器窗口
     async init() {
         await this.loadSettings();
@@ -23,12 +29,18 @@ class PlayerWindow {
 
     // 创建播放器窗口
     createWindow() {
-        if ($(`#${this.windowId}`).length) return;
+        // 检查是否在浏览器环境中
+        if (typeof window !== 'undefined' && typeof $ !== 'undefined') {
+            if ($(`#${this.windowId}`).length) return;
 
-        const html = this.generateWindowHTML();
-        $('body').append(html);
-        
-        console.log('[PlayerWindow] 播放器窗口已创建');
+            const html = this.generateWindowHTML();
+            $('body').append(html);
+            
+            console.log('[PlayerWindow] 播放器窗口已创建');
+        } else {
+            // Node.js环境，只记录日志
+            console.log('[PlayerWindow] 播放器窗口创建（Node.js环境，跳过DOM操作）');
+        }
     }
 
     // 生成窗口HTML
@@ -123,9 +135,15 @@ class PlayerWindow {
 
     // 绑定事件
     bindEvents() {
-        this.bindWindowEvents();
-        this.bindControlEvents();
-        this.bindVideoEvents();
+        // 检查是否在浏览器环境中
+        if (typeof window !== 'undefined' && typeof $ !== 'undefined') {
+            this.bindWindowEvents();
+            this.bindControlEvents();
+            this.bindVideoEvents();
+        } else {
+            // Node.js环境，只记录日志
+            console.log('[PlayerWindow] 事件绑定（Node.js环境，跳过DOM事件绑定）');
+        }
     }
 
     // 绑定窗口事件
@@ -320,6 +338,36 @@ class PlayerWindow {
         });
     }
 
+    // 更新窗口显示状态
+    updateWindow() {
+        // 检查是否在浏览器环境中
+        if (typeof window !== 'undefined' && typeof $ !== 'undefined') {
+            this.updateWindowPosition();
+            
+            // 根据设置显示或隐藏窗口
+            if (this.settings.isWindowVisible) {
+                $(`#${this.windowId}`).show();
+            } else {
+                $(`#${this.windowId}`).hide();
+            }
+            
+            // 更新窗口锁定状态
+            $(`#${this.windowId} .lock i`)
+                .toggleClass('fa-lock', this.settings.isLocked)
+                .toggleClass('fa-lock-open', !this.settings.isLocked);
+                
+            // 更新信息显示状态
+            $(`#${this.windowId} .toggle-info`).toggleClass('active', this.settings.showInfo);
+            $(`#${this.windowId} .media-info`).toggleClass('hidden', !this.settings.showInfo);
+            
+            // 更新视频控制显示状态
+            $(`#${this.windowId} .toggle-video-controls`).toggleClass('active', this.settings.showVideoControls);
+            $(`#${this.windowId} .video-controls`).toggle(this.settings.showVideoControls);
+        }
+        
+        console.log('[PlayerWindow] 窗口更新完成');
+    }
+
     // 显示媒体
     displayMedia(media) {
         if (!media) return;
@@ -374,6 +422,19 @@ class PlayerWindow {
         // 这里需要实现事件发射逻辑
         // 实际实现中应该使用事件总线或回调函数
         console.log(`[PlayerWindow] Event: ${event}`, data);
+        
+        // 触发事件总线上的事件
+        if (this.eventBus) {
+            this.eventBus.emit(`playerWindow.${event}`, data);
+        }
+    }
+    
+    // 事件监听器
+    on(event, callback) {
+        // 使用事件总线监听事件
+        if (this.eventBus) {
+            this.eventBus.on(`playerWindow.${event}`, callback);
+        }
     }
 
     // 销毁窗口

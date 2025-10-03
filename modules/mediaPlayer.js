@@ -197,6 +197,14 @@ class MediaPlayer {
         await this.configManager.updateConfig({ mediaFilter: filter });
     }
 
+    // 事件监听器
+    on(event, callback) {
+        // 使用事件总线监听事件
+        if (this.eventBus) {
+            this.eventBus.on(`mediaPlayer.${event}`, callback);
+        }
+    }
+
     // 预加载媒体
     preloadMedia(index) {
         if (index < 0 || index >= this.mediaList.length) return;

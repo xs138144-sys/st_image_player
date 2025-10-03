@@ -31,37 +31,59 @@ class ImagePlayerExtension {
             await this.configManager.loadConfig();
             console.log('[ImagePlayerExtension] 配置加载完成');
             
-            // 2. 检查后端服务状态
-            const isServiceAvailable = await this.apiClient.checkServiceStatus();
-            if (!isServiceAvailable) {
-                console.warn('[ImagePlayerExtension] 后端服务不可用');
-                this.showServiceError();
-                return false;
+            // 2. 检查后端服务状态（可选，不阻止初始化）
+            let isServiceAvailable = false;
+            try {
+                isServiceAvailable = await this.apiClient.checkServiceStatus();
+                if (isServiceAvailable) {
+                    console.log('[ImagePlayerExtension] 后端服务连接正常');
+                } else {
+                    console.warn('[ImagePlayerExtension] 后端服务不可用，将以离线模式运行');
+                }
+            } catch (error) {
+                console.warn('[ImagePlayerExtension] 后端服务检查失败，将以离线模式运行:', error.message);
+                isServiceAvailable = false;
             }
-            console.log('[ImagePlayerExtension] 后端服务连接正常');
             
-            // 3. 初始化WebSocket连接
-            const settings = await this.configManager.getConfig();
-            const wsUrl = settings.serviceUrl.replace('http://', 'ws://') + '/socket.io';
-            this.wsClient = new WebSocketClient(wsUrl, this.eventBus);
-            await this.wsClient.connect();
-            console.log('[ImagePlayerExtension] WebSocket连接已建立');
+            // 3. 初始化WebSocket连接（仅在服务可用时）
+            if (isServiceAvailable) {
+                try {
+                    const settings = await this.configManager.getConfig();
+                    const wsUrl = settings.serviceUrl.replace('http://', 'ws://') + '/socket.io';
+                    this.wsClient = new WebSocketClient(wsUrl, this.eventBus);
+                    await this.wsClient.connect();
+                    console.log('[ImagePlayerExtension] WebSocket连接已建立');
+                } catch (error) {
+                    console.warn('[ImagePlayerExtension] WebSocket连接失败，将以离线模式运行:', error.message);
+                    this.wsClient = null;
+                }
+            }
             
-            // 绑定事件（在WebSocket连接建立后）
+            // 绑定事件
             this.bindEvents();
             
-            // 4. 加载媒体列表
-            await this.loadMediaList();
-            console.log(`[ImagePlayerExtension] 媒体列表加载完成，共 ${this.mediaList.length} 个文件`);
+            // 4. 加载媒体列表（仅在服务可用时）
+            if (isServiceAvailable) {
+                try {
+                    await this.loadMediaList();
+                    console.log(`[ImagePlayerExtension] 媒体列表加载完成，共 ${this.mediaList.length} 个文件`);
+                } catch (error) {
+                    console.warn('[ImagePlayerExtension] 媒体列表加载失败，使用空列表:', error.message);
+                    this.mediaList = [];
+                }
+            } else {
+                console.log('[ImagePlayerExtension] 离线模式，使用空媒体列表');
+                this.mediaList = [];
+            }
             
             // 5. 创建播放器窗口
-            this.playerWindow = new PlayerWindow();
-            this.playerWindow.create();
+            this.playerWindow = new PlayerWindow(this.eventBus, this.configManager);
+            await this.playerWindow.init();
             console.log('[ImagePlayerExtension] 播放器窗口已创建');
             
             // 6. 创建媒体播放器
             const config = await this.configManager.getConfig();
-            this.mediaPlayer = new MediaPlayer(this.mediaList, this.configManager, this.eventBus);
+            this.mediaPlayer = new MediaPlayer(this.eventBus);
             await this.mediaPlayer.initialize();
             console.log('[ImagePlayerExtension] 媒体播放器已初始化');
             
