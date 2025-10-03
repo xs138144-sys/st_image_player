@@ -31,7 +31,7 @@ const getExtensionSettings = () => {
   // 如果有用户保存的设置，就使用用户的选择
   if (globalSettings[EXTENSION_ID]) {
     const savedSettings = globalSettings[EXTENSION_ID];
-    console.log(`[${EXTENSION_ID}] 加载用户设置: masterEnabled=${savedSettings.masterEnabled}`);
+    console.log(`[${EXTENSION_ID}] 加载用户设置: masterEnabled=${savedSettings.masterEnabled}`, savedSettings);
     return savedSettings;
   }
 
@@ -98,7 +98,7 @@ const saveSafeSettings = () => {
   if (saveFn && typeof saveFn === "function") {
     saveFn();
     console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+      `[${EXTENSION_ID}] 设置已保存: masterEnabled=${getExtensionSettings().masterEnabled}`
     );
   }
 };
