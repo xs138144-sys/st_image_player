@@ -28,16 +28,18 @@ const getExtensionSettings = () => {
   // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
   const globalSettings = getSafeGlobal("extension_settings", {});
   
-  // 彻底修复：确保masterEnabled状态正确，即使有已保存的设置
+  // 修复：仅在页面加载时检查一次，避免干扰用户操作
   if (globalSettings[EXTENSION_ID]) {
     const savedSettings = globalSettings[EXTENSION_ID];
     
-    // 强制修复：无论之前是什么状态，都设置为false
-    if (savedSettings.masterEnabled !== false) {
-      savedSettings.masterEnabled = false;
-      // 立即保存修复后的设置
-      saveSafeSettings();
-      console.log(`[${EXTENSION_ID}] 强制修复masterEnabled状态为false`);
+    // 只在页面加载时修复一次，避免干扰用户启用操作
+    if (typeof savedSettings._fixedOnLoad === 'undefined') {
+      if (savedSettings.masterEnabled !== false) {
+        savedSettings.masterEnabled = false;
+        savedSettings._fixedOnLoad = true; // 标记已修复
+        saveSafeSettings();
+        console.log(`[${EXTENSION_ID}] 页面加载时修复masterEnabled状态为false`);
+      }
     }
     
     return savedSettings;
@@ -85,6 +87,7 @@ const getExtensionSettings = () => {
     showMediaUpdateToast: false,
     aiEventRegistered: false,
     filterTriggerSource: null,
+    _fixedOnLoad: true // 标记已修复
   };
 
   // 将默认设置写入全局，供后续保存使用
@@ -2539,13 +2542,9 @@ const addMenuButton = () => {
 const initExtension = async () => {
   const settings = getExtensionSettings();
 
-  // 总开关禁用：终止初始化
-  if (!settings.masterEnabled) {
-    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，不进行初始化`);
-    // 即使总开关关闭，也显示一个最小化的设置面板以便重新启用
-    createMinimalSettingsPanel();
-    return;
-  }
+  // 关键修复：移除强制检查，让用户操作生效
+  // 当用户点击启用按钮时，masterEnabled已经设置为true，应该继续初始化
+  console.log(`[${EXTENSION_ID}] 开始初始化扩展，masterEnabled=${settings.masterEnabled}`);
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
     // 1. 初始化全局设置容器（兼容老版本存储）
