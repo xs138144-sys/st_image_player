@@ -96,10 +96,21 @@ const saveSafeSettings = () => {
   const saveFn = getSafeGlobal("saveSettingsDebounced", null);
   // 关键：通过 SillyTavern 核心函数保存设置到本地存储
   if (saveFn && typeof saveFn === "function") {
+    console.log(`[${EXTENSION_ID}] 开始保存设置...`);
     saveFn();
-    console.log(
-      `[${EXTENSION_ID}] 设置已保存: masterEnabled=${getExtensionSettings().masterEnabled}`
-    );
+    console.log(`[${EXTENSION_ID}] 设置保存函数已调用`);
+    
+    // 检查设置是否真的保存了
+    setTimeout(() => {
+      const globalSettings = getSafeGlobal("extension_settings", {});
+      if (globalSettings[EXTENSION_ID]) {
+        console.log(`[${EXTENSION_ID}] 设置已确认保存: masterEnabled=${globalSettings[EXTENSION_ID].masterEnabled}`, globalSettings[EXTENSION_ID]);
+      } else {
+        console.error(`[${EXTENSION_ID}] 设置保存失败: 设置对象不存在`);
+      }
+    }, 100);
+  } else {
+    console.error(`[${EXTENSION_ID}] 保存函数不存在: saveFn=`, saveFn);
   }
 };
 
