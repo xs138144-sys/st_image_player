@@ -27,16 +27,15 @@ const toastr = getSafeToastr();
 const getExtensionSettings = () => {
   // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
   const globalSettings = getSafeGlobal("extension_settings", {});
-  
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的状态）
+  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
   if (globalSettings[EXTENSION_ID]) {
     return globalSettings[EXTENSION_ID];
   }
 
-  // 仅当完全无配置时，才创建默认设置
+  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
   const defaultSettings = {
-    masterEnabled: false, // 修复：默认总开关为false，避免自动启用
-    enabled: false, // 修复：默认播放器状态为false
+    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+    enabled: true, // 播放器启用状态
     serviceUrl: "http://localhost:9000",
     playMode: "random",
     autoSwitchMode: "timer",
@@ -118,8 +117,6 @@ let wsReconnectTimer = null;
 const createMinimalSettingsPanel = () => {
   if ($(`#${SETTINGS_PANEL_ID}-minimal`).length) return;
 
-  const settings = getExtensionSettings();
-  
   const html = `
     <div id="${SETTINGS_PANEL_ID}-minimal">
       <div class="extension_settings inline-drawer">
@@ -134,7 +131,7 @@ const createMinimalSettingsPanel = () => {
             <!-- 总开关 -->
             <div class="settings-row">
               <label class="checkbox_label" style="min-width:auto;">
-                <input type="checkbox" id="master-enabled-minimal" ${settings.masterEnabled ? 'checked' : ''} />
+                <input type="checkbox" id="master-enabled-minimal" />
                 <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
               </label>
             </div>
@@ -155,7 +152,7 @@ const createMinimalSettingsPanel = () => {
       saveSafeSettings();
 
       if (settings.masterEnabled) {
-        // 启用扩展：立即移除最小面板，然后初始化完整扩展
+        // 启用扩展
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
         initExtension();
         toastr.success("媒体播放器扩展已启用");
@@ -165,8 +162,6 @@ const createMinimalSettingsPanel = () => {
 };
 
 const disableExtension = () => {
-  const settings = getExtensionSettings();
-  
   // 停止所有定时器
   if (pollingTimer) clearTimeout(pollingTimer);
   if (switchTimer) clearTimeout(switchTimer);
@@ -190,11 +185,6 @@ const disableExtension = () => {
   mediaList = [];
   currentMediaIndex = 0;
   serviceStatus = { active: false };
-  
-  // 确保状态正确保存
-  settings.enabled = false;
-  settings.isPlaying = false;
-  saveSafeSettings();
 
   // 创建最小化设置面板以便重新启用
   createMinimalSettingsPanel();
@@ -1592,17 +1582,8 @@ const updateStatusDisplay = () => {
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.masterEnabled) {
-    console.log(`[${EXTENSION_ID}] 总开关禁用，跳过完整设置面板创建`);
-    return;
-  }
-  // 如果完整设置面板已存在，先移除再重新创建
-  if ($(`#${SETTINGS_PANEL_ID}`).length) {
-    console.log(`[${EXTENSION_ID}] 移除已存在的完整设置面板`);
-    $(`#${SETTINGS_PANEL_ID}`).remove();
-  }
+  if (!settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
 
-  console.log(`[${EXTENSION_ID}] 开始创建完整设置面板HTML结构`);
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const observerStatus = serviceStatus.observerActive ? "已启用" : "已禁用";
@@ -1948,26 +1929,7 @@ const createSettingsPanel = async () => {
         </div>
     `;
 
-  console.log(`[${EXTENSION_ID}] 准备插入设置面板HTML到#extensions_settings`);
-  
-  // 确保目标容器存在
-  const container = $("#extensions_settings");
-  if (container.length === 0) {
-    console.error(`[${EXTENSION_ID}] 错误：找不到#extensions_settings容器`);
-    return;
-  }
-  
-  console.log(`[${EXTENSION_ID}] 找到容器，开始插入HTML`);
-  container.append(html);
-  
-  // 验证面板是否成功插入
-  const panel = $(`#${SETTINGS_PANEL_ID}`);
-  if (panel.length === 0) {
-    console.error(`[${EXTENSION_ID}] 错误：设置面板插入失败`);
-    return;
-  }
-  
-  console.log(`[${EXTENSION_ID}] 设置面板HTML插入成功，开始设置事件`);
+  $("#extensions_settings").append(html);
   setupSettingsEvents();
   console.log(`[${EXTENSION_ID}] 设置面板创建完成`);
 };
@@ -2562,9 +2524,6 @@ const initExtension = async () => {
   }
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
-    // 0. 移除最小化设置面板（如果存在）
-    $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
-    
     // 1. 初始化全局设置容器（兼容老版本存储）
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
@@ -2587,9 +2546,7 @@ const initExtension = async () => {
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
     addMenuButton();
     await createPlayerWindow();
-    console.log(`[${EXTENSION_ID}] 开始创建完整设置面板`);
     await createSettingsPanel();
-    console.log(`[${EXTENSION_ID}] 完整设置面板创建完成`);
     // 3. 初始化服务通信（WebSocket+轮询）
     initWebSocket();
     startPollingService();
@@ -2682,13 +2639,7 @@ jQuery(() => {
           document.getElementById("extensions_settings");
         if (finalDOMReady) {
           console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
-          const settings = getExtensionSettings();
-          // 修复：超时时也要检查总开关状态
-          if (settings.masterEnabled) {
-            initExtension();
-          } else {
-            createMinimalSettingsPanel();
-          }
+          initExtension();
         } else {
           console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
           toastr.error("扩展初始化失败,核心DOM未加载");
