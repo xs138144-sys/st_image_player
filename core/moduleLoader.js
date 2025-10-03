@@ -61,6 +61,38 @@ class ModuleLoader {
    */
   _loadScript(modulePath, moduleName) {
     return new Promise((resolve, reject) => {
+      // 特殊处理deps.js模块
+      if (moduleName === 'deps') {
+        console.log(`[moduleLoader] 加载deps.js模块`);
+        
+        // 检查是否已经存在全局deps对象
+        if (window.deps && window.deps.registerModule) {
+          console.log('[moduleLoader] deps.js已存在，直接返回');
+          resolve(window.deps);
+          return;
+        }
+        
+        // 构建deps.js路径
+        const depsPath = './deps.js';
+        
+        // 加载deps.js
+        this._loadScript(depsPath, moduleName)
+          .then(() => {
+            // 等待deps对象初始化
+            const checkDeps = () => {
+              if (window.deps && window.deps.registerModule) {
+                console.log('[moduleLoader] deps.js加载成功');
+                resolve(window.deps);
+              } else {
+                setTimeout(checkDeps, 100);
+              }
+            };
+            checkDeps();
+          })
+          .catch(reject);
+        return;
+      }
+
       // 检查是否已经通过其他方式加载了模块
       const globalModule = this._checkGlobalModule(moduleName);
       if (globalModule) {
