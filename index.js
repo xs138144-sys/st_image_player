@@ -82,8 +82,12 @@ const getExtensionSettings = () => {
   // 将默认设置写入全局，供后续保存使用
   globalSettings[EXTENSION_ID] = defaultSettings;
   
-  // 关键修复：立即保存默认设置到本地存储，避免刷新后重新创建
-  saveSafeSettings();
+  // 关键修复：仅在第一次使用时保存默认设置
+  if (typeof globalSettings._firstTimeSetup === 'undefined') {
+    globalSettings._firstTimeSetup = true;
+    saveSafeSettings();
+    console.log(`[${EXTENSION_ID}] 第一次使用，保存默认设置`);
+  }
   
   return defaultSettings;
 };
