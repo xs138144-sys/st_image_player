@@ -324,10 +324,14 @@ function initializeDeps() {
       })();
     }
     
-    // 设置EventBus实例
-    deps.EventBus = eventBusInstance;
-    
-    console.log('[deps] 延迟初始化完成');
+    // 设置EventBus实例（使用defineProperty避免getter冲突）
+  Object.defineProperty(deps, 'EventBus', {
+    value: eventBusInstance,
+    writable: true,
+    configurable: true
+  });
+  
+  console.log('[deps] 延迟初始化完成');
   }).catch(error => {
     console.error('[deps] EventBus导入失败', error);
     // 提供回退的EventBus实现

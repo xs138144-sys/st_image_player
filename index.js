@@ -44,12 +44,11 @@ const initExtension = async () => {
 
   try {
     // 使用模块加载器加载所有模块
-    const moduleLoader = window.moduleLoader;
-    if (!moduleLoader) {
+    if (!window.moduleLoader) {
       throw new Error("模块加载器未找到");
     }
 
-    const loadResults = await moduleLoader.loadAllModules(MODULES);
+    const loadResults = await window.moduleLoader.loadAllModules(MODULES);
 
     // 检查关键模块加载状态
     const criticalModules = [
