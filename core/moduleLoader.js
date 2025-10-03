@@ -271,3 +271,6 @@ class ModuleLoader {
 
 // 导出默认实例
 export default new ModuleLoader();
+
+// 导出到全局window对象，供SillyTavern环境使用
+window.moduleLoader = new ModuleLoader();
