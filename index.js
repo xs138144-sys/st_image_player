@@ -24,74 +24,18 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
-// 独立设置文件管理
-const SETTINGS_FILE_NAME = "st_image_player_settings.json";
-
-const loadSettingsFromFile = () => {
-  try {
-    const settingsJson = localStorage.getItem(SETTINGS_FILE_NAME);
-    if (settingsJson) {
-      const settings = JSON.parse(settingsJson);
-      console.log(`[${EXTENSION_ID}] 从文件加载设置: masterEnabled=${settings.masterEnabled}`);
-      return settings;
-    }
-  } catch (error) {
-    console.error(`[${EXTENSION_ID}] 加载设置文件失败:`, error);
-  }
-  return null;
-};
-
-const saveSettingsToFile = (settings) => {
-  try {
-    // 只保存必要的设置字段，避免文件过大
-    const essentialSettings = {
-      masterEnabled: settings.masterEnabled,
-      enabled: settings.enabled,
-      serviceUrl: settings.serviceUrl,
-      playMode: settings.playMode,
-      autoSwitchMode: settings.autoSwitchMode,
-      switchInterval: settings.switchInterval,
-      position: settings.position,
-      isLocked: settings.isLocked,
-      isWindowVisible: settings.isWindowVisible,
-      showInfo: settings.showInfo,
-      aiResponseCooldown: settings.aiResponseCooldown,
-      mediaFilter: settings.mediaFilter,
-      transitionEffect: settings.transitionEffect,
-      preloadImages: settings.preloadImages,
-      preloadVideos: settings.preloadVideos,
-      playerDetectEnabled: settings.playerDetectEnabled,
-      aiDetectEnabled: settings.aiDetectEnabled,
-      pollingInterval: settings.pollingInterval,
-      slideshowMode: settings.slideshowMode,
-      videoLoop: settings.videoLoop,
-      videoVolume: settings.videoVolume,
-      showVideoControls: settings.showVideoControls,
-      hideBorder: settings.hideBorder,
-      customVideoControls: settings.customVideoControls,
-      serviceDirectory: settings.serviceDirectory
-    };
-    
-    localStorage.setItem(SETTINGS_FILE_NAME, JSON.stringify(essentialSettings));
-    console.log(`[${EXTENSION_ID}] 设置已保存到文件: masterEnabled=${settings.masterEnabled}`);
-    return true;
-  } catch (error) {
-    console.error(`[${EXTENSION_ID}] 保存设置文件失败:`, error);
-    return false;
-  }
-};
-
 const getExtensionSettings = () => {
-  // 优先从独立文件加载设置
-  const fileSettings = loadSettingsFromFile();
-  if (fileSettings) {
-    return fileSettings;
+  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+  if (globalSettings[EXTENSION_ID]) {
+    return globalSettings[EXTENSION_ID];
   }
 
-  // 如果没有文件设置，创建默认设置
+  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
   const defaultSettings = {
-    masterEnabled: false, // 默认禁用扩展
-    enabled: true,
+    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+    enabled: true, // 播放器启用状态
     serviceUrl: "http://localhost:9000",
     playMode: "random",
     autoSwitchMode: "timer",
@@ -129,25 +73,22 @@ const getExtensionSettings = () => {
     currentRandomIndex: -1,
     showMediaUpdateToast: false,
     aiEventRegistered: false,
-    filterTriggerSource: null
+    filterTriggerSource: null,
   };
 
-  // 保存默认设置到文件
-  saveSettingsToFile(defaultSettings);
-  console.log(`[${EXTENSION_ID}] 第一次使用，创建并保存默认设置`);
-  
+  // 将默认设置写入全局，供后续保存使用
+  globalSettings[EXTENSION_ID] = defaultSettings;
   return defaultSettings;
 };
 
 const saveSafeSettings = () => {
-  // 直接使用独立文件保存机制
-  const settings = getExtensionSettings();
-  const success = saveSettingsToFile(settings);
-  
-  if (success) {
-    console.log(`[${EXTENSION_ID}] 设置保存成功: masterEnabled=${settings.masterEnabled}`);
-  } else {
-    console.error(`[${EXTENSION_ID}] 设置保存失败`);
+  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
+  if (saveFn && typeof saveFn === "function") {
+    saveFn();
+    console.log(
+      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+    );
   }
 };
 
@@ -202,10 +143,6 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
-  // 关键修复：设置复选框初始状态
-  const settings = getExtensionSettings();
-  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop('checked', settings.masterEnabled);
-
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
@@ -219,10 +156,6 @@ const createMinimalSettingsPanel = () => {
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
         initExtension();
         toastr.success("媒体播放器扩展已启用");
-      } else {
-        // 禁用扩展
-        disableExtension();
-        toastr.info("媒体播放器扩展已禁用");
       }
     }
   );
@@ -1648,14 +1581,8 @@ const updateStatusDisplay = () => {
 
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
-  
-  // 关键修复：移除总开关检查，确保设置面板总是被创建
-  // 如果设置面板已存在，先移除再重新创建（确保启用时能显示完整面板）
-  if ($(`#${SETTINGS_PANEL_ID}`).length) {
-    $(`#${SETTINGS_PANEL_ID}`).remove();
-  }
-  
-  console.log(`[${EXTENSION_ID}] 创建设置面板，masterEnabled=${settings.masterEnabled}`);
+  // 总开关禁用：不创建设置面板（核心修复）
+  if (!settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
 
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
@@ -2588,9 +2515,13 @@ const addMenuButton = () => {
 const initExtension = async () => {
   const settings = getExtensionSettings();
 
-  // 关键修复：移除强制检查，让用户操作生效
-  // 当用户点击启用按钮时，masterEnabled已经设置为true，应该继续初始化
-  console.log(`[${EXTENSION_ID}] 开始初始化扩展，masterEnabled=${settings.masterEnabled}`);
+  // 总开关禁用：终止初始化
+  if (!settings.masterEnabled) {
+    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，不进行初始化`);
+    // 即使总开关关闭，也显示一个最小化的设置面板以便重新启用
+    createMinimalSettingsPanel();
+    return;
+  }
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
     // 1. 初始化全局设置容器（兼容老版本存储）
@@ -2667,35 +2598,60 @@ const initExtension = async () => {
   }
 };
 
-// ==================== 页面就绪触发（简化初始化逻辑） ====================
+// ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(简化初始化)`);
-  
-  // 简化初始化：直接创建最小化设置面板，确保设置保存功能可用
-  const initExtensionSimple = () => {
-    console.log(`[${EXTENSION_ID}] 开始简化初始化`);
-    
-    // 确保全局设置对象存在
-    if (typeof window.extension_settings === "undefined") {
-      window.extension_settings = {};
-    }
-    
-    // 获取当前设置
-    const settings = getExtensionSettings();
-    console.log(`[${EXTENSION_ID}] 当前设置状态: masterEnabled=${settings.masterEnabled}`);
-    
-    // 根据总开关状态决定是否初始化扩展
-    if (settings.masterEnabled) {
-      console.log(`[${EXTENSION_ID}] 总开关已启用，初始化完整扩展`);
-      initExtension();
-    } else {
-      console.log(`[${EXTENSION_ID}] 总开关未启用，创建最小化设置面板`);
-      createMinimalSettingsPanel();
-    }
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
+  const initWhenReady = () => {
+    // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
+    const checkGlobalSettings = () => {
+      const globalSettings = getSafeGlobal("extension_settings", {});
+      // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
+      const isDOMReady =
+        document.getElementById("extensionsMenu") &&
+        document.getElementById("extensions_settings");
+      // 条件2：全局设置已加载（或超时强制尝试）
+      const isSettingsReady =
+        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
+
+      if (isDOMReady && isSettingsReady) {
+        clearInterval(checkTimer);
+        const settings = getExtensionSettings();
+        console.log(
+          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
+        );
+
+        // 根据总开关状态决定是否初始化扩展
+        if (settings.masterEnabled) {
+          initExtension();
+        } else {
+          createMinimalSettingsPanel();
+        }
+
+        console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
+        return;
+      }
+
+      // 超时保护：5秒后强制初始化（避免无限等待）
+      if (Date.now() - startTime > 5000) {
+        clearInterval(checkTimer);
+        const finalDOMReady =
+          document.getElementById("extensionsMenu") &&
+          document.getElementById("extensions_settings");
+        if (finalDOMReady) {
+          console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
+          initExtension();
+        } else {
+          console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
+          toastr.error("扩展初始化失败,核心DOM未加载");
+        }
+      }
+    };
+
+    const startTime = Date.now();
+    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms检查一次
   };
-  
-  // 延迟1秒执行，确保DOM完全加载
-  setTimeout(initExtensionSimple, 1000);
+
+  initWhenReady();
 });
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
