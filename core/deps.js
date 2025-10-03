@@ -343,7 +343,7 @@ function initializeDeps() {
 window.deps = deps;
 
 // ES6模块导出（用于模块化环境）
-export { deps };
+export default deps;
 
 // 延迟初始化（在模块加载完成后执行）
 if (document.readyState === 'loading') {
