@@ -24,18 +24,71 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
+// 独立设置文件管理
+const SETTINGS_FILE_NAME = "st_image_player_settings.json";
+
+const loadSettingsFromFile = () => {
+  try {
+    const settingsJson = localStorage.getItem(SETTINGS_FILE_NAME);
+    if (settingsJson) {
+      const settings = JSON.parse(settingsJson);
+      console.log(`[${EXTENSION_ID}] 从文件加载设置: masterEnabled=${settings.masterEnabled}`);
+      return settings;
+    }
+  } catch (error) {
+    console.error(`[${EXTENSION_ID}] 加载设置文件失败:`, error);
+  }
+  return null;
+};
+
+const saveSettingsToFile = (settings) => {
+  try {
+    // 只保存必要的设置字段，避免文件过大
+    const essentialSettings = {
+      masterEnabled: settings.masterEnabled,
+      enabled: settings.enabled,
+      serviceUrl: settings.serviceUrl,
+      playMode: settings.playMode,
+      autoSwitchMode: settings.autoSwitchMode,
+      switchInterval: settings.switchInterval,
+      position: settings.position,
+      isLocked: settings.isLocked,
+      isWindowVisible: settings.isWindowVisible,
+      showInfo: settings.showInfo,
+      aiResponseCooldown: settings.aiResponseCooldown,
+      mediaFilter: settings.mediaFilter,
+      transitionEffect: settings.transitionEffect,
+      preloadImages: settings.preloadImages,
+      preloadVideos: settings.preloadVideos,
+      playerDetectEnabled: settings.playerDetectEnabled,
+      aiDetectEnabled: settings.aiDetectEnabled,
+      pollingInterval: settings.pollingInterval,
+      slideshowMode: settings.slideshowMode,
+      videoLoop: settings.videoLoop,
+      videoVolume: settings.videoVolume,
+      showVideoControls: settings.showVideoControls,
+      hideBorder: settings.hideBorder,
+      customVideoControls: settings.customVideoControls,
+      serviceDirectory: settings.serviceDirectory
+    };
+    
+    localStorage.setItem(SETTINGS_FILE_NAME, JSON.stringify(essentialSettings));
+    console.log(`[${EXTENSION_ID}] 设置已保存到文件: masterEnabled=${settings.masterEnabled}`);
+    return true;
+  } catch (error) {
+    console.error(`[${EXTENSION_ID}] 保存设置文件失败:`, error);
+    return false;
+  }
+};
+
 const getExtensionSettings = () => {
-  // 优先读取 SillyTavern 核心管理的全局设置（含本地存储）
-  const globalSettings = getSafeGlobal("extension_settings", {});
-  
-  // 如果有用户保存的设置，就使用用户的选择
-  if (globalSettings[EXTENSION_ID]) {
-    const savedSettings = globalSettings[EXTENSION_ID];
-    console.log(`[${EXTENSION_ID}] 加载用户设置: masterEnabled=${savedSettings.masterEnabled}`, savedSettings);
-    return savedSettings;
+  // 优先从独立文件加载设置
+  const fileSettings = loadSettingsFromFile();
+  if (fileSettings) {
+    return fileSettings;
   }
 
-  // 仅当完全无配置时，才创建默认设置
+  // 如果没有文件设置，创建默认设置
   const defaultSettings = {
     masterEnabled: false, // 默认禁用扩展
     enabled: true,
@@ -79,56 +132,22 @@ const getExtensionSettings = () => {
     filterTriggerSource: null
   };
 
-  // 将默认设置写入全局，供后续保存使用
-  globalSettings[EXTENSION_ID] = defaultSettings;
-  
-  // 关键修复：仅在第一次使用时保存默认设置
-  if (typeof globalSettings._firstTimeSetup === 'undefined') {
-    globalSettings._firstTimeSetup = true;
-    console.log(`[${EXTENSION_ID}] 第一次使用，保存默认设置`);
-    saveSafeSettings();
-  }
+  // 保存默认设置到文件
+  saveSettingsToFile(defaultSettings);
+  console.log(`[${EXTENSION_ID}] 第一次使用，创建并保存默认设置`);
   
   return defaultSettings;
 };
 
 const saveSafeSettings = () => {
-  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  // 直接使用独立文件保存机制
+  const settings = getExtensionSettings();
+  const success = saveSettingsToFile(settings);
   
-  // 确保全局设置对象存在
-  if (typeof window.extension_settings === "undefined") {
-    window.extension_settings = {};
-  }
-  
-  // 确保扩展设置存在
-  if (!window.extension_settings[EXTENSION_ID]) {
-    window.extension_settings[EXTENSION_ID] = getExtensionSettings();
-  }
-  
-  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
-  if (saveFn && typeof saveFn === "function") {
-    console.log(`[${EXTENSION_ID}] 开始保存设置...`);
-    saveFn();
-    console.log(`[${EXTENSION_ID}] 设置保存函数已调用`);
-    
-    // 立即检查设置是否保存成功
-    const globalSettings = getSafeGlobal("extension_settings", {});
-    if (globalSettings[EXTENSION_ID]) {
-      console.log(`[${EXTENSION_ID}] 设置已确认保存: masterEnabled=${globalSettings[EXTENSION_ID].masterEnabled}`);
-    } else {
-      console.error(`[${EXTENSION_ID}] 设置保存失败: 设置对象不存在`);
-    }
+  if (success) {
+    console.log(`[${EXTENSION_ID}] 设置保存成功: masterEnabled=${settings.masterEnabled}`);
   } else {
-    console.error(`[${EXTENSION_ID}] 保存函数不存在: saveFn=`, saveFn);
-    
-    // 备用方案：直接使用localStorage保存
-    try {
-      const settings = getExtensionSettings();
-      localStorage.setItem(`st_image_player_settings`, JSON.stringify(settings));
-      console.log(`[${EXTENSION_ID}] 使用localStorage保存设置: masterEnabled=${settings.masterEnabled}`);
-    } catch (error) {
-      console.error(`[${EXTENSION_ID}] localStorage保存失败:`, error);
-    }
+    console.error(`[${EXTENSION_ID}] 设置保存失败`);
   }
 };
 
