@@ -1,5 +1,5 @@
-import { deps } from "./core/deps.js";
-import { moduleLoader } from "./core/moduleLoader.js";
+// index.js - 媒体播放器扩展主入口文件
+// 使用兼容SillyTavern环境的加载方式
 
 const EXT_ID = "st_image_player";
 
@@ -7,7 +7,7 @@ const EXT_ID = "st_image_player";
 const MODULES = [
   // 基础工具模块 - 先加载这些，因为它们被其他模块依赖
   "modules/timeUtils",
-  "modules/domUtils",
+  "modules/domUtils", 
   "modules/utils",
   
   // 设置相关模块 - 在API之前加载
@@ -36,12 +36,17 @@ const initExtension = async () => {
   console.log(`[index] 媒体播放器扩展开始初始化（共${MODULES.length}个模块）`);
 
   // 使用安全的toastr调用
-  if (deps.toastr && typeof deps.toastr.info === "function") {
-    deps.toastr.info("媒体播放器扩展正在加载...");
+  if (window.deps && window.deps.toastr && typeof window.deps.toastr.info === "function") {
+    window.deps.toastr.info("媒体播放器扩展正在加载...");
   }
 
   try {
     // 使用模块加载器加载所有模块
+    const moduleLoader = window.moduleLoader;
+    if (!moduleLoader) {
+      throw new Error("模块加载器未找到");
+    }
+
     const loadResults = await moduleLoader.loadAllModules(MODULES);
 
     // 检查关键模块加载状态
@@ -77,16 +82,19 @@ const initExtension = async () => {
     
     console.log(`🚀 媒体播放器扩展已完全就绪，可以正常使用！`);
     
-    if (deps.toastr && typeof deps.toastr.success === "function") {
-      deps.toastr.success("媒体播放器扩展已加载就绪");
+    if (window.deps && window.deps.toastr && typeof window.deps.toastr.success === "function") {
+      window.deps.toastr.success("媒体播放器扩展已加载就绪");
     }
-    deps.EventBus.emit("extensionInitialized");
+    
+    if (window.deps && window.deps.EventBus && typeof window.deps.EventBus.emit === "function") {
+      window.deps.EventBus.emit("extensionInitialized");
+    }
 
     // 注意：不再触发requestCreateSettingsPanel事件，因为UI模块初始化时已经根据设置状态创建了相应的面板
   } catch (e) {
     console.error(`[index] 扩展初始化全局错误:`, e);
-    if (deps.toastr && typeof deps.toastr.error === "function") {
-      deps.toastr.error(`扩展加载失败: ${e.message}`);
+    if (window.deps && window.deps.toastr && typeof window.deps.toastr.error === "function") {
+      window.deps.toastr.error(`扩展加载失败: ${e.message}`);
     }
   }
 };
@@ -104,8 +112,19 @@ const safeInit = (fn) => {
 
 const waitForSTAndInit = () => {
   // 确保扩展配置存在
-  if (!deps.extension_settings[EXT_ID]) {
-    deps.extension_settings[EXT_ID] = {
+  if (!window.deps || !window.deps.extension_settings || !window.deps.extension_settings[EXT_ID]) {
+    // 如果deps未初始化，延迟执行
+    if (!window.deps) {
+      console.log(`[${EXT_ID}] deps未初始化，延迟配置设置`);
+      setTimeout(waitForSTAndInit, 100);
+      return;
+    }
+    
+    if (!window.deps.extension_settings) {
+      window.deps.extension_settings = {};
+    }
+    
+    window.deps.extension_settings[EXT_ID] = {
       enabled: true,
       lastPlayed: null,
       volume: 0.8,
@@ -145,7 +164,7 @@ const waitForSTAndInit = () => {
     };
   } else {
     // 配置迁移
-    const settings = deps.extension_settings[EXT_ID];
+    const settings = window.deps.extension_settings[EXT_ID];
     if (!settings.config_version || settings.config_version !== "1.4.2") {
       console.log(`[${EXT_ID}] 迁移配置从 ${settings.config_version || '未知'} 到 1.4.2`);
 
@@ -155,7 +174,9 @@ const waitForSTAndInit = () => {
       if (!settings.randomPlayedIndices) settings.randomPlayedIndices = [];
 
       settings.config_version = "1.4.2";
-      deps.saveSettingsDebounced();
+      if (window.deps.saveSettingsDebounced) {
+        window.deps.saveSettingsDebounced();
+      }
     }
   }
 
@@ -177,13 +198,16 @@ waitForSTAndInit();
 window.addEventListener("error", (e) => {
   console.error("[index] 全局错误:", e.error);
   // 只有在toastr可用时才显示错误
-  if (deps.toastr && typeof deps.toastr.error === "function") {
-    deps.toastr.error(`媒体播放器错误: ${e.error?.message || "未知错误"}`);
+  if (window.deps && window.deps.toastr && typeof window.deps.toastr.error === "function") {
+    window.deps.toastr.error(`媒体播放器错误: ${e.error?.message || "未知错误"}`);
   }
 });
 
 window.addEventListener("beforeunload", () => {
-  deps.EventBus.emit("extensionDisable");
+  if (window.deps && window.deps.EventBus && typeof window.deps.EventBus.emit === "function") {
+    window.deps.EventBus.emit("extensionDisable");
+  }
+  
   if (window.moduleCleanupListeners) {
     window.moduleCleanupListeners.forEach((removeListener) => {
       if (typeof removeListener === "function") {
