@@ -1,3 +1,4 @@
+import { extension_settings, getContext } from "../../../extensions.js";
 import {
   saveSettingsDebounced,
   eventSource as importedEventSource,
@@ -70,13 +71,12 @@ const defaultSettings = {
 };
 
 // 完全按照修复脚本模式直接初始化设置，确保设置对象完整
-const globalSettings = getSafeGlobal("extension_settings", {});
-if (!globalSettings[EXTENSION_ID]) {
-  globalSettings[EXTENSION_ID] = JSON.parse(JSON.stringify(defaultSettings));
+if (!extension_settings[EXTENSION_ID]) {
+  extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(defaultSettings));
 }
 
 // 确保customVideoControls对象存在且完整
-const settings = globalSettings[EXTENSION_ID];
+const settings = extension_settings[EXTENSION_ID];
 if (!settings.customVideoControls) {
   settings.customVideoControls = {
     showProgress: true,
@@ -102,7 +102,7 @@ if (!settings.customVideoControls) {
 
 const getExtensionSettings = () => {
   // 直接返回全局设置对象，确保保存功能正常工作
-  return globalSettings[EXTENSION_ID];
+  return extension_settings[EXTENSION_ID];
 };
 
 const saveSafeSettings = () => {
