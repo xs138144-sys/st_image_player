@@ -865,12 +865,10 @@ const adjustVideoControlsLayout = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const settings = getExtensionSettings();
   
-  // 直接根据settings.showVideoControls来调整容器高度，不依赖控制栏可见性
+  // 直接根据settings.showVideoControls来调整容器高度，使用固定高度避免控制栏状态影响
   if (settings.showVideoControls) {
-    const videoControls = win.find(".video-controls");
-    // 确保控制栏可见，以便正确获取高度
-    videoControls.css({ display: "block", opacity: 1 });
-    const controlsHeight = videoControls.outerHeight() || 40;
+    // 使用固定高度40px，避免控制栏隐藏状态导致高度计算为0
+    const controlsHeight = 40;
     win.find(".image-container").css("height", `calc(100% - ${controlsHeight}px)`);
   } else {
     // 控制栏隐藏时，容器高度恢复100%
