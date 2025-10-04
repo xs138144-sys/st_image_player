@@ -194,6 +194,8 @@
     align-items: center;
     box-sizing: border-box;
     justify-content: space-between;
+    cursor: move;
+    user-select: none;
 }
 
 .control-btn {

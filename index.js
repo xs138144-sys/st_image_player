@@ -906,7 +906,7 @@ const setupWindowEvents = () => {
   const panel = $(`#${SETTINGS_PANEL_ID}`);
   const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
 
-  // 1. 窗口拖拽
+  // 1. 窗口拖拽 - 标题栏
   header.addEventListener("mousedown", (e) => {
     if (settings.isLocked || settings.hideBorder) return;
     dragData = {
@@ -915,6 +915,21 @@ const setupWindowEvents = () => {
       startLeft: win.offset().left,
       startTop: win.offset().top,
     };
+  });
+
+  // 1.1 窗口拖拽 - 底部控制栏
+  const controls = win.find(".image-player-controls")[0];
+  controls.addEventListener("mousedown", (e) => {
+    if (settings.isLocked || settings.hideBorder) return;
+    // 只有当点击在控制栏空白区域时才触发拖动，避免与按钮冲突
+    if (e.target === controls || e.target.classList.contains("control-text")) {
+      dragData = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startLeft: win.offset().left,
+        startTop: win.offset().top,
+      };
+    }
   });
 
   // 2. 窗口调整大小 - 为8个拉伸手柄添加事件监听
