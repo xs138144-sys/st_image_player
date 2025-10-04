@@ -27,6 +27,7 @@ const toastr = getSafeToastr();
 const getExtensionSettings = () => {
   // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
   const globalSettings = getSafeGlobal("extension_settings", {});
+  
   // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
   if (globalSettings[EXTENSION_ID]) {
     return globalSettings[EXTENSION_ID];
@@ -78,17 +79,28 @@ const getExtensionSettings = () => {
 
   // 将默认设置写入全局，供后续保存使用
   globalSettings[EXTENSION_ID] = defaultSettings;
+  
+  // 关键修复：立即保存默认设置到本地存储
+  saveSafeSettings();
+  
   return defaultSettings;
 };
 
 const saveSafeSettings = () => {
-  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
-  if (saveFn && typeof saveFn === "function") {
-    saveFn();
-    console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
-    );
+  // 关键修复：直接使用导入的 saveSettingsDebounced 函数
+  // 这是 LittleWhiteBox 使用的标准保存方式
+  if (typeof saveSettingsDebounced === "function") {
+    saveSettingsDebounced();
+    console.log(`[${EXTENSION_ID}] 设置已保存到 localStorage`);
+  } else {
+    // 备用方案：如果导入失败，尝试从全局获取
+    const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+    if (saveFn && typeof saveFn === "function") {
+      saveFn();
+      console.log(`[${EXTENSION_ID}] 设置已保存（备用方案）`);
+    } else {
+      console.warn(`[${EXTENSION_ID}] 无法保存设置：saveSettingsDebounced 函数不可用`);
+    }
   }
 };
 
@@ -1955,8 +1967,9 @@ const setupSettingsEvents = () => {
   });
 
   const saveCurrentSettings = () => {
-    // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
-    settings.enabled = panel.find("#extension-enabled").prop("checked");
+    // 1. 同步总开关状态（核心：绑定"启用媒体播放器"复选框）
+    // 注意：这里应该使用 #master-enabled 而不是 #extension-enabled
+    settings.masterEnabled = panel.find("#master-enabled").prop("checked");
 
     // 2. 同步其他基础设置
     settings.serviceUrl = panel.find("#player-service-url").val().trim();
@@ -2006,7 +2019,7 @@ const setupSettingsEvents = () => {
     saveSafeSettings();
 
     // 4. 总开关联动：禁用时清理所有资源（核心修复）
-    if (!settings.enabled) {
+    if (!settings.masterEnabled) {
       // 停止服务轮询
       if (pollingTimer) clearTimeout(pollingTimer);
       // 关闭WebSocket连接
@@ -2230,11 +2243,11 @@ const setupSettingsEvents = () => {
     }
   });
 
-  // 基础设置项变更绑定
+  // 基础设置项变更绑定（确保所有输入框都有保存事件）
   panel
     .find(
       "#player-service-url, #player-interval, #player-ai-cooldown, #player-polling-interval, " +
-        "#image-max-size, #video-max-size, #show-media-update-toast"
+        "#image-max-size, #video-max-size, #show-media-update-toast, #player-scan-directory"
     )
     .on("change", saveCurrentSettings);
 
@@ -2243,7 +2256,7 @@ const setupSettingsEvents = () => {
     .find(
       "#player-slideshow-mode, #player-video-loop, #player-show-info, #player-preload-images, " +
         "#player-preload-videos, #player-show-video-controls, #player-ai-detect, #player-player-detect, " +
-        "#extension-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, " +
+        "#master-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, " +
         "#custom-show-loop, #custom-show-time"
     )
     .on("change", function () {
