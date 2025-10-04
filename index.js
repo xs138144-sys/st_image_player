@@ -241,12 +241,14 @@ const createMinimalSettingsPanel = () => {
       if (settings.masterEnabled) {
         console.log(`[${EXTENSION_ID}] 启用扩展，移除最小面板`);
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
-        // 再次获取最新设置，确保 masterEnabled 为 true
+        // 再次获取最新设置，确保 masterEnabled 和 enabled 都为 true
         setTimeout(() => {
           const latestSettings = getExtensionSettings();
           latestSettings.masterEnabled = true;
+          latestSettings.enabled = true; // 关键修复：确保播放器启用状态为 true
           window.extension_settings[EXTENSION_ID].masterEnabled = true;
-          console.log(`[${EXTENSION_ID}] 延迟初始化前状态: latestSettings.masterEnabled=${latestSettings.masterEnabled}, 全局=${window.extension_settings[EXTENSION_ID].masterEnabled}`);
+          window.extension_settings[EXTENSION_ID].enabled = true; // 关键修复：同步到全局设置
+          console.log(`[${EXTENSION_ID}] 延迟初始化前状态: masterEnabled=${latestSettings.masterEnabled}, enabled=${latestSettings.enabled}, 全局masterEnabled=${window.extension_settings[EXTENSION_ID].masterEnabled}, 全局enabled=${window.extension_settings[EXTENSION_ID].enabled}`);
           initExtension();
         }, 100);
         toastr.success("媒体播放器扩展已启用");
