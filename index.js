@@ -159,6 +159,10 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
+  // 设置初始状态
+  const settings = getExtensionSettings();
+  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", settings.masterEnabled);
+
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
@@ -202,8 +206,15 @@ const disableExtension = () => {
   currentMediaIndex = 0;
   serviceStatus = { active: false };
 
+  // 修复：确保最小化设置面板存在且总开关状态正确
+  const settings = getExtensionSettings();
+  settings.masterEnabled = false; // 确保设置为禁用状态
+  saveSafeSettings();
+  
   // 创建最小化设置面板以便重新启用
   createMinimalSettingsPanel();
+  
+  console.log(`[${EXTENSION_ID}] 扩展已禁用`);
 };
 
 // ==================== API 通信（无修改，确保稳定） ====================
@@ -698,6 +709,10 @@ const createPlayerWindow = async () => {
   setupWindowEvents();
   positionWindow();
   bindVideoControls();
+  
+  // 修复：确保播放器窗口创建时正确应用边框隐藏样式
+  const playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+  playerWindow.toggleClass("no-border", settings.hideBorder);
 
   // 初始化筛选状态（修复同步）
   const filterBtn = $(
@@ -1972,7 +1987,7 @@ const setupSettingsEvents = () => {
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
 
-  // 监听总开关变化
+  // 监听总开关变化（修复：添加实时事件绑定）
   panel.find("#master-enabled").on("change", function () {
     settings.masterEnabled = $(this).prop("checked");
     saveSafeSettings();
@@ -1986,6 +2001,41 @@ const setupSettingsEvents = () => {
       disableExtension();
       toastr.info("媒体播放器扩展已禁用");
     }
+  });
+
+  // 修复：添加边框隐藏的实时事件绑定
+  panel.find("#player-hide-border").on("change", function () {
+    saveCurrentSettings();
+  });
+
+  // 修复：添加其他关键设置的实时事件绑定
+  panel.find("#player-service-url, #player-scan-directory").on("change", function () {
+    saveCurrentSettings();
+  });
+
+  panel.find("#player-play-mode, #player-media-filter, #player-transition-effect").on("change", function () {
+    saveCurrentSettings();
+  });
+
+  panel.find("#player-slideshow-mode, #player-video-loop, #player-show-info").on("change", function () {
+    saveCurrentSettings();
+  });
+
+  panel.find("#player-preload-images, #player-preload-videos, #player-show-video-controls").on("change", function () {
+    saveCurrentSettings();
+  });
+
+  panel.find("#player-interval, #player-polling-interval, #player-ai-cooldown").on("change", function () {
+    saveCurrentSettings();
+  });
+
+  panel.find("#player-ai-detect, #player-player-detect, #show-media-update-toast").on("change", function () {
+    saveCurrentSettings();
+  });
+
+  // 修复：添加视频控制自定义的实时事件绑定
+  panel.find("#custom-show-progress, #custom-show-volume, #custom-show-loop, #custom-show-time").on("change", function () {
+    saveCurrentSettings();
   });
 
   const saveCurrentSettings = () => {
@@ -2067,7 +2117,43 @@ const setupSettingsEvents = () => {
     }
 
     // 5. 同步UI状态
-    $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
+    // 修复边框隐藏功能：确保样式正确应用
+    const playerWindow = $(`#${PLAYER_WINDOW_ID}`);
+    if (playerWindow.length > 0) {
+      playerWindow.toggleClass("no-border", settings.hideBorder);
+      
+      // 如果边框隐藏状态发生变化，需要重新调整布局
+      if (settings.hideBorder) {
+        // 隐藏边框时，调整视频控制布局
+        if (settings.showVideoControls) {
+          const container = playerWindow.find(".image-container");
+          const controls = playerWindow.find(".video-controls");
+          controls.css({ bottom: "-40px", opacity: 0 });
+
+          container.off("mouseenter mouseleave");
+          container.on("mouseenter", () => {
+            controls.css({ bottom: 0, opacity: 1 });
+          });
+          container.on("mouseleave", () => {
+            setTimeout(() => {
+              if (!progressDrag && !volumeDrag) {
+                controls.css({ bottom: "-40px", opacity: 0 });
+              }
+            }, 3000);
+          });
+        }
+      } else {
+        // 显示边框时，恢复默认布局
+        if (settings.showVideoControls) {
+          const controls = playerWindow.find(".video-controls");
+          controls.css({ bottom: "0", opacity: 1 });
+        }
+      }
+      
+      // 重新调整布局
+      adjustVideoControlsLayout();
+    }
+    
     panel
       .find("#player-slideshow-mode")
       .prop("disabled", settings.playMode === "random");
@@ -2550,10 +2636,35 @@ const addMenuButton = () => {
 const initExtension = async () => {
   const settings = getExtensionSettings();
 
-  // 总开关禁用：终止初始化
+  // 总开关禁用：清理所有资源并终止初始化
   if (!settings.masterEnabled) {
-    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，不进行初始化`);
-    // 即使总开关关闭，也显示一个最小化的设置面板以便重新启用
+    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，清理资源并终止初始化`);
+    
+    // 清理所有资源（类似disableExtension函数）
+    if (pollingTimer) clearTimeout(pollingTimer);
+    if (switchTimer) clearTimeout(switchTimer);
+    if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+    stopProgressUpdate();
+
+    // 关闭WebSocket
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+
+    // 隐藏播放器窗口和设置面板
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+    $(`#${SETTINGS_PANEL_ID}`).remove();
+
+    // 移除菜单按钮
+    $(`#ext_menu_${EXTENSION_ID}`).remove();
+
+    // 重置状态
+    mediaList = [];
+    currentMediaIndex = 0;
+    serviceStatus = { active: false };
+
+    // 创建最小化设置面板以便重新启用
     createMinimalSettingsPanel();
     return;
   }
