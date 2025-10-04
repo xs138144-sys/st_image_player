@@ -1200,46 +1200,101 @@ const setupWindowEvents = () => {
   // 11. 上一个/下一个
   win.find(".prev").on("click", () => {
     if (settings.isMediaLoading) return;
+    
+    // 清理定时器和进度更新
     clearTimeout(switchTimer);
+    switchTimer = null;
+    stopProgressUpdate();
+    
+    // 暂停视频（如果正在播放）
     const video = win.find(".image-player-video")[0];
-    if (video) {
+    if (video && !video.paused) {
       video.pause();
-      stopProgressUpdate();
     }
+    
+    // 如果当前是播放状态，切换到暂停状态
+    if (settings.isPlaying) {
+      settings.isPlaying = false;
+      saveSafeSettings();
+      // 更新暂停图标
+      win.find(".play-pause i").removeClass("fa-pause").addClass("fa-play");
+      win.find(".control-text").text("已暂停");
+    }
+    
     showMedia("prev");
   });
   win.find(".next").on("click", () => {
     if (settings.isMediaLoading) return;
+    
+    // 清理定时器和进度更新
     clearTimeout(switchTimer);
+    switchTimer = null;
+    stopProgressUpdate();
+    
+    // 暂停视频（如果正在播放）
     const video = win.find(".image-player-video")[0];
-    if (video) {
+    if (video && !video.paused) {
       video.pause();
-      stopProgressUpdate();
     }
+    
+    // 如果当前是播放状态，切换到暂停状态
+    if (settings.isPlaying) {
+      settings.isPlaying = false;
+      saveSafeSettings();
+      // 更新暂停图标
+      win.find(".play-pause i").removeClass("fa-pause").addClass("fa-play");
+      win.find(".control-text").text("已暂停");
+    }
+    
     showMedia("next");
   });
 
   // 12. 切换模式（AI检测/定时）
   win.find(".switch-mode-toggle").on("click", function () {
+    // 清理定时器和进度更新
+    clearTimeout(switchTimer);
+    switchTimer = null;
+    stopProgressUpdate();
+    
+    // 暂停视频（如果正在播放）
+    const video = win.find(".image-player-video")[0];
+    if (video && !video.paused) {
+      video.pause();
+    }
+    
+    // 切换模式
     settings.autoSwitchMode =
       settings.autoSwitchMode === "detect" ? "timer" : "detect";
-    settings.isPlaying = settings.autoSwitchMode !== null;
+    
+    // 只有在切换到定时模式时才自动播放
+    if (settings.autoSwitchMode === "timer") {
+      settings.isPlaying = true;
+    } else {
+      // AI检测模式时暂停播放
+      settings.isPlaying = false;
+    }
+    
     saveSafeSettings();
+    
+    // 更新模式按钮状态
     $(this)
       .toggleClass("active", settings.autoSwitchMode === "detect")
       .find("i")
       .toggleClass("fa-robot fa-clock");
-    win
-      .find(".play-pause i")
-      .toggleClass("fa-play", !settings.isPlaying)
-      .toggleClass("fa-pause", settings.isPlaying);
-    const video = win.find(".image-player-video")[0];
-    if (video) video.pause();
-    stopProgressUpdate();
-    clearTimeout(switchTimer);
-    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
-      startPlayback();
+    
+    // 更新播放/暂停图标和文本
+    if (settings.isPlaying) {
+      win.find(".play-pause i").removeClass("fa-play").addClass("fa-pause");
+      win.find(".control-text").text("播放中");
+      // 如果是定时模式，开始播放
+      if (settings.autoSwitchMode === "timer") {
+        startPlayback();
+      }
+    } else {
+      win.find(".play-pause i").removeClass("fa-pause").addClass("fa-play");
+      win.find(".control-text").text("已暂停");
     }
+    
     updateExtensionMenu();
   });
 
