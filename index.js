@@ -48,7 +48,7 @@ const saveSettingsToStorage = (settings) => {
     // 过滤掉不需要保存的临时状态
     const settingsToSave = {
       masterEnabled: settings.masterEnabled,
-      enabled: settings.enabled,
+      enabled: settings.masterEnabled,
       serviceUrl: settings.serviceUrl,
       playMode: settings.playMode,
       autoSwitchMode: settings.autoSwitchMode,
@@ -164,7 +164,7 @@ const saveSafeSettings = () => {
   saveSettingsToStorage(settings);
   
   console.log(
-    `[${EXTENSION_ID}] 设置已保存: enabled=${settings.enabled}`
+    `[${EXTENSION_ID}] 设置已保存: enabled=${settings.masterEnabled}`
   );
 };
 
@@ -226,16 +226,24 @@ const createMinimalSettingsPanel = () => {
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
-    function () {
+    async function () {
       const settings = getExtensionSettings();
-      settings.masterEnabled = $(this).prop("checked");
+      const isChecked = $(this).prop("checked");
+      settings.masterEnabled = isChecked;
       saveSafeSettings();
 
-      if (settings.masterEnabled) {
+      if (isChecked) {
         // 启用扩展
-        $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
-        initExtension();
-        toastr.success("媒体播放器扩展已启用");
+        try {
+          $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
+          await initExtension();
+          toastr.success("媒体播放器扩展已启用");
+        } catch (error) {
+          console.error("启用扩展失败:", error);
+          toastr.error("启用扩展失败，请刷新页面重试");
+          // 恢复最小设置面板
+          createMinimalSettingsPanel();
+        }
       }
     }
   );
@@ -410,7 +418,7 @@ const refreshMediaList = async () => {
 const initWebSocket = () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不初始化WebSocket（核心修复）
-  if (!settings.enabled || ws) return;
+  if (!settings.masterEnabled || ws) return;
 
   try {
     const wsUrl =
@@ -444,11 +452,11 @@ const initWebSocket = () => {
       }
     };
 
-    ws.onclose = () => {
-      console.log(`[${EXTENSION_ID}] WebSocket连接关闭`);
+    ws.onclose = (e) => {
+      console.warn(`[${EXTENSION_ID}] WebSocket关闭`, e);
       ws = null;
       // 仅在启用时尝试重连
-      if (settings.enabled) {
+      if (settings.masterEnabled) {
         wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
       }
     };
@@ -457,14 +465,14 @@ const initWebSocket = () => {
       console.error(`[${EXTENSION_ID}] WebSocket错误`, e);
       ws = null;
       // 仅在启用时尝试重连
-      if (settings.enabled) {
+      if (settings.masterEnabled) {
         wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
       }
     };
 
     // 心跳检测（仅在启用时发送）
     setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN && settings.enabled) {
+      if (ws?.readyState === WebSocket.OPEN && settings.masterEnabled) {
         ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
       }
     }, 30000);
@@ -472,7 +480,7 @@ const initWebSocket = () => {
     console.error(`[${EXTENSION_ID}] WebSocket初始化失败`, e);
     ws = null;
     // 仅在启用时尝试重连
-    if (settings.enabled) {
+    if (settings.masterEnabled) {
       wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
     }
   }
@@ -594,7 +602,7 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+  if (!settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
@@ -1188,7 +1196,7 @@ const startPlayback = () => {
   const settings = getExtensionSettings();
   // 严格前置判断：排除无效状态，避免定时器残留
   if (
-    !settings.enabled ||
+    !settings.masterEnabled ||
     !settings.isPlaying ||
     settings.autoSwitchMode !== "timer"
   ) {
@@ -1229,7 +1237,7 @@ const startPlayback = () => {
     } finally {
       // 关键：无论成功/失败，只要仍在“定时播放+播放中”，就强制续期
       if (
-        settings.enabled &&
+        settings.masterEnabled &&
         settings.isPlaying &&
         settings.autoSwitchMode === "timer"
       ) {
@@ -1528,7 +1536,7 @@ const showMedia = async (direction) => {
     else if (e.message.includes("无可用媒体"))
       errorMsg = `无可用${filterType === "all" ? "媒体" : filterType}文件`;
 
-    if (retryCount < 3 && settings.enabled) {
+    if (retryCount < 3 && settings.masterEnabled) {
       retryCount++;
       toastr.warning(`${errorMsg}，重试中（${retryCount}/3)`);
       setTimeout(() => showMedia(direction), 3000);
@@ -1548,7 +1556,7 @@ const showMedia = async (direction) => {
 const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
-  if (!settings.enabled || settings.isMediaLoading) return;
+  if (!settings.masterEnabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1577,7 +1585,7 @@ const onAIResponse = () => {
 
 const onPlayerMessage = () => {
   const settings = getExtensionSettings();
-  if (!settings.enabled || settings.isMediaLoading) return;
+  if (!settings.masterEnabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1608,7 +1616,7 @@ const onPlayerMessage = () => {
 const startPollingService = () => {
   const settings = getExtensionSettings();
   // 总开关禁用：停止轮询并清理定时器（核心修复）
-  if (!settings.enabled) {
+  if (!settings.masterEnabled) {
     if (pollingTimer) clearTimeout(pollingTimer);
     return;
   }
@@ -1634,7 +1642,7 @@ const startPollingService = () => {
       console.error(`[${EXTENSION_ID}] 服务轮询失败`, e);
     } finally {
       // 仅在启用时续设定时器
-      if (settings.enabled) {
+      if (settings.masterEnabled) {
         pollingTimer = setTimeout(poll, settings.pollingInterval);
       }
     }
@@ -1662,7 +1670,12 @@ const updateStatusDisplay = () => {
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
+  if (!settings.masterEnabled) return;
+  
+  // 如果设置面板已存在，先移除再重新创建
+  if ($(`#${SETTINGS_PANEL_ID}`).length) {
+    $(`#${SETTINGS_PANEL_ID}`).remove();
+  }
 
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
@@ -2036,7 +2049,7 @@ const setupSettingsEvents = () => {
 
   const saveCurrentSettings = () => {
     // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
-    settings.enabled = panel.find("#extension-enabled").prop("checked");
+    settings.masterEnabled = panel.find("#extension-enabled").prop("checked");
 
     // 2. 同步其他基础设置
     settings.serviceUrl = panel.find("#player-service-url").val().trim();
@@ -2086,7 +2099,7 @@ const setupSettingsEvents = () => {
     saveSafeSettings();
 
     // 4. 总开关联动：禁用时清理所有资源（核心修复）
-    if (!settings.enabled) {
+    if (!settings.masterEnabled) {
       // 停止服务轮询
       if (pollingTimer) clearTimeout(pollingTimer);
       // 关闭WebSocket连接
@@ -2469,7 +2482,7 @@ const registerAIEventListeners = () => {
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
-          settings.enabled &&
+          settings.masterEnabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isWindowVisible
@@ -2481,7 +2494,7 @@ const registerAIEventListeners = () => {
       bindEvent(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
-          settings.enabled &&
+          settings.masterEnabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isWindowVisible
@@ -2697,7 +2710,7 @@ jQuery(() => {
         clearInterval(checkTimer);
         const settings = getExtensionSettings();
         console.log(
-          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
+          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.masterEnabled}`
         );
 
         // 根据总开关状态决定是否初始化扩展
