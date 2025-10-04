@@ -5,6 +5,14 @@ import {
 } from "../../../../script.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
+const EXTENSION_NAME = "媒体播放器";
+const SETTINGS_PANEL_ID = "image_player_settings_panel";
+const PLAYER_WINDOW_ID = "image_player_window";
+
+// 兼容 SillyTavern 主程序的事件源和事件类型（如果主程序没有自动挂载）
+const eventSource = typeof importedEventSource !== "undefined" ? importedEventSource : window.eventSource;
+const event_types = typeof importedEventTypes !== "undefined" ? importedEventTypes : window.event_types;
+
 window.extension_settings = window.extension_settings || {};
 window.extension_settings[EXTENSION_ID] = window.extension_settings[EXTENSION_ID] || {
   masterEnabled: true,
@@ -1968,6 +1976,7 @@ const setupSettingsEvents = () => {
       .prop("checked");
     settings.transitionEffect = panel.find("#player-transition-effect").val();
     settings.pollingInterval =
+     
       parseInt(panel.find("#player-polling-interval").val()) || 30000;
     settings.switchInterval =
       parseInt(panel.find("#player-interval").val()) || 5000;
