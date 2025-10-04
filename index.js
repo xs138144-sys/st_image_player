@@ -1,3 +1,4 @@
+import { extension_settings, getContext } from "../../../extensions.js";
 import {
   saveSettingsDebounced,
   eventSource as importedEventSource,
@@ -70,11 +71,11 @@ const defaultSettings = {
 };
 
 // 完全按照LittleWhiteBox模式直接初始化设置
-const globalSettings = getSafeGlobal("extension_settings", {});
-globalSettings[EXTENSION_ID] = globalSettings[EXTENSION_ID] || JSON.parse(JSON.stringify(defaultSettings));
+// 关键修复：使用extension_settings对象而不是getSafeGlobal
+extension_settings[EXTENSION_ID] = extension_settings[EXTENSION_ID] || JSON.parse(JSON.stringify(defaultSettings));
 
 // 确保customVideoControls对象存在且完整
-const settings = globalSettings[EXTENSION_ID];
+const settings = extension_settings[EXTENSION_ID];
 if (!settings.customVideoControls) {
   settings.customVideoControls = {
     showProgress: true,
@@ -100,7 +101,7 @@ if (!settings.customVideoControls) {
 
 const getExtensionSettings = () => {
   // 直接返回全局设置对象
-  return globalSettings[EXTENSION_ID];
+  return extension_settings[EXTENSION_ID];
 };
 
 const saveSafeSettings = () => {
