@@ -235,14 +235,18 @@ const createMinimalSettingsPanel = () => {
       if (isChecked) {
         // 启用扩展
         try {
-          $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
           await initExtension();
+          // 只有在成功启用后才移除最小面板
+          $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
           toastr.success("媒体播放器扩展已启用");
         } catch (error) {
           console.error("启用扩展失败:", error);
           toastr.error("启用扩展失败，请刷新页面重试");
-          // 恢复最小设置面板
-          createMinimalSettingsPanel();
+          // 恢复总开关状态
+          settings.masterEnabled = false;
+          saveSafeSettings();
+          // 重新勾选最小面板中的总开关，确保用户能看到当前状态
+          $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", false);
         }
       }
     }
@@ -1669,8 +1673,6 @@ const updateStatusDisplay = () => {
 
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
-  // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.masterEnabled) return;
   
   // 如果设置面板已存在，先移除再重新创建
   if ($(`#${SETTINGS_PANEL_ID}`).length) {
