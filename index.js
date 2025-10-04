@@ -545,9 +545,10 @@ const createPlayerWindow = async () => {
   // 总开关禁用：不创建播放器窗口（核心修复）
   if (!settings.enabled) return Promise.resolve();
   
-  // 如果播放器窗口已存在但可能损坏，先移除再重新创建
+  // 修复：如果播放器窗口已存在且功能正常，直接返回
   if ($(`#${PLAYER_WINDOW_ID}`).length) {
-    $(`#${PLAYER_WINDOW_ID}`).remove();
+    console.log(`[${EXTENSION_ID}] 播放器窗口已存在，跳过创建`);
+    return Promise.resolve();
   }
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
@@ -2073,8 +2074,8 @@ const setupSettingsEvents = () => {
       if (switchTimer) clearTimeout(switchTimer);
       // 停止视频进度更新
       stopProgressUpdate();
-      // 隐藏播放器窗口
-      $(`#${PLAYER_WINDOW_ID}`).hide();
+      // 修复：不强制隐藏播放器窗口，只更新状态
+      // $(`#${PLAYER_WINDOW_ID}`).hide(); // 移除强制隐藏
       settings.isWindowVisible = false;
       settings.isPlaying = false;
     } else {
@@ -2273,9 +2274,15 @@ const setupSettingsEvents = () => {
   });
 
   // 显示播放器
-  panel.find("#show-player").on("click", () => {
+  panel.find("#show-player").on("click", async () => {
     settings.isWindowVisible = true;
     saveSafeSettings();
+    
+    // 修复：确保窗口存在后再显示
+    if (!$(`#${PLAYER_WINDOW_ID}`).length) {
+      await createPlayerWindow();
+    }
+    
     $(`#${PLAYER_WINDOW_ID}`).show();
     if (mediaList.length === 0) {
       toastr.info("未检测到媒体，请先配置扫描目录");
