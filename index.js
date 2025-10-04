@@ -2276,16 +2276,7 @@ const setupSettingsEvents = () => {
   panel.find("#show-player").on("click", () => {
     settings.isWindowVisible = true;
     saveSafeSettings();
-    
-    // 确保播放器窗口存在，如果不存在则先创建
-    if (!$(`#${PLAYER_WINDOW_ID}`).length) {
-      createPlayerWindow();
-    }
-    
-    // 确保窗口显示状态同步
     $(`#${PLAYER_WINDOW_ID}`).show();
-    positionWindow(); // 重新定位窗口以确保显示状态正确
-    
     if (mediaList.length === 0) {
       toastr.info("未检测到媒体，请先配置扫描目录");
     } else {
