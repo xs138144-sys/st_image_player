@@ -625,13 +625,7 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.enabled) return;
-  
-  // 防止重复创建：如果播放器窗口已存在，先移除旧窗口避免事件重复绑定
-  if ($(`#${PLAYER_WINDOW_ID}`).length) {
-    console.log(`[${EXTENSION_ID}] 播放器窗口已存在，移除旧窗口避免事件重复绑定`);
-    $(`#${PLAYER_WINDOW_ID}`).remove();
-  }
+  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
@@ -1066,35 +1060,71 @@ const setupWindowEvents = () => {
     toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
   });
 
-  // 6. 播放/暂停按钮
+  // 6. 播放/暂停按钮（修复状态同步和定时器管理）
   win.find(".play-pause").on("click", function () {
     const oldIsPlaying = settings.isPlaying;
-    settings.isPlaying = !oldIsPlaying;
-    saveSafeSettings();
     const icon = $(this).find("i");
-    icon.toggleClass("fa-play fa-pause");
     const video = win.find(".image-player-video")[0];
     const isVideoVisible = video && video.style.display !== "none";
-    if (!settings.isPlaying) {
+    
+    // 先更新图标状态，确保UI立即响应
+    icon.toggleClass("fa-play fa-pause");
+    
+    if (oldIsPlaying) {
+      // 暂停逻辑：从播放状态切换到暂停状态
+      settings.isPlaying = false;
+      saveSafeSettings();
+      // 暂停逻辑：彻底清理定时器和进度更新
       clearTimeout(switchTimer);
+      switchTimer = null;
       stopProgressUpdate();
-      if (isVideoVisible && !video.paused) {
-        video.pause();
-      }
-      win.find(".control-text").text("已暂停");
-    } else {
+      
       if (isVideoVisible) {
+        // 视频暂停
+        if (!video.paused) {
+          video.pause();
+        }
+      } else {
+        // 图片暂停：确保定时器完全停止
+        clearTimeout(switchTimer);
+        switchTimer = null;
+      }
+      
+      // 更新状态文本
+      win.find(".control-text").text("已暂停");
+      console.log(`[${EXTENSION_ID}] 播放已暂停，定时器已清理`);
+    } else {
+      // 播放逻辑：从暂停状态切换到播放状态
+      settings.isPlaying = true;
+      saveSafeSettings();
+      
+      if (isVideoVisible) {
+        // 视频播放
         video.play().catch((err) => {
           console.warn("视频自动播放失败（浏览器限制）:", err);
           toastr.warning("请点击视频手动播放");
+          // 播放失败时恢复暂停状态和图标
+          settings.isPlaying = false;
+          saveSafeSettings();
+          icon.toggleClass("fa-play fa-pause"); // 恢复图标状态
+          win.find(".control-text").text("已暂停");
+        }).then(() => {
+          // 视频播放成功时更新状态文本
+          win.find(".control-text").text("播放中");
         });
         startProgressUpdate();
       } else {
+        // 图片播放：确保定时器干净重启
         clearTimeout(switchTimer);
+        switchTimer = null;
         startPlayback();
+        // 图片播放立即更新状态文本
+        win.find(".control-text").text("播放中");
       }
-      win.find(".control-text").text("播放中");
     }
+    
+    // 同步菜单状态
+    updateExtensionMenu();
   });
 
   // 7. 播放模式切换（删除外部重复代码，此处逻辑完整）
@@ -1191,8 +1221,8 @@ const setupWindowEvents = () => {
 
   // 12. 切换模式（AI检测/定时）
   win.find(".switch-mode-toggle").on("click", function () {
-    const wasDetectMode = settings.autoSwitchMode === "detect";
-    settings.autoSwitchMode = wasDetectMode ? "timer" : "detect";
+    settings.autoSwitchMode =
+      settings.autoSwitchMode === "detect" ? "timer" : "detect";
     settings.isPlaying = settings.autoSwitchMode !== null;
     saveSafeSettings();
     $(this)
@@ -1207,12 +1237,6 @@ const setupWindowEvents = () => {
     if (video) video.pause();
     stopProgressUpdate();
     clearTimeout(switchTimer);
-    
-    // 切换到AI检测模式时强制注册AI事件监听器
-    if (!wasDetectMode && settings.autoSwitchMode === "detect") {
-      registerAIEventListeners(true);
-    }
-    
     if (settings.isPlaying && settings.autoSwitchMode === "timer") {
       startPlayback();
     }
@@ -1311,6 +1335,7 @@ const startPlayback = () => {
     settings.autoSwitchMode !== "timer"
   ) {
     clearTimeout(switchTimer);
+    switchTimer = null;
     return;
   }
 
@@ -1320,6 +1345,7 @@ const startPlayback = () => {
 
   // 核心：无论视频/图片，先清除旧定时器，再执行逻辑（避免叠加）
   clearTimeout(switchTimer);
+  switchTimer = null;
 
   // 视频播放逻辑（不变，确保定时器续期）
   if (isVideoVisible) {
@@ -1634,25 +1660,13 @@ const showMedia = async (direction) => {
       settings.playMode === "random"
         ? settings.randomPlayedIndices.length
         : currentMediaIndex + 1;
-    
-    // 根据播放状态显示不同的控制栏文本
-    if (settings.isPlaying) {
-      win
-        .find(".control-text")
-        .text(
-          `${
-            settings.playMode === "random" ? "随机模式" : "顺序模式"
-          }: ${currentCount}/${totalCount}(${mediaType}) - 播放中`
-        );
-    } else {
-      win
-        .find(".control-text")
-        .text(
-          `${
-            settings.playMode === "random" ? "随机模式" : "顺序模式"
-          }: ${currentCount}/${totalCount}(${mediaType}) - 已暂停`
-        );
-    }
+    win
+      .find(".control-text")
+      .text(
+        `${
+          settings.playMode === "random" ? "随机模式" : "顺序模式"
+        }: ${currentCount}/${totalCount}(${mediaType})`
+      );
 
     retryCount = 0;
     
@@ -1760,13 +1774,7 @@ const showMedia = async (direction) => {
 const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
-  
-  console.log(`[${EXTENSION_ID}] AI检测条件检查: enabled=${settings.enabled}, isMediaLoading=${settings.isMediaLoading}`);
-  
-  if (!settings.enabled || settings.isMediaLoading) {
-    console.log(`[${EXTENSION_ID}] 条件不满足，跳过AI切换`);
-    return;
-  }
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1774,42 +1782,28 @@ const onAIResponse = () => {
     return;
   }
 
-  console.log(`[${EXTENSION_ID}] AI检测模式检查: autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
-  
   if (
     settings.autoSwitchMode !== "detect" ||
     !settings.aiDetectEnabled ||
     !settings.isWindowVisible
   ) {
-    console.log(`[${EXTENSION_ID}] AI检测模式条件不满足，跳过切换`);
     return;
   }
 
   const now = performance.now();
-  const timeDiff = now - settings.lastAISwitchTime;
-  console.log(`[${EXTENSION_ID}] 冷却时间检查: 当前时间=${now}, 上次切换时间=${settings.lastAISwitchTime}, 时间差=${timeDiff}, 冷却时间=${settings.aiResponseCooldown}`);
-  
-  if (timeDiff < settings.aiResponseCooldown) {
-    console.log(`[${EXTENSION_ID}] 冷却时间未到，跳过切换`);
+  if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
     return;
   }
 
   settings.lastAISwitchTime = now;
   saveSafeSettings();
-  console.log(`[${EXTENSION_ID}] AI回复触发媒体切换，调用showMedia("next")`);
   showMedia("next");
+  console.log(`[${EXTENSION_ID}] AI回复触发媒体切换`);
 };
 
 const onPlayerMessage = () => {
-  console.log(`[${EXTENSION_ID}] 检测到玩家消息事件触发(来自SillyTavern)`);
   const settings = getExtensionSettings();
-  
-  console.log(`[${EXTENSION_ID}] 玩家检测条件检查: enabled=${settings.enabled}, isMediaLoading=${settings.isMediaLoading}`);
-  
-  if (!settings.enabled || settings.isMediaLoading) {
-    console.log(`[${EXTENSION_ID}] 条件不满足，跳过玩家切换`);
-    return;
-  }
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1817,30 +1811,23 @@ const onPlayerMessage = () => {
     return;
   }
 
-  console.log(`[${EXTENSION_ID}] 玩家检测模式检查: autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
-  
   if (
     settings.autoSwitchMode !== "detect" ||
     !settings.playerDetectEnabled ||
     !settings.isWindowVisible
   ) {
-    console.log(`[${EXTENSION_ID}] 玩家检测模式条件不满足，跳过切换`);
     return;
   }
 
   const now = performance.now();
-  const timeDiff = now - settings.lastAISwitchTime;
-  console.log(`[${EXTENSION_ID}] 冷却时间检查: 当前时间=${now}, 上次切换时间=${settings.lastAISwitchTime}, 时间差=${timeDiff}, 冷却时间=${settings.aiResponseCooldown}`);
-  
-  if (timeDiff < settings.aiResponseCooldown) {
-    console.log(`[${EXTENSION_ID}] 冷却时间未到，跳过切换`);
+  if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
     return;
   }
 
   settings.lastAISwitchTime = now;
   saveSafeSettings();
-  console.log(`[${EXTENSION_ID}] 玩家消息触发媒体切换，调用showMedia("next")`);
   showMedia("next");
+  console.log(`[${EXTENSION_ID}] 玩家消息触发媒体切换`);
 };
 
 // ==================== 服务轮询（无修改） ====================
@@ -2472,8 +2459,6 @@ const setupSettingsEvents = () => {
     } else {
       settings.autoSwitchMode = "detect";
       settings.isPlaying = true;
-      // 强制注册AI事件监听器，确保AI检测功能正常工作
-      registerAIEventListeners(true);
     }
 
     saveSafeSettings();
@@ -2605,24 +2590,6 @@ const setupSettingsEvents = () => {
         $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(isChecked);
         adjustVideoControlsLayout();
       }
-
-      // AI检测启用时强制注册AI事件监听器
-      if ($(this).attr("id") === "player-ai-detect") {
-        const isChecked = $(this).prop("checked");
-        settings.aiDetectEnabled = isChecked;
-        if (isChecked && settings.autoSwitchMode === "detect") {
-          registerAIEventListeners(true);
-        }
-      }
-
-      // 玩家检测启用时强制注册AI事件监听器
-      if ($(this).attr("id") === "player-player-detect") {
-        const isChecked = $(this).prop("checked");
-        settings.playerDetectEnabled = isChecked;
-        if (isChecked && settings.autoSwitchMode === "detect") {
-          registerAIEventListeners(true);
-        }
-      }
     });
 }; // 闭合 setupSettingsEvents 函数
 
@@ -2706,36 +2673,6 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-// ==================== AI检测调试函数 ====================
-window.checkAIDetectionStatus = () => {
-  console.log('=== AI检测状态检查 ===');
-  console.log('eventSource:', eventSource);
-  console.log('event_types:', event_types);
-  console.log('event_types.MESSAGE_RECEIVED:', event_types?.MESSAGE_RECEIVED);
-  console.log('event_types.MESSAGE_SENT:', event_types?.MESSAGE_SENT);
-  
-  const settings = getExtensionSettings();
-  console.log('AI检测模式启用:', settings.autoSwitchMode === 'detect');
-  console.log('AI回复检测启用:', settings.aiDetectEnabled);
-  console.log('玩家消息检测启用:', settings.playerDetectEnabled);
-  console.log('AI事件已注册:', settings.aiEventRegistered);
-  console.log('播放器窗口可见:', settings.isWindowVisible);
-  console.log('播放器启用:', settings.enabled);
-  
-  return {
-    eventSource: !!eventSource,
-    event_types: !!event_types,
-    MESSAGE_RECEIVED: event_types?.MESSAGE_RECEIVED,
-    MESSAGE_SENT: event_types?.MESSAGE_SENT,
-    aiMode: settings.autoSwitchMode === 'detect',
-    aiDetectEnabled: settings.aiDetectEnabled,
-    playerDetectEnabled: settings.playerDetectEnabled,
-    aiEventRegistered: settings.aiEventRegistered,
-    windowVisible: settings.isWindowVisible,
-    enabled: settings.enabled
-  };
-};
-
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
@@ -2744,14 +2681,6 @@ const registerAIEventListeners = () => {
   let retries = 0;
   const tryRegister = () => {
     try {
-      console.log(`[st_image_player] ==== AI事件注册调试信息 ====`);
-      console.log(`[st_image_player] eventSource 类型:`, typeof eventSource);
-      console.log(`[st_image_player] eventSource 值:`, eventSource);
-      console.log(`[st_image_player] event_types 类型:`, typeof event_types);
-      console.log(`[st_image_player] event_types 值:`, event_types);
-      console.log(`[st_image_player] MESSAGE_RECEIVED:`, event_types?.MESSAGE_RECEIVED);
-      console.log(`[st_image_player] MESSAGE_SENT:`, event_types?.MESSAGE_SENT);
-      
       console.log(
         `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
       );
@@ -2761,11 +2690,6 @@ const registerAIEventListeners = () => {
         !event_types.MESSAGE_RECEIVED ||
         !event_types.MESSAGE_SENT
       ) {
-        console.error(`[st_image_player] 依赖检查失败详情:`);
-        console.error(`- eventSource:`, eventSource);
-        console.error(`- event_types:`, event_types);
-        console.error(`- MESSAGE_RECEIVED:`, event_types?.MESSAGE_RECEIVED);
-        console.error(`- MESSAGE_SENT:`, event_types?.MESSAGE_SENT);
         throw new Error(
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
         );
@@ -2784,36 +2708,26 @@ const registerAIEventListeners = () => {
       };
       // AI回复事件（使用兼容的绑定方法）
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
-        console.log(`[${EXTENSION_ID}] MESSAGE_RECEIVED事件被触发`);
         const settings = getExtensionSettings();
-        console.log(`[${EXTENSION_ID}] 事件触发条件检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isWindowVisible
         ) {
-          console.log(`[${EXTENSION_ID}] 条件满足，调用onAIResponse()`);
           onAIResponse();
-        } else {
-          console.log(`[${EXTENSION_ID}] 条件不满足，跳过AI响应`);
         }
       });
       // 玩家消息事件（同上）
       bindEvent(event_types.MESSAGE_SENT, () => {
-        console.log(`[${EXTENSION_ID}] MESSAGE_SENT事件被触发`);
         const settings = getExtensionSettings();
-        console.log(`[${EXTENSION_ID}] 事件触发条件检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isWindowVisible
         ) {
-          console.log(`[${EXTENSION_ID}] 条件满足，调用onPlayerMessage()`);
           onPlayerMessage();
-        } else {
-          console.log(`[${EXTENSION_ID}] 条件不满足，跳过玩家响应`);
         }
       });
       // 标记注册成功，避免重复尝试
