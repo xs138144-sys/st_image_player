@@ -543,7 +543,7 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.enabled) return;
+  if (!settings.enabled) return Promise.resolve();
   
   // 如果播放器窗口已存在但可能损坏，先移除再重新创建
   if ($(`#${PLAYER_WINDOW_ID}`).length) {
@@ -720,6 +720,7 @@ const createPlayerWindow = async () => {
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video) video.volume = settings.videoVolume;
   console.log(`[${EXTENSION_ID}] 播放器窗口创建完成`);
+  return Promise.resolve();
 };
 
 const positionWindow = () => {
@@ -1275,6 +1276,13 @@ const applyTransitionEffect = (imgElement, effect) => {
 const showMedia = async (direction) => {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
+  
+  // 检查播放器窗口是否存在，如果不存在则先创建
+  if (!win.length) {
+    console.warn(`[${EXTENSION_ID}] 播放器窗口不存在，尝试创建`);
+    await createPlayerWindow();
+  }
+  
   let imgElement = win.find(".image-player-img")[0];
   let videoElement = win.find(".image-player-video")[0];
   const loadingElement = win.find(".loading-animation")[0];
