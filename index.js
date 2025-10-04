@@ -80,8 +80,20 @@ const getExtensionSettings = () => {
   // 将默认设置写入全局，供后续保存使用
   globalSettings[EXTENSION_ID] = defaultSettings;
   
-  // 关键修复：立即保存默认设置到本地存储
-  saveSafeSettings();
+  // 关键修复：延迟保存机制 - 等待SillyTavern环境完全初始化
+  function delayedSaveSettings() {
+    // 检查saveSettingsDebounced函数是否可用
+    if (typeof saveSettingsDebounced === 'function') {
+      saveSafeSettings();
+      console.log(`[${EXTENSION_ID}] 设置已立即保存到localStorage`);
+    } else {
+      // 如果saveSettingsDebounced不可用，延迟重试（模仿LittleWhiteBox的加载机制）
+      setTimeout(delayedSaveSettings, 100);
+    }
+  }
+  
+  // 立即尝试保存设置
+  delayedSaveSettings();
   
   return defaultSettings;
 };
