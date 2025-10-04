@@ -1760,7 +1760,13 @@ const showMedia = async (direction) => {
 const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
-  if (!settings.enabled || settings.isMediaLoading) return;
+  
+  console.log(`[${EXTENSION_ID}] AI检测条件检查: enabled=${settings.enabled}, isMediaLoading=${settings.isMediaLoading}`);
+  
+  if (!settings.enabled || settings.isMediaLoading) {
+    console.log(`[${EXTENSION_ID}] 条件不满足，跳过AI切换`);
+    return;
+  }
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1768,28 +1774,42 @@ const onAIResponse = () => {
     return;
   }
 
+  console.log(`[${EXTENSION_ID}] AI检测模式检查: autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
+  
   if (
     settings.autoSwitchMode !== "detect" ||
     !settings.aiDetectEnabled ||
     !settings.isWindowVisible
   ) {
+    console.log(`[${EXTENSION_ID}] AI检测模式条件不满足，跳过切换`);
     return;
   }
 
   const now = performance.now();
-  if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
+  const timeDiff = now - settings.lastAISwitchTime;
+  console.log(`[${EXTENSION_ID}] 冷却时间检查: 当前时间=${now}, 上次切换时间=${settings.lastAISwitchTime}, 时间差=${timeDiff}, 冷却时间=${settings.aiResponseCooldown}`);
+  
+  if (timeDiff < settings.aiResponseCooldown) {
+    console.log(`[${EXTENSION_ID}] 冷却时间未到，跳过切换`);
     return;
   }
 
   settings.lastAISwitchTime = now;
   saveSafeSettings();
+  console.log(`[${EXTENSION_ID}] AI回复触发媒体切换，调用showMedia("next")`);
   showMedia("next");
-  console.log(`[${EXTENSION_ID}] AI回复触发媒体切换`);
 };
 
 const onPlayerMessage = () => {
+  console.log(`[${EXTENSION_ID}] 检测到玩家消息事件触发(来自SillyTavern)`);
   const settings = getExtensionSettings();
-  if (!settings.enabled || settings.isMediaLoading) return;
+  
+  console.log(`[${EXTENSION_ID}] 玩家检测条件检查: enabled=${settings.enabled}, isMediaLoading=${settings.isMediaLoading}`);
+  
+  if (!settings.enabled || settings.isMediaLoading) {
+    console.log(`[${EXTENSION_ID}] 条件不满足，跳过玩家切换`);
+    return;
+  }
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1797,23 +1817,30 @@ const onPlayerMessage = () => {
     return;
   }
 
+  console.log(`[${EXTENSION_ID}] 玩家检测模式检查: autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
+  
   if (
     settings.autoSwitchMode !== "detect" ||
     !settings.playerDetectEnabled ||
     !settings.isWindowVisible
   ) {
+    console.log(`[${EXTENSION_ID}] 玩家检测模式条件不满足，跳过切换`);
     return;
   }
 
   const now = performance.now();
-  if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
+  const timeDiff = now - settings.lastAISwitchTime;
+  console.log(`[${EXTENSION_ID}] 冷却时间检查: 当前时间=${now}, 上次切换时间=${settings.lastAISwitchTime}, 时间差=${timeDiff}, 冷却时间=${settings.aiResponseCooldown}`);
+  
+  if (timeDiff < settings.aiResponseCooldown) {
+    console.log(`[${EXTENSION_ID}] 冷却时间未到，跳过切换`);
     return;
   }
 
   settings.lastAISwitchTime = now;
   saveSafeSettings();
+  console.log(`[${EXTENSION_ID}] 玩家消息触发媒体切换，调用showMedia("next")`);
   showMedia("next");
-  console.log(`[${EXTENSION_ID}] 玩家消息触发媒体切换`);
 };
 
 // ==================== 服务轮询（无修改） ====================
@@ -2744,26 +2771,36 @@ const registerAIEventListeners = () => {
       };
       // AI回复事件（使用兼容的绑定方法）
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
+        console.log(`[${EXTENSION_ID}] MESSAGE_RECEIVED事件被触发`);
         const settings = getExtensionSettings();
+        console.log(`[${EXTENSION_ID}] 事件触发条件检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isWindowVisible
         ) {
+          console.log(`[${EXTENSION_ID}] 条件满足，调用onAIResponse()`);
           onAIResponse();
+        } else {
+          console.log(`[${EXTENSION_ID}] 条件不满足，跳过AI响应`);
         }
       });
       // 玩家消息事件（同上）
       bindEvent(event_types.MESSAGE_SENT, () => {
+        console.log(`[${EXTENSION_ID}] MESSAGE_SENT事件被触发`);
         const settings = getExtensionSettings();
+        console.log(`[${EXTENSION_ID}] 事件触发条件检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isWindowVisible
         ) {
+          console.log(`[${EXTENSION_ID}] 条件满足，调用onPlayerMessage()`);
           onPlayerMessage();
+        } else {
+          console.log(`[${EXTENSION_ID}] 条件不满足，跳过玩家响应`);
         }
       });
       // 标记注册成功，避免重复尝试
