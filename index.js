@@ -2538,6 +2538,27 @@ const addMenuButton = () => {
 
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
+  // 先初始化全局设置容器（兼容老版本存储）
+  if (typeof window.extension_settings === "undefined") {
+    window.extension_settings = {};
+  }
+  if (!window.extension_settings[EXTENSION_ID]) {
+    // 关键修复：直接使用defaultSettings而不是通过getExtensionSettings()获取
+    // 避免循环依赖和双菜单冲突问题
+    window.extension_settings[EXTENSION_ID] = JSON.parse(
+      JSON.stringify(defaultSettings)
+    );
+    // 补充修复相关字段（覆盖默认值）
+    window.extension_settings[EXTENSION_ID].isMediaLoading = false;
+    window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
+    window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
+    window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
+    window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
+    // 修复：将save和log缩进进if块内，且删除多余的"};"
+    saveSafeSettings();
+    console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
+  }
+  
   const settings = getExtensionSettings();
 
   // 总开关禁用：终止初始化
@@ -2549,26 +2570,6 @@ const initExtension = async () => {
   }
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
-    // 1. 初始化全局设置容器（兼容老版本存储）
-    if (typeof window.extension_settings === "undefined") {
-      window.extension_settings = {};
-    }
-    if (!window.extension_settings[EXTENSION_ID]) {
-      // 关键修复：直接使用defaultSettings而不是通过getExtensionSettings()获取
-      // 避免循环依赖和双菜单冲突问题
-      window.extension_settings[EXTENSION_ID] = JSON.parse(
-        JSON.stringify(defaultSettings)
-      );
-      // 补充修复相关字段（覆盖默认值）
-      window.extension_settings[EXTENSION_ID].isMediaLoading = false;
-      window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
-      window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
-      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
-      window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
-      // 修复：将save和log缩进进if块内，且删除多余的“};”
-      saveSafeSettings();
-      console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
-    }
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
     addMenuButton();
     await createPlayerWindow();
