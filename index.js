@@ -229,8 +229,11 @@ const createMinimalSettingsPanel = () => {
 
       if (settings.masterEnabled) {
         // 启用扩展
-        $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
-        initExtension();
+        $(`#${SETTINGS_PANEL_ID}-minimal`).remove(); // 先移除最小面板
+        // 强制创建完整设置面板
+        setTimeout(() => {
+          initExtension();
+        }, 100); // 延迟一点，确保DOM刷新
         toastr.success("媒体播放器扩展已启用");
       }
     }
@@ -1658,7 +1661,12 @@ const updateStatusDisplay = () => {
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
+  if (!settings.masterEnabled) return;
+  
+  // 如果设置面板已存在，先移除再重新创建
+  if ($(`#${SETTINGS_PANEL_ID}`).length) {
+    $(`#${SETTINGS_PANEL_ID}`).remove();
+  }
 
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
