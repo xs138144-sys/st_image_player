@@ -1249,8 +1249,8 @@ const startPlayback = () => {
         settings.isPlaying &&
         settings.autoSwitchMode === "timer"
       ) {
-        // 额外防护：避免定时器延迟累积（用当前时间计算准确间隔）
-        const delay = Math.max(1000, settings.switchInterval); // 最低1秒间隔，防止卡死
+        // 优化定时器逻辑：确保预加载完成后再切换，避免闪烁
+        const delay = Math.max(2000, settings.switchInterval); // 最低2秒间隔，给预加载足够时间
         switchTimer = setTimeout(startPlayback, delay);
       }
     }
@@ -1447,8 +1447,11 @@ const showMedia = async (direction) => {
     if (mediaType === "image") {
       applyTransitionEffect(imgElement, settings.transitionEffect);
       if (preloadedMedia && preloadedMedia.src === mediaUrl) {
+        // 使用预加载的图片，避免重新加载
         $(imgElement).attr("src", mediaUrl).show();
+        console.log(`[${EXTENSION_ID}] 使用预加载图片: ${mediaUrl}`);
       } else {
+        // 没有预加载，正常加载图片
         const img = new Image();
         img.src = mediaUrl;
         await new Promise((resolve, reject) => {
@@ -1456,6 +1459,7 @@ const showMedia = async (direction) => {
           img.onerror = () => reject(new Error("图片加载失败"));
         });
         $(imgElement).attr("src", mediaUrl).show();
+        console.log(`[${EXTENSION_ID}] 直接加载图片: ${mediaUrl}`);
       }
       $(videoElement).hide();
     } else if (mediaType === "video") {
@@ -1513,32 +1517,41 @@ const showMedia = async (direction) => {
       );
 
     retryCount = 0;
-    let nextUrl, nextType;
-    if (settings.playMode === "random") {
-      const nextIndex = getRandomMediaIndex();
-      if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
-        const nextMedia = settings.randomMediaList[nextIndex];
+    
+    // 异步执行预加载，不阻塞当前媒体显示
+    setTimeout(async () => {
+      let nextUrl, nextType;
+      if (settings.playMode === "random") {
+        const nextIndex = getRandomMediaIndex();
+        if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
+          const nextMedia = settings.randomMediaList[nextIndex];
+          nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
+            nextMedia.rel_path
+          )}`;
+          nextType = nextMedia.media_type;
+        }
+      } else {
+        const nextIndex = (currentMediaIndex + 1) % mediaList.length;
+        const nextMedia = mediaList[nextIndex];
         nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
           nextMedia.rel_path
         )}`;
         nextType = nextMedia.media_type;
       }
-    } else {
-      const nextIndex = (currentMediaIndex + 1) % mediaList.length;
-      const nextMedia = mediaList[nextIndex];
-      nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-        nextMedia.rel_path
-      )}`;
-      nextType = nextMedia.media_type;
-    }
 
-    if (nextUrl && nextType) {
-      preloadedMedia = await preloadMediaItem(nextUrl, nextType);
-      if (!preloadedMedia) {
-        console.warn(`[${EXTENSION_ID}] 预加载媒体失败: ${nextUrl}`);
-        // 可选：不重置 preloadedMedia，保留上一次有效预加载
+      if (nextUrl && nextType) {
+        try {
+          preloadedMedia = await preloadMediaItem(nextUrl, nextType);
+          if (preloadedMedia) {
+            console.log(`[${EXTENSION_ID}] 预加载成功: ${nextUrl}`);
+          } else {
+            console.warn(`[${EXTENSION_ID}] 预加载媒体失败: ${nextUrl}`);
+          }
+        } catch (error) {
+          console.warn(`[${EXTENSION_ID}] 预加载异常: ${error.message}`);
+        }
       }
-    }
+    }, 100); // 延迟100ms执行预加载，确保当前媒体显示优先
 
     return Promise.resolve();
   } catch (e) {
