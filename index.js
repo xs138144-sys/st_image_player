@@ -78,16 +78,22 @@ const getExtensionSettings = () => {
 
   // 将默认设置写入全局，供后续保存使用
   globalSettings[EXTENSION_ID] = defaultSettings;
+  window.extension_settings = globalSettings; // 修复：确保全局对象同步
   return defaultSettings;
 };
 
 const saveSafeSettings = () => {
+  // 修复：每次保存都强制同步到全局对象
+  const settings = getExtensionSettings();
+  if (typeof window.extension_settings === "undefined") {
+    window.extension_settings = {};
+  }
+  window.extension_settings[EXTENSION_ID] = settings;
   const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
   if (saveFn && typeof saveFn === "function") {
     saveFn();
     console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+      `[${EXTENSION_ID}] 设置已保存: enabled=${settings.enabled}`
     );
   }
 };
@@ -910,7 +916,7 @@ const setupWindowEvents = () => {
     } else {
       if (isVideoVisible) {
         video.play().catch((err) => {
-          console.warn("视频自动播放失败（浏览器限制）:", err);
+          console.warn("视频自动播放失败:", err);
           toastr.warning("请点击视频手动播放");
         });
         startProgressUpdate();
