@@ -1150,24 +1150,8 @@ const setupWindowEvents = () => {
     settings.showVideoControls = !settings.showVideoControls;
     saveSafeSettings();
     
-    // 在有边框模式下，直接处理高度调整，避免时序问题
-    if (!settings.hideBorder) {
-      const win = $(`#${PLAYER_WINDOW_ID}`);
-      const controls = win.find(".image-player-controls");
-      
-      if (settings.showVideoControls) {
-        // 显示控制栏：先调整容器高度，再显示控制栏
-        win.find(".image-container").css("height", "calc(100% - 40px)");
-        controls.css({ display: "block", bottom: 0, opacity: 1 });
-      } else {
-        // 隐藏控制栏：先隐藏控制栏，再调整容器高度
-        controls.hide();
-        win.find(".image-container").css("height", "100%");
-      }
-    } else {
-      // 隐藏边框模式下使用原来的positionWindow逻辑
-      positionWindow();
-    }
+    // 使用positionWindow函数来正确设置控制栏显示状态
+    positionWindow();
     
     // 同步按钮样式和设置面板状态
     $(this).toggleClass("active", settings.showVideoControls);
