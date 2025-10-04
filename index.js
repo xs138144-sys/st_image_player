@@ -364,7 +364,7 @@ const refreshMediaList = async () => {
 const initWebSocket = () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不初始化WebSocket（核心修复）
-  if (!settings.masterEnabled || ws) return;
+  if (!settings.enabled || ws) return;
 
   try {
     const wsUrl =
@@ -402,7 +402,7 @@ const initWebSocket = () => {
       console.log(`[${EXTENSION_ID}] WebSocket连接关闭`);
       ws = null;
       // 仅在启用时尝试重连
-      if (settings.masterEnabled) {
+      if (settings.enabled) {
         wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
       }
     };
@@ -411,14 +411,14 @@ const initWebSocket = () => {
       console.error(`[${EXTENSION_ID}] WebSocket错误`, e);
       ws = null;
       // 仅在启用时尝试重连
-      if (settings.masterEnabled) {
+      if (settings.enabled) {
         wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
       }
     };
 
     // 心跳检测（仅在启用时发送）
     setInterval(() => {
-      if (ws?.readyState === WebSocket.OPEN && settings.masterEnabled) {
+      if (ws?.readyState === WebSocket.OPEN && settings.enabled) {
         ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
       }
     }, 30000);
@@ -426,7 +426,7 @@ const initWebSocket = () => {
     console.error(`[${EXTENSION_ID}] WebSocket初始化失败`, e);
     ws = null;
     // 仅在启用时尝试重连
-    if (settings.masterEnabled) {
+    if (settings.enabled) {
       wsReconnectTimer = setTimeout(initWebSocket, wsReconnectDelay);
     }
   }
@@ -1142,7 +1142,7 @@ const startPlayback = () => {
   const settings = getExtensionSettings();
   // 严格前置判断：排除无效状态，避免定时器残留
   if (
-    !settings.masterEnabled ||
+    !settings.enabled ||
     !settings.isPlaying ||
     settings.autoSwitchMode !== "timer"
   ) {
@@ -1183,7 +1183,7 @@ const startPlayback = () => {
     } finally {
       // 关键：无论成功/失败，只要仍在“定时播放+播放中”，就强制续期
       if (
-        settings.masterEnabled &&
+        settings.enabled &&
         settings.isPlaying &&
         settings.autoSwitchMode === "timer"
       ) {
@@ -1482,7 +1482,7 @@ const showMedia = async (direction) => {
     else if (e.message.includes("无可用媒体"))
       errorMsg = `无可用${filterType === "all" ? "媒体" : filterType}文件`;
 
-    if (retryCount < 3 && settings.masterEnabled) {
+    if (retryCount < 3 && settings.enabled) {
       retryCount++;
       toastr.warning(`${errorMsg}，重试中（${retryCount}/3)`);
       setTimeout(() => showMedia(direction), 3000);
@@ -1502,7 +1502,7 @@ const showMedia = async (direction) => {
 const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
-  if (!settings.masterEnabled || settings.isMediaLoading) return;
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1531,7 +1531,7 @@ const onAIResponse = () => {
 
 const onPlayerMessage = () => {
   const settings = getExtensionSettings();
-  if (!settings.masterEnabled || settings.isMediaLoading) return;
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1562,7 +1562,7 @@ const onPlayerMessage = () => {
 const startPollingService = () => {
   const settings = getExtensionSettings();
   // 总开关禁用：停止轮询并清理定时器（核心修复）
-  if (!settings.masterEnabled) {
+  if (!settings.enabled) {
     if (pollingTimer) clearTimeout(pollingTimer);
     return;
   }
@@ -1588,7 +1588,7 @@ const startPollingService = () => {
       console.error(`[${EXTENSION_ID}] 服务轮询失败`, e);
     } finally {
       // 仅在启用时续设定时器
-      if (settings.masterEnabled) {
+      if (settings.enabled) {
         pollingTimer = setTimeout(poll, settings.pollingInterval);
       }
     }
@@ -1990,7 +1990,7 @@ const setupSettingsEvents = () => {
 
   const saveCurrentSettings = () => {
     // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
-    settings.masterEnabled = panel.find("#extension-enabled").prop("checked");
+    settings.enabled = panel.find("#extension-enabled").prop("checked");
 
     // 2. 同步其他基础设置
     settings.serviceUrl = panel.find("#player-service-url").val().trim();
@@ -2040,7 +2040,7 @@ const setupSettingsEvents = () => {
     saveSafeSettings();
 
     // 4. 总开关联动：禁用时清理所有资源（核心修复）
-    if (!settings.masterEnabled) {
+    if (!settings.enabled) {
       // 停止服务轮询
       if (pollingTimer) clearTimeout(pollingTimer);
       // 关闭WebSocket连接
@@ -2386,7 +2386,7 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-// ==================== AI事件注册（增强兼容性版本） ====================
+// ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
   const maxRetries = 8;
@@ -2394,29 +2394,9 @@ const registerAIEventListeners = () => {
   let retries = 0;
   const tryRegister = () => {
     try {
-      // 增强依赖检查：尝试多种方式获取eventSource和event_types
-      let eventSource = window.eventSource || window.event_manager?.eventSource || window.event_manager;
-      let event_types = window.event_types || window.event_manager?.event_types;
-      
       console.log(
-        `[st_image_player] 增强依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
+        `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
       );
-      
-      // 如果依赖不存在，尝试从全局对象查找
-      if (!eventSource || !event_types) {
-        // 遍历全局对象查找可能的event相关对象
-        for (let key in window) {
-          if (key.toLowerCase().includes('event') && window[key] && typeof window[key] === 'object') {
-            if (!eventSource && (window[key].addEventListener || window[key].on)) {
-              eventSource = window[key];
-            }
-            if (!event_types && window[key].MESSAGE_RECEIVED) {
-              event_types = window[key];
-            }
-          }
-        }
-      }
-      
       if (
         !eventSource ||
         !event_types ||
@@ -2443,7 +2423,7 @@ const registerAIEventListeners = () => {
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
-          settings.masterEnabled &&
+          settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isWindowVisible
@@ -2455,7 +2435,7 @@ const registerAIEventListeners = () => {
       bindEvent(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
-          settings.masterEnabled &&
+          settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isWindowVisible
@@ -2578,21 +2558,18 @@ const initExtension = async () => {
   }
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
-    // 1. 初始化全局设置容器（兼容老版本存储）
-    if (typeof window.extension_settings === "undefined") {
-      window.extension_settings = {};
-    }
-    if (!window.extension_settings[EXTENSION_ID]) {
+    // 1. 使用导入的extension_settings对象进行设置初始化（修复冲突）
+    if (!extension_settings[EXTENSION_ID]) {
       // 用JSON深拷贝快速覆盖所有默认设置，避免手动复制遗漏
-      window.extension_settings[EXTENSION_ID] = JSON.parse(
+      extension_settings[EXTENSION_ID] = JSON.parse(
         JSON.stringify(settings)
       );
       // 补充修复相关字段（覆盖默认值）
-      window.extension_settings[EXTENSION_ID].isMediaLoading = false;
-      window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
-      window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
-      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
-      window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
+      extension_settings[EXTENSION_ID].isMediaLoading = false;
+      extension_settings[EXTENSION_ID].currentRandomIndex = -1;
+      extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
+      extension_settings[EXTENSION_ID].aiEventRegistered = false;
+      extension_settings[EXTENSION_ID].filterTriggerSource = null;
       // 修复：将save和log缩进进if块内，且删除多余的“};”
       saveSafeSettings();
       console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
@@ -2671,7 +2648,7 @@ jQuery(() => {
         clearInterval(checkTimer);
         const settings = getExtensionSettings();
         console.log(
-          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.masterEnabled}`
+          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
         );
 
         // 根据总开关状态决定是否初始化扩展
