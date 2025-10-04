@@ -2319,6 +2319,17 @@ const setupSettingsEvents = () => {
       .find("#player-slideshow-mode")
       .prop("disabled", settings.playMode === "random");
     updateExtensionMenu();
+
+    // 修复：启用播放器窗口后，若当前为AI检测模式，重新注册AI事件监听
+    if (
+      settings.enabled && 
+      settings.autoSwitchMode === "detect" && 
+      !settings.aiEventRegistered
+    ) {
+      registerAIEventListeners();
+      settings.isPlaying = true;
+      saveSafeSettings();
+    }
   };
 
   // 刷新服务
@@ -2550,6 +2561,20 @@ const setupSettingsEvents = () => {
         );
         $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(isChecked);
         adjustVideoControlsLayout();
+      }
+
+      // 修复：启用播放器窗口后，若当前为AI检测模式，重新注册AI事件监听
+      if ($(this).attr("id") === "extension-enabled") {
+        const isEnabled = $(this).prop("checked");
+        if (
+          isEnabled && 
+          settings.autoSwitchMode === "detect" && 
+          !settings.aiEventRegistered
+        ) {
+          registerAIEventListeners();
+          settings.isPlaying = true;
+          saveSafeSettings();
+        }
       }
     });
 }; // 闭合 setupSettingsEvents 函数
