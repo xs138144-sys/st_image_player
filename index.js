@@ -1710,6 +1710,16 @@ const createSettingsPanel = async () => {
                 <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
               </label>
             </div>
+            
+            <!-- 启用播放器窗口 -->
+            <div class="settings-row">
+              <label class="checkbox_label" style="min-width:auto;">
+                <input type="checkbox" id="extension-enabled" ${
+                  settings.enabled ? "checked" : ""
+                } />
+                <i class="fa-solid fa-play"></i>启用播放器窗口
+              </label>
+            </div>
                         
                         <!-- 服务状态 -->
                         <div class="settings-row">
