@@ -826,8 +826,10 @@ const positionWindow = () => {
     .toggleClass("no-border", settings.hideBorder);
 
   // 视频控制栏显示逻辑
+  const controls = win.find(".video-controls");
+  
   if (settings.showVideoControls) {
-    const controls = win.find(".video-controls");
+    controls.show(); // 确保显示控制栏
     
     if (settings.hideBorder) {
       // 隐藏边框模式：鼠标悬停显示
@@ -851,7 +853,7 @@ const positionWindow = () => {
     }
   } else {
     // 如果设置中关闭了视频控制栏，确保隐藏
-    win.find(".video-controls").hide();
+    controls.hide();
   }
 
   adjustVideoControlsLayout();
@@ -1139,8 +1141,10 @@ const setupWindowEvents = () => {
     settings.showVideoControls = !settings.showVideoControls;
     saveSafeSettings();
     $(this).toggleClass("active", settings.showVideoControls);
-    win.find(".video-controls").toggle(settings.showVideoControls);
-    adjustVideoControlsLayout();
+    
+    // 使用positionWindow函数来正确设置控制栏显示状态
+    positionWindow();
+    
     $(`#${SETTINGS_PANEL_ID} #player-show-video-controls`).prop(
       "checked",
       settings.showVideoControls

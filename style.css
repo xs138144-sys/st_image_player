@@ -725,10 +725,12 @@
 .image-player-window.no-border .video-controls {
     bottom: -40px;
     transition: bottom 0.3s ease;
+    opacity: 0;
 }
 
 .image-player-window.no-border .image-container:hover .video-controls {
     bottom: 0;
+    opacity: 1;
 }
 
 .image-player-window.no-border .image-info {
