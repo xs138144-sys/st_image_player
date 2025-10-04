@@ -547,11 +547,8 @@ const bindVideoControls = () => {
 // ==================== 播放器窗口（修复媒体筛选同步） ====================
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
-  // 播放器窗口已存在则跳过创建
-  if ($(`#${PLAYER_WINDOW_ID}`).length) return;
-  
-  // 关键修复：确保播放器窗口能够正常创建，不依赖settings.enabled检查
-  // 播放器窗口应该独立于设置保存功能
+  // 总开关禁用：不创建播放器窗口（核心修复）
+  if (!settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
@@ -1144,8 +1141,8 @@ const setupWindowEvents = () => {
 const startPlayback = () => {
   const settings = getExtensionSettings();
   // 严格前置判断：排除无效状态，避免定时器残留
-  // 关键修复：移除settings.enabled检查，确保定时播放功能正常工作
   if (
+    !settings.enabled ||
     !settings.isPlaying ||
     settings.autoSwitchMode !== "timer"
   ) {
@@ -1505,8 +1502,7 @@ const showMedia = async (direction) => {
 const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
-  // 关键修复：移除settings.enabled检查，确保AI检测功能正常工作
-  if (settings.isMediaLoading) return;
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -1535,8 +1531,7 @@ const onAIResponse = () => {
 
 const onPlayerMessage = () => {
   const settings = getExtensionSettings();
-  // 关键修复：移除settings.enabled检查，确保玩家消息检测功能正常工作
-  if (settings.isMediaLoading) return;
+  if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -2427,8 +2422,8 @@ const registerAIEventListeners = () => {
       // AI回复事件（使用兼容的绑定方法）
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
-        // 关键修复：移除settings.enabled检查，确保AI检测功能正常工作
         if (
+          settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isWindowVisible
@@ -2439,8 +2434,8 @@ const registerAIEventListeners = () => {
       // 玩家消息事件（同上）
       bindEvent(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
-        // 关键修复：移除settings.enabled检查，确保AI检测功能正常工作
         if (
+          settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isWindowVisible
