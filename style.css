@@ -724,24 +724,11 @@
 
 .image-player-window.no-border .video-controls {
     bottom: -40px;
-    transition: bottom 0.3s ease, opacity 0.3s ease;
-    opacity: 0;
-    display: block !important;
+    transition: bottom 0.3s ease;
 }
 
 .image-player-window.no-border .image-container:hover .video-controls {
     bottom: 0;
-    opacity: 1;
-    display: block !important;
-}
-
-/* 修复：确保在非边框隐藏模式下视频控制栏正常显示 */
-.image-player-window:not(.no-border) .video-controls {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    bottom: 0 !important;
-    display: block !important;
 }
 
 .image-player-window.no-border .image-info {
