@@ -225,16 +225,87 @@
 /* ==================== 大小调整手柄 ==================== */
 .resize-handle {
     position: absolute;
-    bottom: 1px;
-    right: 1px;
-    width: 12px;
-    height: 12px;
-    cursor: nwse-resize;
     z-index: 20;
-    background:
-        linear-gradient(135deg, transparent 0%, transparent 70%,
-            rgba(114, 137, 218, 0.5) 70%, rgba(114, 137, 218, 0.5) 100%);
-    border-radius: 2px;
+    background: rgba(114, 137, 218, 0.3);
+    border-radius: 1px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+/* 鼠标悬停在窗口边缘时才显示拉伸手柄 */
+.image-player-window:hover .resize-handle {
+    opacity: 0;
+}
+
+/* 鼠标悬停在拉伸手柄区域时显示 */
+.resize-handle:hover {
+    opacity: 1;
+}
+
+/* 四个角的手柄 - 缩小尺寸 */
+.resize-handle.top-left {
+    top: 0px;
+    left: 0px;
+    width: 6px;
+    height: 6px;
+    cursor: nwse-resize;
+}
+
+.resize-handle.top-right {
+    top: 0px;
+    right: 0px;
+    width: 6px;
+    height: 6px;
+    cursor: nesw-resize;
+}
+
+.resize-handle.bottom-left {
+    bottom: 0px;
+    left: 0px;
+    width: 6px;
+    height: 6px;
+    cursor: nesw-resize;
+}
+
+.resize-handle.bottom-right {
+    bottom: 0px;
+    right: 0px;
+    width: 6px;
+    height: 6px;
+    cursor: nwse-resize;
+}
+
+/* 四个边的手柄 - 缩小尺寸 */
+.resize-handle.top {
+    top: 0px;
+    left: 6px;
+    right: 6px;
+    height: 3px;
+    cursor: ns-resize;
+}
+
+.resize-handle.bottom {
+    bottom: 0px;
+    left: 6px;
+    right: 6px;
+    height: 3px;
+    cursor: ns-resize;
+}
+
+.resize-handle.left {
+    left: 0px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    cursor: ew-resize;
+}
+
+.resize-handle.right {
+    right: 0px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    cursor: ew-resize;
 }
 
 /* ==================== 设置面板样式 ==================== */
