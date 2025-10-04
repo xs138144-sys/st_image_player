@@ -1,6 +1,9 @@
-// 使用与修复脚本相同的导入路径，确保模块加载一致性
 import { extension_settings, getContext } from "../../../extensions.js";
-import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js";
+import {
+  saveSettingsDebounced,
+  eventSource as importedEventSource,
+  event_types as importedEventTypes,
+} from "../../../../script.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
