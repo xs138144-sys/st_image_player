@@ -1,9 +1,5 @@
-import {
-  saveSettingsDebounced,
-  eventSource as importedEventSource,
-  event_types as importedEventTypes,
-} from "../../../../script.js";
-import { extension_settings } from "../../../extensions.js";
+import { extension_settings, getContext } from "../../extensions.js";
+import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../script.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
@@ -72,39 +68,20 @@ const defaultSettings = {
 
 // 完全按照LittleWhiteBox的模式：直接赋值给extension_settings
 // 使用 || 操作符确保设置正确初始化
-// 修复：确保extension_settings存在
-if (typeof extension_settings === "undefined") {
-  extension_settings = {};
-}
 extension_settings[EXTENSION_ID] = extension_settings[EXTENSION_ID] || defaultSettings;
 
 const getExtensionSettings = () => {
   // 直接返回全局设置（与LittleWhiteBox保持一致）
-  // 修复：统一使用window.extension_settings
-  if (typeof window.extension_settings === "undefined") {
-    window.extension_settings = {};
-  }
-  if (!window.extension_settings[EXTENSION_ID]) {
-    window.extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(defaultSettings));
-  }
-  return window.extension_settings[EXTENSION_ID];
+  return extension_settings[EXTENSION_ID];
 };
 
 const saveSafeSettings = () => {
-  // 关键修复：直接使用导入的 saveSettingsDebounced 函数
-  // 这是 LittleWhiteBox 使用的标准保存方式
-  if (typeof saveSettingsDebounced === "function") {
+  // 关键修复：完全按照LittleWhiteBox的模式直接调用
+  try {
     saveSettingsDebounced();
     console.log(`[${EXTENSION_ID}] 设置已保存到 localStorage`);
-  } else {
-    // 备用方案：如果导入失败，尝试从全局获取
-    const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-    if (saveFn && typeof saveFn === "function") {
-      saveFn();
-      console.log(`[${EXTENSION_ID}] 设置已保存（备用方案）`);
-    } else {
-      console.warn(`[${EXTENSION_ID}] 无法保存设置：saveSettingsDebounced 函数不可用`);
-    }
+  } catch (error) {
+    console.warn(`[${EXTENSION_ID}] 保存设置时出错:`, error);
   }
 };
 
