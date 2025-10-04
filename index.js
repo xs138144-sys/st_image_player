@@ -2744,6 +2744,14 @@ const registerAIEventListeners = () => {
   let retries = 0;
   const tryRegister = () => {
     try {
+      console.log(`[st_image_player] ==== AI事件注册调试信息 ====`);
+      console.log(`[st_image_player] eventSource 类型:`, typeof eventSource);
+      console.log(`[st_image_player] eventSource 值:`, eventSource);
+      console.log(`[st_image_player] event_types 类型:`, typeof event_types);
+      console.log(`[st_image_player] event_types 值:`, event_types);
+      console.log(`[st_image_player] MESSAGE_RECEIVED:`, event_types?.MESSAGE_RECEIVED);
+      console.log(`[st_image_player] MESSAGE_SENT:`, event_types?.MESSAGE_SENT);
+      
       console.log(
         `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
       );
@@ -2753,6 +2761,11 @@ const registerAIEventListeners = () => {
         !event_types.MESSAGE_RECEIVED ||
         !event_types.MESSAGE_SENT
       ) {
+        console.error(`[st_image_player] 依赖检查失败详情:`);
+        console.error(`- eventSource:`, eventSource);
+        console.error(`- event_types:`, event_types);
+        console.error(`- MESSAGE_RECEIVED:`, event_types?.MESSAGE_RECEIVED);
+        console.error(`- MESSAGE_SENT:`, event_types?.MESSAGE_SENT);
         throw new Error(
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
         );
