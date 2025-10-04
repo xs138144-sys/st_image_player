@@ -543,7 +543,7 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.enabled) return Promise.resolve();
+  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return Promise.resolve();
   
   // 如果播放器窗口已存在但可能损坏，先移除再重新创建
   if ($(`#${PLAYER_WINDOW_ID}`).length) {
