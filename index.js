@@ -1060,71 +1060,34 @@ const setupWindowEvents = () => {
     toastr.info(`窗口已${settings.isLocked ? "锁定" : "解锁"}`);
   });
 
-  // 6. 播放/暂停按钮（修复状态同步和定时器管理）
+  // 6. 播放/暂停按钮
   win.find(".play-pause").on("click", function () {
     const oldIsPlaying = settings.isPlaying;
+    settings.isPlaying = !oldIsPlaying;
+    saveSafeSettings();
     const icon = $(this).find("i");
+    icon.toggleClass("fa-play fa-pause");
     const video = win.find(".image-player-video")[0];
     const isVideoVisible = video && video.style.display !== "none";
-    
-    // 先更新图标状态，确保UI立即响应
-    icon.toggleClass("fa-play fa-pause");
-    
-    if (oldIsPlaying) {
-      // 暂停逻辑：从播放状态切换到暂停状态
-      settings.isPlaying = false;
-      saveSafeSettings();
-      // 暂停逻辑：彻底清理定时器和进度更新
+    if (!settings.isPlaying) {
       clearTimeout(switchTimer);
-      switchTimer = null;
       stopProgressUpdate();
-      
-      if (isVideoVisible) {
-        // 视频暂停
-        if (!video.paused) {
-          video.pause();
-        }
-      } else {
-        // 图片暂停：确保定时器完全停止
-        clearTimeout(switchTimer);
-        switchTimer = null;
+      if (isVideoVisible && !video.paused) {
+        video.pause();
       }
-      
-      // 更新状态文本
-      win.find(".control-text").text("已暂停");
-      console.log(`[${EXTENSION_ID}] 播放已暂停，定时器已清理`);
+      win.find(".control-text").text(oldIsPlaying ? "已暂停" : "播放中");
     } else {
-      // 播放逻辑：从暂停状态切换到播放状态
-      settings.isPlaying = true;
-      saveSafeSettings();
-      
       if (isVideoVisible) {
-        // 视频播放
         video.play().catch((err) => {
           console.warn("视频自动播放失败（浏览器限制）:", err);
           toastr.warning("请点击视频手动播放");
-          // 播放失败时恢复暂停状态和图标
-          settings.isPlaying = false;
-          saveSafeSettings();
-          icon.toggleClass("fa-play fa-pause"); // 恢复图标状态
-          win.find(".control-text").text("已暂停");
-        }).then(() => {
-          // 视频播放成功时更新状态文本
-          win.find(".control-text").text("播放中");
         });
         startProgressUpdate();
       } else {
-        // 图片播放：确保定时器干净重启
         clearTimeout(switchTimer);
-        switchTimer = null;
         startPlayback();
-        // 图片播放立即更新状态文本
-        win.find(".control-text").text("播放中");
       }
     }
-    
-    // 同步菜单状态
-    updateExtensionMenu();
   });
 
   // 7. 播放模式切换（删除外部重复代码，此处逻辑完整）
@@ -1200,68 +1163,46 @@ const setupWindowEvents = () => {
   // 11. 上一个/下一个
   win.find(".prev").on("click", () => {
     if (settings.isMediaLoading) return;
-    
-    // 清理定时器（但不影响播放状态）
     clearTimeout(switchTimer);
-    switchTimer = null;
-    
-    // 注意：不暂停视频，保持当前播放状态
-    // 如果正在播放视频，继续播放；如果已暂停，保持暂停
-    
-    showMedia("prev");
-    
-    // 切换媒体后，如果当前是播放状态，重新开始定时播放
-    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
-      startPlayback();
+    const video = win.find(".image-player-video")[0];
+    if (video) {
+      video.pause();
+      stopProgressUpdate();
     }
+    showMedia("prev");
   });
   win.find(".next").on("click", () => {
     if (settings.isMediaLoading) return;
-    
-    // 清理定时器（但不影响播放状态）
     clearTimeout(switchTimer);
-    switchTimer = null;
-    
-    // 注意：不暂停视频，保持当前播放状态
-    // 如果正在播放视频，继续播放；如果已暂停，保持暂停
-    
-    showMedia("next");
-    
-    // 切换媒体后，如果当前是播放状态，重新开始定时播放
-    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
-      startPlayback();
+    const video = win.find(".image-player-video")[0];
+    if (video) {
+      video.pause();
+      stopProgressUpdate();
     }
+    showMedia("next");
   });
 
   // 12. 切换模式（AI检测/定时）
   win.find(".switch-mode-toggle").on("click", function () {
-    // 切换模式
     settings.autoSwitchMode =
       settings.autoSwitchMode === "detect" ? "timer" : "detect";
-    
-    // 清理定时器（仅在切换到AI检测模式时）
-    if (settings.autoSwitchMode === "detect") {
-      clearTimeout(switchTimer);
-      switchTimer = null;
-    }
-    
-    // 保持当前的播放状态，不自动改变
-    // settings.isPlaying 保持不变
-    
+    settings.isPlaying = settings.autoSwitchMode !== null;
     saveSafeSettings();
-    
-    // 更新模式按钮状态
     $(this)
       .toggleClass("active", settings.autoSwitchMode === "detect")
       .find("i")
       .toggleClass("fa-robot fa-clock");
-    
-    // 如果当前是播放状态且切换到定时模式，重新开始播放
+    win
+      .find(".play-pause i")
+      .toggleClass("fa-play", !settings.isPlaying)
+      .toggleClass("fa-pause", settings.isPlaying);
+    const video = win.find(".image-player-video")[0];
+    if (video) video.pause();
+    stopProgressUpdate();
+    clearTimeout(switchTimer);
     if (settings.isPlaying && settings.autoSwitchMode === "timer") {
       startPlayback();
     }
-    // 如果切换到AI检测模式，保持播放状态，AI检测会通过事件监听自动切换媒体
-    
     updateExtensionMenu();
   });
 
@@ -1357,7 +1298,6 @@ const startPlayback = () => {
     settings.autoSwitchMode !== "timer"
   ) {
     clearTimeout(switchTimer);
-    switchTimer = null;
     return;
   }
 
@@ -1367,7 +1307,6 @@ const startPlayback = () => {
 
   // 核心：无论视频/图片，先清除旧定时器，再执行逻辑（避免叠加）
   clearTimeout(switchTimer);
-  switchTimer = null;
 
   // 视频播放逻辑（不变，确保定时器续期）
   if (isVideoVisible) {
