@@ -849,16 +849,19 @@ const positionWindow = () => {
           }
         }, 3000);
       });
+      
+      // 无边框模式下，控制栏初始隐藏，但容器高度应该为100%
+      win.find(".image-container").css("height", "100%");
     } else {
       // 普通模式：直接显示
       controls.css({ display: "block", bottom: 0, opacity: 1 });
+      adjustVideoControlsLayout(); // 普通模式下调整布局
     }
   } else {
     // 如果设置中关闭了视频控制栏，确保隐藏
     controls.hide();
+    win.find(".image-container").css("height", "100%"); // 控制栏隐藏时容器高度恢复100%
   }
-
-  adjustVideoControlsLayout();
 };
 
 const adjustVideoControlsLayout = () => {
@@ -866,14 +869,12 @@ const adjustVideoControlsLayout = () => {
   const settings = getExtensionSettings();
   const videoControls = win.find(".video-controls");
   
-  // 只有当视频控制栏显示时才调整容器高度
+  // 只有当视频控制栏显示且可见时才调整容器高度
   if (settings.showVideoControls && videoControls.is(":visible")) {
     const controlsHeight = videoControls.outerHeight() || 40;
     win.find(".image-container").css("height", `calc(100% - ${controlsHeight}px)`);
-  } else {
-    // 控制栏隐藏时，容器高度恢复为100%
-    win.find(".image-container").css("height", "100%");
   }
+  // 其他情况（控制栏隐藏或不可见）已经在positionWindow中处理了
 };
 
 // 应用媒体自适应模式
