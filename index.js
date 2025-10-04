@@ -547,11 +547,8 @@ const bindVideoControls = () => {
 // ==================== 播放器窗口（修复媒体筛选同步） ====================
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
-  // 播放器窗口已存在则跳过创建
-  if ($(`#${PLAYER_WINDOW_ID}`).length) return;
-  
-  // 关键修复：确保播放器窗口能够正常创建，不依赖settings.enabled检查
-  // 播放器窗口应该独立于设置保存功能
+  // 播放器窗口已存在或播放器功能禁用时跳过创建
+  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
