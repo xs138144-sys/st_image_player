@@ -625,7 +625,13 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+  if (!settings.enabled) return;
+  
+  // 防止重复创建：如果播放器窗口已存在，先移除旧窗口避免事件重复绑定
+  if ($(`#${PLAYER_WINDOW_ID}`).length) {
+    console.log(`[${EXTENSION_ID}] 播放器窗口已存在，移除旧窗口避免事件重复绑定`);
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+  }
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
@@ -1075,7 +1081,7 @@ const setupWindowEvents = () => {
       if (isVideoVisible && !video.paused) {
         video.pause();
       }
-      win.find(".control-text").text(oldIsPlaying ? "已暂停" : "播放中");
+      win.find(".control-text").text("已暂停");
     } else {
       if (isVideoVisible) {
         video.play().catch((err) => {
@@ -1087,6 +1093,7 @@ const setupWindowEvents = () => {
         clearTimeout(switchTimer);
         startPlayback();
       }
+      win.find(".control-text").text("播放中");
     }
   });
 
@@ -1627,13 +1634,25 @@ const showMedia = async (direction) => {
       settings.playMode === "random"
         ? settings.randomPlayedIndices.length
         : currentMediaIndex + 1;
-    win
-      .find(".control-text")
-      .text(
-        `${
-          settings.playMode === "random" ? "随机模式" : "顺序模式"
-        }: ${currentCount}/${totalCount}(${mediaType})`
-      );
+    
+    // 根据播放状态显示不同的控制栏文本
+    if (settings.isPlaying) {
+      win
+        .find(".control-text")
+        .text(
+          `${
+            settings.playMode === "random" ? "随机模式" : "顺序模式"
+          }: ${currentCount}/${totalCount}(${mediaType}) - 播放中`
+        );
+    } else {
+      win
+        .find(".control-text")
+        .text(
+          `${
+            settings.playMode === "random" ? "随机模式" : "顺序模式"
+          }: ${currentCount}/${totalCount}(${mediaType}) - 已暂停`
+        );
+    }
 
     retryCount = 0;
     
