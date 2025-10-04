@@ -64,6 +64,10 @@ const getExtensionSettings = () => window.extension_settings[EXTENSION_ID];
 
 // 3. 保存设置时只需调用 SillyTavern 的保存方法
 const saveSafeSettings = () => {
+  localStorage.setItem(
+    `st_ext_settings_${EXTENSION_ID}`,
+    JSON.stringify(window.extension_settings[EXTENSION_ID])
+  );
   if (typeof window.saveSettingsDebounced === "function") {
     window.saveSettingsDebounced();
     console.log(`[${EXTENSION_ID}] 设置已保存:`, window.extension_settings[EXTENSION_ID]);
@@ -2347,6 +2351,7 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
+
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
