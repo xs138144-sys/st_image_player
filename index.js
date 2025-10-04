@@ -548,10 +548,7 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.masterEnabled || !settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) {
-    console.log(`[${EXTENSION_ID}] 播放器窗口创建跳过: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}, windowExists=${$(`#${PLAYER_WINDOW_ID}`).length}`);
-    return;
-  }
+  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
