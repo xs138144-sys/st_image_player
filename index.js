@@ -144,6 +144,8 @@ const getExtensionSettings = () => {
     showMediaUpdateToast: false,
     aiEventRegistered: false,
     filterTriggerSource: null,
+    // 新增：媒体自适应模式
+    mediaFitMode: "contain", // contain: 保持比例自适应, fill: 填充窗口
   };
 
   // 将默认设置写入全局，供后续保存使用
@@ -706,6 +708,15 @@ const createPlayerWindow = async () => {
   }">
                         <i class="fa-solid fa-video"></i>
                     </button>
+                    <button class="toggle-fit-mode ${
+                      settings.mediaFitMode === "fill" ? "active" : ""
+                    }" title="${
+    settings.mediaFitMode === "fill" ? "填充模式" : "自适应模式"
+  }">
+                        <i class="fa-solid ${
+                          settings.mediaFitMode === "fill" ? "fa-expand" : "fa-compress"
+                        }"></i>
+                    </button>
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
                 </div>
             </div>
@@ -785,6 +796,8 @@ const createPlayerWindow = async () => {
   setupWindowEvents();
   positionWindow();
   bindVideoControls();
+  // 应用媒体自适应模式
+  applyMediaFitMode();
 
   // 初始化筛选状态（修复同步）
   const filterBtn = $(
@@ -850,6 +863,40 @@ const adjustVideoControlsLayout = () => {
   win
     .find(".image-container")
     .css("height", `calc(100% - ${controlsHeight}px)`);
+};
+
+// 应用媒体自适应模式
+const applyMediaFitMode = () => {
+  const settings = getExtensionSettings();
+  const win = $(`#${PLAYER_WINDOW_ID}`);
+  const imgElement = win.find(".image-player-img")[0];
+  const videoElement = win.find(".image-player-video")[0];
+  
+  if (settings.mediaFitMode === "fill") {
+    // 填充模式：媒体填充整个容器
+    $(imgElement).css({
+      "object-fit": "fill",
+      "width": "100%",
+      "height": "100%"
+    });
+    $(videoElement).css({
+      "object-fit": "fill", 
+      "width": "100%",
+      "height": "100%"
+    });
+  } else {
+    // 自适应模式（默认）：保持比例自适应
+    $(imgElement).css({
+      "object-fit": "contain",
+      "max-width": "100%",
+      "max-height": "100%"
+    });
+    $(videoElement).css({
+      "object-fit": "contain",
+      "max-width": "100%", 
+      "max-height": "100%"
+    });
+  }
 };
 
 const setupWindowEvents = () => {
@@ -991,6 +1038,8 @@ const setupWindowEvents = () => {
       saveSafeSettings();
       dragData = null;
       resizeData = null;
+      // 窗口大小调整结束后重新应用媒体自适应模式
+      applyMediaFitMode();
     }
     if (progressDrag && settings.customVideoControls.showProgress) {
       const video = win.find(".image-player-video")[0];
@@ -1083,6 +1132,20 @@ const setupWindowEvents = () => {
     );
     // 重新绑定视频控制栏事件
     bindVideoControls();
+    updateExtensionMenu();
+  });
+
+  // 10. 媒体自适应模式切换
+  win.find(".toggle-fit-mode").on("click", function () {
+    settings.mediaFitMode = settings.mediaFitMode === "contain" ? "fill" : "contain";
+    saveSafeSettings();
+    $(this).toggleClass("active", settings.mediaFitMode === "fill");
+    $(this).attr("title", settings.mediaFitMode === "fill" ? "填充模式" : "自适应模式");
+    $(this).find("i")
+      .toggleClass("fa-expand", settings.mediaFitMode === "fill")
+      .toggleClass("fa-compress", settings.mediaFitMode === "contain");
+    // 重新应用媒体显示样式
+    applyMediaFitMode();
     updateExtensionMenu();
   });
 
@@ -1663,6 +1726,8 @@ const showMedia = async (direction) => {
     return Promise.reject(e);
   } finally {
     settings.isMediaLoading = false;
+    // 媒体显示完成后应用媒体自适应模式
+    applyMediaFitMode();
   }
 };
 
