@@ -800,22 +800,30 @@ const positionWindow = () => {
     .toggle(settings.isWindowVisible)
     .toggleClass("no-border", settings.hideBorder);
 
-  if (settings.hideBorder && settings.showVideoControls) {
-    const container = win.find(".image-container");
+  // 视频控制栏显示逻辑
+  if (settings.showVideoControls) {
     const controls = win.find(".video-controls");
-    controls.css({ bottom: "-40px", opacity: 0 });
+    
+    if (settings.hideBorder) {
+      // 隐藏边框模式：鼠标悬停显示
+      const container = win.find(".image-container");
+      controls.css({ bottom: "-40px", opacity: 0 });
 
-    container.off("mouseenter mouseleave");
-    container.on("mouseenter", () => {
-      controls.css({ bottom: 0, opacity: 1 });
-    });
-    container.on("mouseleave", () => {
-      setTimeout(() => {
-        if (!progressDrag && !volumeDrag) {
-          controls.css({ bottom: "-40px", opacity: 0 });
-        }
-      }, 3000);
-    });
+      container.off("mouseenter mouseleave");
+      container.on("mouseenter", () => {
+        controls.css({ bottom: 0, opacity: 1 });
+      });
+      container.on("mouseleave", () => {
+        setTimeout(() => {
+          if (!progressDrag && !volumeDrag) {
+            controls.css({ bottom: "-40px", opacity: 0 });
+          }
+        }, 3000);
+      });
+    } else {
+      // 普通模式：直接显示
+      controls.css({ display: "block", bottom: 0, opacity: 1 });
+    }
   }
 
   adjustVideoControlsLayout();
