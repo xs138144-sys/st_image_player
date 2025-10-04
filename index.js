@@ -2567,8 +2567,8 @@ const setupSettingsEvents = () => {
           "active",
           isChecked
         );
-        $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(isChecked);
-        adjustVideoControlsLayout();
+        // 使用positionWindow函数统一控制显示状态
+        positionWindow();
       }
     });
 }; // 闭合 setupSettingsEvents 函数
