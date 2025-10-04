@@ -2386,7 +2386,7 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-// ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
+// ==================== AI事件注册（增强兼容性版本） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
   const maxRetries = 8;
@@ -2394,9 +2394,29 @@ const registerAIEventListeners = () => {
   let retries = 0;
   const tryRegister = () => {
     try {
+      // 增强依赖检查：尝试多种方式获取eventSource和event_types
+      let eventSource = window.eventSource || window.event_manager?.eventSource || window.event_manager;
+      let event_types = window.event_types || window.event_manager?.event_types;
+      
       console.log(
-        `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
+        `[st_image_player] 增强依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
       );
+      
+      // 如果依赖不存在，尝试从全局对象查找
+      if (!eventSource || !event_types) {
+        // 遍历全局对象查找可能的event相关对象
+        for (let key in window) {
+          if (key.toLowerCase().includes('event') && window[key] && typeof window[key] === 'object') {
+            if (!eventSource && (window[key].addEventListener || window[key].on)) {
+              eventSource = window[key];
+            }
+            if (!event_types && window[key].MESSAGE_RECEIVED) {
+              event_types = window[key];
+            }
+          }
+        }
+      }
+      
       if (
         !eventSource ||
         !event_types ||
