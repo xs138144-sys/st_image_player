@@ -2536,9 +2536,12 @@ const setupSettingsEvents = () => {
         const isEnabled = $(this).prop("checked");
         const settings = getExtensionSettings();
         
-        // 当启用播放器窗口时，重新注册AI事件监听器
-        if (isEnabled && !settings.aiEventRegistered) {
+        // 当启用播放器窗口时，总是重新注册AI事件监听器以确保功能正常
+        if (isEnabled) {
           console.log(`[${EXTENSION_ID}] 播放器窗口启用，重新注册AI事件监听器`);
+          // 重置注册状态，强制重新注册
+          settings.aiEventRegistered = false;
+          saveSafeSettings();
           registerAIEventListeners();
         }
       }
