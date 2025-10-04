@@ -431,7 +431,13 @@ const updateVolume = (volume) => {
   settings.videoVolume = volume;
   saveSafeSettings();
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-  if (video) video.volume = volume;
+  if (video) {
+    // 安全检查：确保videoVolume是有效的数字（0-1之间）
+    const volume = typeof settings.videoVolume === 'number' && !isNaN(settings.videoVolume) 
+      ? Math.max(0, Math.min(1, settings.videoVolume)) 
+      : 0.8; // 默认值
+    video.volume = volume;
+  }
   const icon = $(`#${PLAYER_WINDOW_ID} .volume-btn i`);
   if (volume === 0) {
     icon.removeClass("fa-volume-high fa-volume-low").addClass("fa-volume-mute");
@@ -690,7 +696,13 @@ const createPlayerWindow = async () => {
   filterBtn.addClass("active");
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-  if (video) video.volume = settings.videoVolume;
+  if (video) {
+    // 安全检查：确保videoVolume是有效的数字（0-1之间）
+    const volume = typeof settings.videoVolume === 'number' && !isNaN(settings.videoVolume) 
+      ? Math.max(0, Math.min(1, settings.videoVolume)) 
+      : 0.8; // 默认值
+    video.volume = volume;
+  }
   console.log(`[${EXTENSION_ID}] 播放器窗口创建完成`);
 };
 
@@ -2542,9 +2554,10 @@ const initExtension = async () => {
       window.extension_settings = {};
     }
     if (!window.extension_settings[EXTENSION_ID]) {
-      // 用JSON深拷贝快速覆盖所有默认设置，避免手动复制遗漏
+      // 关键修复：直接使用defaultSettings而不是通过getExtensionSettings()获取
+      // 避免循环依赖和双菜单冲突问题
       window.extension_settings[EXTENSION_ID] = JSON.parse(
-        JSON.stringify(settings)
+        JSON.stringify(defaultSettings)
       );
       // 补充修复相关字段（覆盖默认值）
       window.extension_settings[EXTENSION_ID].isMediaLoading = false;
