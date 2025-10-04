@@ -1,4 +1,3 @@
-import { extension_settings, getContext } from "../../../extensions.js";
 import {
   saveSettingsDebounced,
   eventSource as importedEventSource,
@@ -25,92 +24,71 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
-// ==================== 采用LittleWhiteBox模式：直接初始化设置 ====================
-// 关键修复：完全按照LittleWhiteBox的模式初始化设置
-const defaultSettings = {
-  masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
-  enabled: true, // 播放器启用状态
-  serviceUrl: "http://localhost:9000",
-  playMode: "random",
-  autoSwitchMode: "timer",
-  switchInterval: 5000,
-  position: { x: 100, y: 100, width: 600, height: 400 },
-  isLocked: false,
-  isWindowVisible: true,
-  showInfo: false,
-  aiResponseCooldown: 3000,
-  lastAISwitchTime: 0,
-  randomPlayedIndices: [],
-  randomMediaList: [],
-  isPlaying: false,
-  transitionEffect: "fade",
-  preloadImages: true,
-  preloadVideos: false,
-  playerDetectEnabled: true,
-  aiDetectEnabled: true,
-  pollingInterval: 30000,
-  slideshowMode: false,
-  videoLoop: false,
-  videoVolume: 0.8,
-  mediaFilter: "all",
-  showVideoControls: true,
-  hideBorder: false,
-  customVideoControls: {
-    showProgress: true,
-    showVolume: true,
-    showLoop: true,
-    showTime: true,
-  },
-  progressUpdateInterval: null,
-  serviceDirectory: "",
-  isMediaLoading: false,
-  currentRandomIndex: -1,
-  showMediaUpdateToast: false,
-  aiEventRegistered: false,
-  filterTriggerSource: null,
-};
-
-// 完全按照LittleWhiteBox模式直接初始化设置
-// 关键修复：使用extension_settings对象而不是getSafeGlobal
-extension_settings[EXTENSION_ID] = extension_settings[EXTENSION_ID] || JSON.parse(JSON.stringify(defaultSettings));
-
-// 确保customVideoControls对象存在且完整
-const settings = extension_settings[EXTENSION_ID];
-if (!settings.customVideoControls) {
-  settings.customVideoControls = {
-    showProgress: true,
-    showVolume: true,
-    showLoop: true,
-    showTime: true,
-  };
-} else {
-  // 确保所有必要的属性都存在
-  if (typeof settings.customVideoControls.showProgress === 'undefined') {
-    settings.customVideoControls.showProgress = true;
-  }
-  if (typeof settings.customVideoControls.showVolume === 'undefined') {
-    settings.customVideoControls.showVolume = true;
-  }
-  if (typeof settings.customVideoControls.showLoop === 'undefined') {
-    settings.customVideoControls.showLoop = true;
-  }
-  if (typeof settings.customVideoControls.showTime === 'undefined') {
-    settings.customVideoControls.showTime = true;
-  }
-}
-
 const getExtensionSettings = () => {
-  // 直接返回全局设置对象
-  return extension_settings[EXTENSION_ID];
+  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+  if (globalSettings[EXTENSION_ID]) {
+    return globalSettings[EXTENSION_ID];
+  }
+
+  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  const defaultSettings = {
+    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+    enabled: true, // 播放器启用状态
+    serviceUrl: "http://localhost:9000",
+    playMode: "random",
+    autoSwitchMode: "timer",
+    switchInterval: 5000,
+    position: { x: 100, y: 100, width: 600, height: 400 },
+    isLocked: false,
+    isWindowVisible: true,
+    showInfo: false,
+    aiResponseCooldown: 3000,
+    lastAISwitchTime: 0,
+    randomPlayedIndices: [],
+    randomMediaList: [],
+    isPlaying: false,
+    transitionEffect: "fade",
+    preloadImages: true,
+    preloadVideos: false,
+    playerDetectEnabled: true,
+    aiDetectEnabled: true,
+    pollingInterval: 30000,
+    slideshowMode: false,
+    videoLoop: false,
+    videoVolume: 0.8,
+    mediaFilter: "all",
+    showVideoControls: true,
+    hideBorder: false,
+    customVideoControls: {
+      showProgress: true,
+      showVolume: true,
+      showLoop: true,
+      showTime: true,
+    },
+    progressUpdateInterval: null,
+    serviceDirectory: "",
+    isMediaLoading: false,
+    currentRandomIndex: -1,
+    showMediaUpdateToast: false,
+    aiEventRegistered: false,
+    filterTriggerSource: null,
+  };
+
+  // 将默认设置写入全局，供后续保存使用
+  globalSettings[EXTENSION_ID] = defaultSettings;
+  return defaultSettings;
 };
 
 const saveSafeSettings = () => {
-  // 关键修复：完全按照LittleWhiteBox的模式直接调用
-  try {
-    saveSettingsDebounced();
-    console.log(`[${EXTENSION_ID}] 设置已保存到 localStorage`);
-  } catch (error) {
-    console.warn(`[${EXTENSION_ID}] 保存设置时出错:`, error);
+  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
+  if (saveFn && typeof saveFn === "function") {
+    saveFn();
+    console.log(
+      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+    );
   }
 };
 
@@ -165,10 +143,6 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
-  // 设置初始状态
-  const settings = getExtensionSettings();
-  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", settings.masterEnabled);
-
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
@@ -212,15 +186,8 @@ const disableExtension = () => {
   currentMediaIndex = 0;
   serviceStatus = { active: false };
 
-  // 修复：确保最小化设置面板存在且总开关状态正确
-  const settings = getExtensionSettings();
-  settings.masterEnabled = false; // 确保设置为禁用状态
-  saveSafeSettings();
-  
   // 创建最小化设置面板以便重新启用
   createMinimalSettingsPanel();
-  
-  console.log(`[${EXTENSION_ID}] 扩展已禁用`);
 };
 
 // ==================== API 通信（无修改，确保稳定） ====================
