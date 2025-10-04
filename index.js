@@ -605,6 +605,18 @@ const bindVideoControls = () => {
   $(document).on("mousedown", `${winSelector} .volume-slider`, () => {
     volumeDrag = true;
   });
+
+  // 音量滑块鼠标移动事件
+  $(document).off("mousemove", `${winSelector} .volume-slider`);
+  $(document).on("mousemove", `${winSelector} .volume-slider`, (e) => {
+    if (volumeDrag) {
+      const slider = e.currentTarget;
+      const rect = slider.getBoundingClientRect();
+      const clickX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      const volume = clickX / rect.width;
+      updateVolume(volume);
+    }
+  });
 };
 
 // ==================== 播放器窗口（修复媒体筛选同步） ====================

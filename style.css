@@ -538,7 +538,7 @@
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     box-sizing: border-box;
     z-index: 15;
-    display: none;
+    display: block;
 }
 
 .progress-container {
