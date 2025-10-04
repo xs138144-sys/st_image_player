@@ -2679,6 +2679,36 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
+// ==================== AI检测调试函数 ====================
+window.checkAIDetectionStatus = () => {
+  console.log('=== AI检测状态检查 ===');
+  console.log('eventSource:', eventSource);
+  console.log('event_types:', event_types);
+  console.log('event_types.MESSAGE_RECEIVED:', event_types?.MESSAGE_RECEIVED);
+  console.log('event_types.MESSAGE_SENT:', event_types?.MESSAGE_SENT);
+  
+  const settings = getExtensionSettings();
+  console.log('AI检测模式启用:', settings.autoSwitchMode === 'detect');
+  console.log('AI回复检测启用:', settings.aiDetectEnabled);
+  console.log('玩家消息检测启用:', settings.playerDetectEnabled);
+  console.log('AI事件已注册:', settings.aiEventRegistered);
+  console.log('播放器窗口可见:', settings.isWindowVisible);
+  console.log('播放器启用:', settings.enabled);
+  
+  return {
+    eventSource: !!eventSource,
+    event_types: !!event_types,
+    MESSAGE_RECEIVED: event_types?.MESSAGE_RECEIVED,
+    MESSAGE_SENT: event_types?.MESSAGE_SENT,
+    aiMode: settings.autoSwitchMode === 'detect',
+    aiDetectEnabled: settings.aiDetectEnabled,
+    playerDetectEnabled: settings.playerDetectEnabled,
+    aiEventRegistered: settings.aiEventRegistered,
+    windowVisible: settings.isWindowVisible,
+    enabled: settings.enabled
+  };
+};
+
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
