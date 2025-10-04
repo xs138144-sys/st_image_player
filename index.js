@@ -8,8 +8,9 @@ const SETTINGS_PANEL_ID = "st-image-player-settings";
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 
-// 获取SillyTavern核心对象
-const extension_settings = getSafeGlobal("extension_settings", {});
+// 关键修复：确保extension_settings使用同一个全局对象引用
+// 直接使用window.extension_settings，避免创建新对象
+const extension_settings = window.extension_settings || {};
 const saveSettingsDebounced = getSafeGlobal("saveSettingsDebounced", () => {});
 const eventSource = getSafeGlobal("eventSource", null);
 const event_types = getSafeGlobal("event_types", {});
