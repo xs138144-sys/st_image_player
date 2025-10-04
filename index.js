@@ -1075,19 +1075,31 @@ const setupWindowEvents = () => {
       if (isVideoVisible && !video.paused) {
         video.pause();
       }
-      win.find(".control-text").text(oldIsPlaying ? "已暂停" : "播放中");
+      // 修复：正确显示暂停状态文本
+      win.find(".control-text").text("已暂停");
     } else {
       if (isVideoVisible) {
         video.play().catch((err) => {
           console.warn("视频自动播放失败（浏览器限制）:", err);
           toastr.warning("请点击视频手动播放");
+          // 修复：播放失败时恢复暂停状态
+          settings.isPlaying = false;
+          icon.toggleClass("fa-play fa-pause");
+          win.find(".control-text").text("已暂停");
+          saveSafeSettings();
         });
         startProgressUpdate();
+        // 修复：播放成功时显示播放状态
+        win.find(".control-text").text("播放中");
       } else {
         clearTimeout(switchTimer);
         startPlayback();
+        // 修复：图片播放时显示播放状态
+        win.find(".control-text").text("播放中");
       }
     }
+    // 修复：同步菜单状态
+    updateExtensionMenu();
   });
 
   // 7. 播放模式切换（删除外部重复代码，此处逻辑完整）
@@ -2456,6 +2468,50 @@ const setupSettingsEvents = () => {
     showMedia("current");
   });
 
+  // AI检测切换
+  panel.find("#player-ai-detect").on("change", function () {
+    const settings = getExtensionSettings();
+    const isChecked = $(this).prop("checked");
+    settings.aiDetectEnabled = isChecked;
+    saveSafeSettings();
+    console.log(`AI检测已${isChecked ? "启用" : "禁用"}`);
+    
+    // 添加调试信息
+    console.log(`当前设置状态：`);
+    console.log(`- AI检测: ${settings.aiDetectEnabled}`);
+    console.log(`- 检测模式: ${settings.autoSwitchMode}`);
+    console.log(`- 总开关: ${settings.enabled}`);
+    console.log(`- 窗口可见: ${settings.isWindowVisible}`);
+    console.log(`- 播放状态: ${settings.isPlaying}`);
+    
+    // 检查AI检测功能是否可用的条件
+    const conditions = [
+      { name: "扩展总开关", value: settings.enabled, required: true },
+      { name: "检测模式", value: settings.autoSwitchMode === "detect", required: true },
+      { name: "播放器窗口可见", value: settings.isWindowVisible, required: true },
+      { name: "播放状态", value: settings.isPlaying, required: true }
+    ];
+    
+    const missingConditions = conditions.filter(cond => cond.required && !cond.value);
+    
+    if (isChecked && missingConditions.length > 0) {
+      const missingList = missingConditions.map(cond => cond.name).join(", ");
+      console.log(`AI检测已启用，但缺少必要条件：${missingList}`);
+      toastr.info(`AI检测已启用，请确保：${missingList}`, "AI检测设置提示");
+    } else if (isChecked) {
+      console.log("AI检测功能已完全启用，等待AI回复事件触发");
+      toastr.success("AI检测功能已启用，AI回复时将自动切换媒体", "AI检测已启用");
+    }
+  });
+
+  // 玩家检测切换
+  panel.find("#player-player-detect").on("change", function () {
+    const settings = getExtensionSettings();
+    settings.playerDetectEnabled = $(this).prop("checked");
+    saveSafeSettings();
+    console.log(`玩家检测已${settings.playerDetectEnabled ? "启用" : "禁用"}`);
+  });
+
   // 媒体筛选变更（根据触发源避免循环同步）
   panel.find("#player-media-filter").on("change", function () {
     const newFilter = $(this).val();
@@ -2564,6 +2620,16 @@ const updateExtensionMenu = () => {
 
   // 1. 播放状态同步（菜单+播放器按钮）
   const playIcon = win.find(".play-pause i");
+  // 修复：检查视频实际播放状态，确保状态同步准确
+  const video = win.find(".image-player-video")[0];
+  const isVideoVisible = video && video.style.display !== "none";
+  
+  // 如果是视频且处于暂停状态，强制同步为暂停状态
+  if (isVideoVisible && video.paused && settings.isPlaying) {
+    settings.isPlaying = false;
+    saveSafeSettings();
+  }
+  
   playIcon
     .toggleClass("fa-play", !settings.isPlaying)
     .toggleClass("fa-pause", settings.isPlaying);
@@ -2610,7 +2676,6 @@ const updateExtensionMenu = () => {
   // 5. 视频循环同步（播放器按钮+面板复选框）
   win.find(".loop-btn").toggleClass("active", settings.videoLoop);
   panel.find("#player-video-loop").prop("checked", settings.videoLoop);
-  const video = win.find(".image-player-video")[0];
   if (video) video.loop = settings.videoLoop;
 
   // 6. 边框隐藏同步（播放器样式+面板复选框）
@@ -2674,7 +2739,8 @@ const registerAIEventListeners = () => {
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
-          settings.isWindowVisible
+          settings.isWindowVisible &&
+          settings.isPlaying // 修复：检查播放状态，暂停时不触发切换
         ) {
           onAIResponse();
         }
@@ -2686,7 +2752,8 @@ const registerAIEventListeners = () => {
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
-          settings.isWindowVisible
+          settings.isWindowVisible &&
+          settings.isPlaying // 修复：检查播放状态，暂停时不触发切换
         ) {
           onPlayerMessage();
         }
