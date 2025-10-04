@@ -1,15 +1,11 @@
-import {
-  saveSettingsDebounced,
-  eventSource as importedEventSource,
-  event_types as importedEventTypes,
-} from "../../../../script.js";
+// 使用与修复脚本相同的导入路径，确保模块加载一致性
+import { extension_settings, getContext } from "../../../extensions.js";
+import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
-const eventSource = importedEventSource || window.eventSource;
-const event_types = importedEventTypes || window.event_types;
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -24,71 +20,93 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
-const getExtensionSettings = () => {
-  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
-  const globalSettings = getSafeGlobal("extension_settings", {});
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
-  if (globalSettings[EXTENSION_ID]) {
-    return globalSettings[EXTENSION_ID];
-  }
+// ==================== 采用修复脚本的稳定设置初始化模式 ====================
+// 关键修复：完全按照修复脚本的模式初始化设置，确保保存功能正常工作
+const defaultSettings = {
+  masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+  enabled: true, // 播放器启用状态
+  serviceUrl: "http://localhost:9000",
+  playMode: "random",
+  autoSwitchMode: "timer",
+  switchInterval: 5000,
+  position: { x: 100, y: 100, width: 600, height: 400 },
+  isLocked: false,
+  isWindowVisible: true,
+  showInfo: false,
+  aiResponseCooldown: 3000,
+  lastAISwitchTime: 0,
+  randomPlayedIndices: [],
+  randomMediaList: [],
+  isPlaying: false,
+  transitionEffect: "fade",
+  preloadImages: true,
+  preloadVideos: false,
+  playerDetectEnabled: true,
+  aiDetectEnabled: true,
+  pollingInterval: 30000,
+  slideshowMode: false,
+  videoLoop: false,
+  videoVolume: 0.8,
+  mediaFilter: "all",
+  showVideoControls: true,
+  hideBorder: false,
+  customVideoControls: {
+    showProgress: true,
+    showVolume: true,
+    showLoop: true,
+    showTime: true,
+  },
+  progressUpdateInterval: null,
+  serviceDirectory: "",
+  isMediaLoading: false,
+  currentRandomIndex: -1,
+  showMediaUpdateToast: false,
+  aiEventRegistered: false,
+  filterTriggerSource: null,
+};
 
-  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
-  const defaultSettings = {
-    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
-    enabled: true, // 播放器启用状态
-    serviceUrl: "http://localhost:9000",
-    playMode: "random",
-    autoSwitchMode: "timer",
-    switchInterval: 5000,
-    position: { x: 100, y: 100, width: 600, height: 400 },
-    isLocked: false,
-    isWindowVisible: true,
-    showInfo: false,
-    aiResponseCooldown: 3000,
-    lastAISwitchTime: 0,
-    randomPlayedIndices: [],
-    randomMediaList: [],
-    isPlaying: false,
-    transitionEffect: "fade",
-    preloadImages: true,
-    preloadVideos: false,
-    playerDetectEnabled: true,
-    aiDetectEnabled: true,
-    pollingInterval: 30000,
-    slideshowMode: false,
-    videoLoop: false,
-    videoVolume: 0.8,
-    mediaFilter: "all",
-    showVideoControls: true,
-    hideBorder: false,
-    customVideoControls: {
-      showProgress: true,
-      showVolume: true,
-      showLoop: true,
-      showTime: true,
-    },
-    progressUpdateInterval: null,
-    serviceDirectory: "",
-    isMediaLoading: false,
-    currentRandomIndex: -1,
-    showMediaUpdateToast: false,
-    aiEventRegistered: false,
-    filterTriggerSource: null,
+// 完全按照修复脚本模式直接初始化设置，确保设置对象完整
+if (!extension_settings[EXTENSION_ID]) {
+  extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(defaultSettings));
+}
+
+// 确保customVideoControls对象存在且完整
+const settings = extension_settings[EXTENSION_ID];
+if (!settings.customVideoControls) {
+  settings.customVideoControls = {
+    showProgress: true,
+    showVolume: true,
+    showLoop: true,
+    showTime: true,
   };
+} else {
+  // 确保所有必要的属性都存在
+  if (typeof settings.customVideoControls.showProgress === 'undefined') {
+    settings.customVideoControls.showProgress = true;
+  }
+  if (typeof settings.customVideoControls.showVolume === 'undefined') {
+    settings.customVideoControls.showVolume = true;
+  }
+  if (typeof settings.customVideoControls.showLoop === 'undefined') {
+    settings.customVideoControls.showLoop = true;
+  }
+  if (typeof settings.customVideoControls.showTime === 'undefined') {
+    settings.customVideoControls.showTime = true;
+  }
+}
 
-  // 将默认设置写入全局，供后续保存使用
-  globalSettings[EXTENSION_ID] = defaultSettings;
-  return defaultSettings;
+const getExtensionSettings = () => {
+  // 直接返回全局设置对象，确保保存功能正常工作
+  return extension_settings[EXTENSION_ID];
 };
 
 const saveSafeSettings = () => {
-  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
-  if (saveFn && typeof saveFn === "function") {
-    saveFn();
-    console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
-    );
+  // 关键修复：完全按照修复脚本的模式直接调用，确保保存功能正常工作
+  try {
+    saveSettingsDebounced();
+    console.log(`[${EXTENSION_ID}] 设置已保存到 localStorage`);
+  } catch (error) {
+    console.warn(`[${EXTENSION_ID}] 保存设置时出错:`, error);
   }
 };
 
@@ -143,6 +161,10 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
+  // 设置初始状态
+  const settings = getExtensionSettings();
+  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", settings.masterEnabled);
+
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
@@ -186,8 +208,15 @@ const disableExtension = () => {
   currentMediaIndex = 0;
   serviceStatus = { active: false };
 
+  // 修复：确保最小化设置面板存在且总开关状态正确
+  const settings = getExtensionSettings();
+  settings.masterEnabled = false; // 确保设置为禁用状态
+  saveSafeSettings();
+  
   // 创建最小化设置面板以便重新启用
   createMinimalSettingsPanel();
+  
+  console.log(`[${EXTENSION_ID}] 扩展已禁用`);
 };
 
 // ==================== API 通信（无修改，确保稳定） ====================
@@ -2523,25 +2552,23 @@ const initExtension = async () => {
     return;
   }
   try {
-    console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
+    console.log(`[${EXTENSION_ID}] 开始初始化(采用修复脚本稳定模式)`);
     // 1. 初始化全局设置容器（兼容老版本存储）
     if (typeof window.extension_settings === "undefined") {
       window.extension_settings = {};
     }
     if (!window.extension_settings[EXTENSION_ID]) {
-      // 用JSON深拷贝快速覆盖所有默认设置，避免手动复制遗漏
-      window.extension_settings[EXTENSION_ID] = JSON.parse(
-        JSON.stringify(settings)
-      );
-      // 补充修复相关字段（覆盖默认值）
-      window.extension_settings[EXTENSION_ID].isMediaLoading = false;
-      window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
-      window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
-      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
-      window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
-      // 修复：将save和log缩进进if块内，且删除多余的“};”
+      // 关键修复：直接使用defaultSettings初始化，避免复杂的深拷贝逻辑
+      window.extension_settings[EXTENSION_ID] = {
+        ...defaultSettings,
+        isMediaLoading: false,
+        currentRandomIndex: -1,
+        showMediaUpdateToast: false,
+        aiEventRegistered: false,
+        filterTriggerSource: null
+      };
       saveSafeSettings();
-      console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
+      console.log(`[${EXTENSION_ID}] 使用修复脚本模式初始化默认扩展设置`);
     }
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
     addMenuButton();
@@ -2584,7 +2611,7 @@ const initExtension = async () => {
     // 延迟3秒触发（给eventSource最终初始化留足时间）
     setTimeout(triggerAIRegister, 3000);
 
-    console.log(`[${EXTENSION_ID}] 扩展初始化完成（老版本适配）`);
+    console.log(`[${EXTENSION_ID}] 扩展初始化完成（修复脚本稳定模式）`);
     toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
   } catch (error) {
     console.error(`[${EXTENSION_ID}] 初始化错误:`, error);
