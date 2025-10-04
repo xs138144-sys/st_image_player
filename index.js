@@ -25,17 +25,18 @@ const getSafeToastr = () => {
 const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
-  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
-  const globalSettings = getSafeGlobal("extension_settings", {});
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
-  if (globalSettings[EXTENSION_ID]) {
-    return globalSettings[EXTENSION_ID];
+  // 优先读取 SillyTavern 全局设置（含本地存储）
+  if (
+    typeof window.extension_settings !== "undefined" &&
+    window.extension_settings[EXTENSION_ID]
+  ) {
+    return window.extension_settings[EXTENSION_ID];
   }
 
-  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  // 若无则创建默认设置并写入全局
   const defaultSettings = {
-    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
-    enabled: true, // 播放器启用状态
+    masterEnabled: true,
+    enabled: true,
     serviceUrl: "http://localhost:9000",
     playMode: "random",
     autoSwitchMode: "timer",
@@ -74,27 +75,31 @@ const getExtensionSettings = () => {
     showMediaUpdateToast: false,
     aiEventRegistered: false,
     filterTriggerSource: null,
+    mediaConfig: {},
   };
-
-  // 将默认设置写入全局，供后续保存使用
-  globalSettings[EXTENSION_ID] = defaultSettings;
-  window.extension_settings = globalSettings; // 修复：确保全局对象同步
-  return defaultSettings;
-};
-
-const saveSafeSettings = () => {
-  // 修复：每次保存都强制同步到全局对象
-  const settings = getExtensionSettings();
+  // 写入全局对象
   if (typeof window.extension_settings === "undefined") {
     window.extension_settings = {};
   }
+  window.extension_settings[EXTENSION_ID] = defaultSettings;
+  return window.extension_settings[EXTENSION_ID];
+};
+
+const saveSafeSettings = () => {
+  // 获取当前设置对象
+  const settings = getExtensionSettings();
+  // 强制写入全局对象
   window.extension_settings[EXTENSION_ID] = settings;
-  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  if (saveFn && typeof saveFn === "function") {
-    saveFn();
-    console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${settings.enabled}`
-    );
+  // SillyTavern 扩展设置持久化方法
+  if (typeof window.saveExtensionSettings === "function") {
+    window.saveExtensionSettings();
+    console.log(`[${EXTENSION_ID}] 设置已保存到 SillyTavern 扩展存储:`, settings);
+  } else if (typeof window.saveSettingsDebounced === "function") {
+    // 兼容老版本
+    window.saveSettingsDebounced();
+    console.log(`[${EXTENSION_ID}] 设置已保存（兼容模式）:`, settings);
+  } else {
+    console.warn(`[${EXTENSION_ID}] 没有可用的保存方法，设置未持久化`);
   }
 };
 
