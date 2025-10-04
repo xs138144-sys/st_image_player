@@ -1,20 +1,18 @@
-// SillyTavern扩展标准导入方式 - 使用全局变量
+import { extension_settings, getContext } from "../../../extensions.js";
+import {
+  saveSettingsDebounced,
+  eventSource as importedEventSource,
+  event_types as importedEventTypes,
+} from "../../../../script.js";
+// 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
-
-// 使用全局变量获取SillyTavern核心功能
+const eventSource = importedEventSource || window.eventSource;
+const event_types = importedEventTypes || window.event_types;
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
-
-// 关键修复：确保extension_settings使用同一个全局对象引用
-// 直接使用window.extension_settings，避免创建新对象
-const extension_settings = window.extension_settings || {};
-const saveSettingsDebounced = getSafeGlobal("saveSettingsDebounced", () => {});
-const eventSource = getSafeGlobal("eventSource", null);
-const event_types = getSafeGlobal("event_types", {});
-const getContext = getSafeGlobal("getContext", () => ({}));
 const getSafeToastr = () => {
   return (
     window.toastr || {
