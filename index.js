@@ -70,7 +70,33 @@ const initializeSettings = () => {
   if (!extension_settings[EXTENSION_ID]) {
     extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(defaultSettings));
   }
-  return extension_settings[EXTENSION_ID];
+  
+  // 确保customVideoControls对象存在且完整
+  const settings = extension_settings[EXTENSION_ID];
+  if (!settings.customVideoControls) {
+    settings.customVideoControls = {
+      showProgress: true,
+      showVolume: true,
+      showLoop: true,
+      showTime: true,
+    };
+  } else {
+    // 确保所有必要的属性都存在
+    if (typeof settings.customVideoControls.showProgress === 'undefined') {
+      settings.customVideoControls.showProgress = true;
+    }
+    if (typeof settings.customVideoControls.showVolume === 'undefined') {
+      settings.customVideoControls.showVolume = true;
+    }
+    if (typeof settings.customVideoControls.showLoop === 'undefined') {
+      settings.customVideoControls.showLoop = true;
+    }
+    if (typeof settings.customVideoControls.showTime === 'undefined') {
+      settings.customVideoControls.showTime = true;
+    }
+  }
+  
+  return settings;
 };
 
 const getExtensionSettings = () => {
