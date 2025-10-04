@@ -1387,6 +1387,13 @@ const showMedia = async (direction) => {
       }
       $(videoElement).hide();
     } else if (mediaType === "video") {
+      if (!videoElement) {
+        console.error(`[${EXTENSION_ID}] 视频元素未找到，重新获取`);
+        videoElement = win.find(".image-player-video")[0];
+        if (!videoElement) {
+          throw new Error("视频元素不存在，播放器窗口可能未正确创建");
+        }
+      }
       videoElement.currentTime = 0;
       videoElement.loop = settings.videoLoop;
       $(videoElement).attr("src", mediaUrl).show();
