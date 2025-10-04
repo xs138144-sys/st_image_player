@@ -2282,7 +2282,10 @@ const setupSettingsEvents = () => {
       createPlayerWindow();
     }
     
+    // 确保窗口显示状态同步
     $(`#${PLAYER_WINDOW_ID}`).show();
+    positionWindow(); // 重新定位窗口以确保显示状态正确
+    
     if (mediaList.length === 0) {
       toastr.info("未检测到媒体，请先配置扫描目录");
     } else {
