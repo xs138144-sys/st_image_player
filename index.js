@@ -24,69 +24,62 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
-const getExtensionSettings = () => {
-  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
-  const globalSettings = getSafeGlobal("extension_settings", {});
-  
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
-  if (globalSettings[EXTENSION_ID]) {
-    return globalSettings[EXTENSION_ID];
-  }
+// ==================== 采用LittleWhiteBox模式：直接初始化设置 ====================
+const globalSettings = getSafeGlobal("extension_settings", {});
 
-  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
-  const defaultSettings = {
-    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
-    enabled: true, // 播放器启用状态
-    serviceUrl: "http://localhost:9000",
-    playMode: "random",
-    autoSwitchMode: "timer",
-    switchInterval: 5000,
-    position: { x: 100, y: 100, width: 600, height: 400 },
-    isLocked: false,
-    isWindowVisible: true,
-    showInfo: false,
-    aiResponseCooldown: 3000,
-    lastAISwitchTime: 0,
-    randomPlayedIndices: [],
-    randomMediaList: [],
-    isPlaying: false,
-    transitionEffect: "fade",
-    preloadImages: true,
-    preloadVideos: false,
-    playerDetectEnabled: true,
-    aiDetectEnabled: true,
-    pollingInterval: 30000,
-    slideshowMode: false,
-    videoLoop: false,
-    videoVolume: 0.8,
-    mediaFilter: "all",
-    showVideoControls: true,
-    hideBorder: false,
-    customVideoControls: {
-      showProgress: true,
-      showVolume: true,
-      showLoop: true,
-      showTime: true,
-    },
-    progressUpdateInterval: null,
-    serviceDirectory: "",
-    isMediaLoading: false,
-    currentRandomIndex: -1,
-    showMediaUpdateToast: false,
-    aiEventRegistered: false,
-    filterTriggerSource: null,
-  };
+// 直接初始化扩展设置（与LittleWhiteBox保持一致）
+const defaultSettings = {
+  masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+  enabled: true, // 播放器启用状态
+  serviceUrl: "http://localhost:9000",
+  playMode: "random",
+  autoSwitchMode: "timer",
+  switchInterval: 5000,
+  position: { x: 100, y: 100, width: 600, height: 400 },
+  isLocked: false,
+  isWindowVisible: true,
+  showInfo: false,
+  aiResponseCooldown: 3000,
+  lastAISwitchTime: 0,
+  randomPlayedIndices: [],
+  randomMediaList: [],
+  isPlaying: false,
+  transitionEffect: "fade",
+  preloadImages: true,
+  preloadVideos: false,
+  playerDetectEnabled: true,
+  aiDetectEnabled: true,
+  pollingInterval: 30000,
+  slideshowMode: false,
+  videoLoop: false,
+  videoVolume: 0.8,
+  mediaFilter: "all",
+  showVideoControls: true,
+  hideBorder: false,
+  customVideoControls: {
+    showProgress: true,
+    showVolume: true,
+    showLoop: true,
+    showTime: true,
+  },
+  progressUpdateInterval: null,
+  serviceDirectory: "",
+  isMediaLoading: false,
+  currentRandomIndex: -1,
+  showMediaUpdateToast: false,
+  aiEventRegistered: false,
+  filterTriggerSource: null,
+};
 
-  // 将默认设置写入全局，供后续保存使用
+// 采用LittleWhiteBox模式：直接赋值给extension_settings
+// 关键修复：只有当设置完全不存在时才使用默认值，避免覆盖已保存的设置
+if (!globalSettings[EXTENSION_ID]) {
   globalSettings[EXTENSION_ID] = defaultSettings;
-  
-  // 采用LittleWhiteBox模式：直接保存设置
-  if (typeof saveSettingsDebounced === 'function') {
-    saveSettingsDebounced();
-    console.log(`[${EXTENSION_ID}] 设置已立即保存到localStorage(LittleWhiteBox模式)`);
-  }
-  
-  return defaultSettings;
+}
+
+const getExtensionSettings = () => {
+  // 直接返回全局设置（与LittleWhiteBox保持一致）
+  return globalSettings[EXTENSION_ID];
 };
 
 const saveSafeSettings = () => {
