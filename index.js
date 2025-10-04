@@ -26,10 +26,7 @@ const getSafeToastr = () => {
 const toastr = getSafeToastr();
 
 // ==================== 采用LittleWhiteBox模式：直接初始化设置 ====================
-// 关键修复：直接使用导入的extension_settings对象（与LittleWhiteBox完全一致）
-const globalSettings = extension_settings;
-
-// 直接初始化扩展设置（与LittleWhiteBox保持一致）
+// 关键修复：完全按照LittleWhiteBox的模式初始化设置
 const defaultSettings = {
   masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
   enabled: true, // 播放器启用状态
@@ -73,15 +70,14 @@ const defaultSettings = {
   filterTriggerSource: null,
 };
 
-// 采用LittleWhiteBox模式：直接赋值给extension_settings
-// 关键修复：只有当设置完全不存在时才使用默认值，避免覆盖已保存的设置
-if (!globalSettings[EXTENSION_ID]) {
-  globalSettings[EXTENSION_ID] = defaultSettings;
-}
+// 完全按照LittleWhiteBox的模式：直接赋值给extension_settings
+// 使用 || 操作符确保设置正确初始化
+const globalSettings = extension_settings;
+extension_settings[EXTENSION_ID] = extension_settings[EXTENSION_ID] || defaultSettings;
 
 const getExtensionSettings = () => {
   // 直接返回全局设置（与LittleWhiteBox保持一致）
-  return globalSettings[EXTENSION_ID];
+  return extension_settings[EXTENSION_ID];
 };
 
 const saveSafeSettings = () => {
@@ -701,6 +697,12 @@ const createPlayerWindow = async () => {
 const positionWindow = () => {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
+
+  // 安全检查：确保position对象存在，如果不存在则使用默认值
+  if (!settings.position) {
+    settings.position = { x: 100, y: 100, width: 600, height: 400 };
+    saveSafeSettings();
+  }
 
   win
     .css({
