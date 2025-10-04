@@ -1,11 +1,15 @@
-// 使用与LittleWhiteBox相同的导入路径
-import { extension_settings, getContext } from "../../../extensions.js";
-import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js";
+import {
+  saveSettingsDebounced,
+  eventSource as importedEventSource,
+  event_types as importedEventTypes,
+} from "../../../../script.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
+const eventSource = importedEventSource || window.eventSource;
+const event_types = importedEventTypes || window.event_types;
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -20,91 +24,71 @@ const getSafeToastr = () => {
 };
 const toastr = getSafeToastr();
 
-// ==================== 采用LittleWhiteBox模式：直接初始化设置 ====================
-// 关键修复：完全按照LittleWhiteBox的模式初始化设置
-const defaultSettings = {
-  masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
-  enabled: true, // 播放器启用状态
-  serviceUrl: "http://localhost:9000",
-  playMode: "random",
-  autoSwitchMode: "timer",
-  switchInterval: 5000,
-  position: { x: 100, y: 100, width: 600, height: 400 },
-  isLocked: false,
-  isWindowVisible: true,
-  showInfo: false,
-  aiResponseCooldown: 3000,
-  lastAISwitchTime: 0,
-  randomPlayedIndices: [],
-  randomMediaList: [],
-  isPlaying: false,
-  transitionEffect: "fade",
-  preloadImages: true,
-  preloadVideos: false,
-  playerDetectEnabled: true,
-  aiDetectEnabled: true,
-  pollingInterval: 30000,
-  slideshowMode: false,
-  videoLoop: false,
-  videoVolume: 0.8,
-  mediaFilter: "all",
-  showVideoControls: true,
-  hideBorder: false,
-  customVideoControls: {
-    showProgress: true,
-    showVolume: true,
-    showLoop: true,
-    showTime: true,
-  },
-  progressUpdateInterval: null,
-  serviceDirectory: "",
-  isMediaLoading: false,
-  currentRandomIndex: -1,
-  showMediaUpdateToast: false,
-  aiEventRegistered: false,
-  filterTriggerSource: null,
-};
-
-// 完全按照LittleWhiteBox模式直接初始化设置
-extension_settings[EXTENSION_ID] = extension_settings[EXTENSION_ID] || JSON.parse(JSON.stringify(defaultSettings));
-
-// 确保customVideoControls对象存在且完整
-const settings = extension_settings[EXTENSION_ID];
-if (!settings.customVideoControls) {
-  settings.customVideoControls = {
-    showProgress: true,
-    showVolume: true,
-    showLoop: true,
-    showTime: true,
-  };
-} else {
-  // 确保所有必要的属性都存在
-  if (typeof settings.customVideoControls.showProgress === 'undefined') {
-    settings.customVideoControls.showProgress = true;
-  }
-  if (typeof settings.customVideoControls.showVolume === 'undefined') {
-    settings.customVideoControls.showVolume = true;
-  }
-  if (typeof settings.customVideoControls.showLoop === 'undefined') {
-    settings.customVideoControls.showLoop = true;
-  }
-  if (typeof settings.customVideoControls.showTime === 'undefined') {
-    settings.customVideoControls.showTime = true;
-  }
-}
-
 const getExtensionSettings = () => {
-  // 直接返回全局设置对象
-  return extension_settings[EXTENSION_ID];
+  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+  if (globalSettings[EXTENSION_ID]) {
+    return globalSettings[EXTENSION_ID];
+  }
+
+  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  const defaultSettings = {
+    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+    enabled: true, // 播放器启用状态
+    serviceUrl: "http://localhost:9000",
+    playMode: "random",
+    autoSwitchMode: "timer",
+    switchInterval: 5000,
+    position: { x: 100, y: 100, width: 600, height: 400 },
+    isLocked: false,
+    isWindowVisible: true,
+    showInfo: false,
+    aiResponseCooldown: 3000,
+    lastAISwitchTime: 0,
+    randomPlayedIndices: [],
+    randomMediaList: [],
+    isPlaying: false,
+    transitionEffect: "fade",
+    preloadImages: true,
+    preloadVideos: false,
+    playerDetectEnabled: true,
+    aiDetectEnabled: true,
+    pollingInterval: 30000,
+    slideshowMode: false,
+    videoLoop: false,
+    videoVolume: 0.8,
+    mediaFilter: "all",
+    showVideoControls: true,
+    hideBorder: false,
+    customVideoControls: {
+      showProgress: true,
+      showVolume: true,
+      showLoop: true,
+      showTime: true,
+    },
+    progressUpdateInterval: null,
+    serviceDirectory: "",
+    isMediaLoading: false,
+    currentRandomIndex: -1,
+    showMediaUpdateToast: false,
+    aiEventRegistered: false,
+    filterTriggerSource: null,
+  };
+
+  // 将默认设置写入全局，供后续保存使用
+  globalSettings[EXTENSION_ID] = defaultSettings;
+  return defaultSettings;
 };
 
 const saveSafeSettings = () => {
-  // 关键修复：完全按照LittleWhiteBox的模式直接调用
-  try {
-    saveSettingsDebounced();
-    console.log(`[${EXTENSION_ID}] 设置已保存到 localStorage`);
-  } catch (error) {
-    console.warn(`[${EXTENSION_ID}] 保存设置时出错:`, error);
+  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
+  if (saveFn && typeof saveFn === "function") {
+    saveFn();
+    console.log(
+      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+    );
   }
 };
 
@@ -159,10 +143,6 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
-  // 设置初始状态
-  const settings = getExtensionSettings();
-  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", settings.masterEnabled);
-
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
@@ -206,15 +186,8 @@ const disableExtension = () => {
   currentMediaIndex = 0;
   serviceStatus = { active: false };
 
-  // 修复：确保最小化设置面板存在且总开关状态正确
-  const settings = getExtensionSettings();
-  settings.masterEnabled = false; // 确保设置为禁用状态
-  saveSafeSettings();
-  
   // 创建最小化设置面板以便重新启用
   createMinimalSettingsPanel();
-  
-  console.log(`[${EXTENSION_ID}] 扩展已禁用`);
 };
 
 // ==================== API 通信（无修改，确保稳定） ====================
@@ -452,13 +425,7 @@ const updateVolume = (volume) => {
   settings.videoVolume = volume;
   saveSafeSettings();
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-  if (video) {
-    // 安全检查：确保videoVolume是有效的数字（0-1之间）
-    const volume = typeof settings.videoVolume === 'number' && !isNaN(settings.videoVolume) 
-      ? Math.max(0, Math.min(1, settings.videoVolume)) 
-      : 0.8; // 默认值
-    video.volume = volume;
-  }
+  if (video) video.volume = volume;
   const icon = $(`#${PLAYER_WINDOW_ID} .volume-btn i`);
   if (volume === 0) {
     icon.removeClass("fa-volume-high fa-volume-low").addClass("fa-volume-mute");
@@ -709,10 +676,6 @@ const createPlayerWindow = async () => {
   setupWindowEvents();
   positionWindow();
   bindVideoControls();
-  
-  // 修复：确保播放器窗口创建时正确应用边框隐藏样式
-  const playerWindow = $(`#${PLAYER_WINDOW_ID}`);
-  playerWindow.toggleClass("no-border", settings.hideBorder);
 
   // 初始化筛选状态（修复同步）
   const filterBtn = $(
@@ -721,25 +684,13 @@ const createPlayerWindow = async () => {
   filterBtn.addClass("active");
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-  if (video) {
-    // 安全检查：确保videoVolume是有效的数字（0-1之间）
-    const volume = typeof settings.videoVolume === 'number' && !isNaN(settings.videoVolume) 
-      ? Math.max(0, Math.min(1, settings.videoVolume)) 
-      : 0.8; // 默认值
-    video.volume = volume;
-  }
+  if (video) video.volume = settings.videoVolume;
   console.log(`[${EXTENSION_ID}] 播放器窗口创建完成`);
 };
 
 const positionWindow = () => {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
-
-  // 安全检查：确保position对象存在，如果不存在则使用默认值
-  if (!settings.position) {
-    settings.position = { x: 100, y: 100, width: 600, height: 400 };
-    saveSafeSettings();
-  }
 
   win
     .css({
@@ -1987,7 +1938,7 @@ const setupSettingsEvents = () => {
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
 
-  // 监听总开关变化（修复：添加实时事件绑定）
+  // 监听总开关变化
   panel.find("#master-enabled").on("change", function () {
     settings.masterEnabled = $(this).prop("checked");
     saveSafeSettings();
@@ -2003,45 +1954,9 @@ const setupSettingsEvents = () => {
     }
   });
 
-  // 修复：添加边框隐藏的实时事件绑定
-  panel.find("#player-hide-border").on("change", function () {
-    saveCurrentSettings();
-  });
-
-  // 修复：添加其他关键设置的实时事件绑定
-  panel.find("#player-service-url, #player-scan-directory").on("change", function () {
-    saveCurrentSettings();
-  });
-
-  panel.find("#player-play-mode, #player-media-filter, #player-transition-effect").on("change", function () {
-    saveCurrentSettings();
-  });
-
-  panel.find("#player-slideshow-mode, #player-video-loop, #player-show-info").on("change", function () {
-    saveCurrentSettings();
-  });
-
-  panel.find("#player-preload-images, #player-preload-videos, #player-show-video-controls").on("change", function () {
-    saveCurrentSettings();
-  });
-
-  panel.find("#player-interval, #player-polling-interval, #player-ai-cooldown").on("change", function () {
-    saveCurrentSettings();
-  });
-
-  panel.find("#player-ai-detect, #player-player-detect, #show-media-update-toast").on("change", function () {
-    saveCurrentSettings();
-  });
-
-  // 修复：添加视频控制自定义的实时事件绑定
-  panel.find("#custom-show-progress, #custom-show-volume, #custom-show-loop, #custom-show-time").on("change", function () {
-    saveCurrentSettings();
-  });
-
   const saveCurrentSettings = () => {
-    // 1. 同步总开关状态（核心：绑定"启用媒体播放器"复选框）
-    // 注意：这里应该使用 #master-enabled 而不是 #extension-enabled
-    settings.masterEnabled = panel.find("#master-enabled").prop("checked");
+    // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
+    settings.enabled = panel.find("#extension-enabled").prop("checked");
 
     // 2. 同步其他基础设置
     settings.serviceUrl = panel.find("#player-service-url").val().trim();
@@ -2091,7 +2006,7 @@ const setupSettingsEvents = () => {
     saveSafeSettings();
 
     // 4. 总开关联动：禁用时清理所有资源（核心修复）
-    if (!settings.masterEnabled) {
+    if (!settings.enabled) {
       // 停止服务轮询
       if (pollingTimer) clearTimeout(pollingTimer);
       // 关闭WebSocket连接
@@ -2117,43 +2032,7 @@ const setupSettingsEvents = () => {
     }
 
     // 5. 同步UI状态
-    // 修复边框隐藏功能：确保样式正确应用
-    const playerWindow = $(`#${PLAYER_WINDOW_ID}`);
-    if (playerWindow.length > 0) {
-      playerWindow.toggleClass("no-border", settings.hideBorder);
-      
-      // 如果边框隐藏状态发生变化，需要重新调整布局
-      if (settings.hideBorder) {
-        // 隐藏边框时，调整视频控制布局
-        if (settings.showVideoControls) {
-          const container = playerWindow.find(".image-container");
-          const controls = playerWindow.find(".video-controls");
-          controls.css({ bottom: "-40px", opacity: 0 });
-
-          container.off("mouseenter mouseleave");
-          container.on("mouseenter", () => {
-            controls.css({ bottom: 0, opacity: 1 });
-          });
-          container.on("mouseleave", () => {
-            setTimeout(() => {
-              if (!progressDrag && !volumeDrag) {
-                controls.css({ bottom: "-40px", opacity: 0 });
-              }
-            }, 3000);
-          });
-        }
-      } else {
-        // 显示边框时，恢复默认布局
-        if (settings.showVideoControls) {
-          const controls = playerWindow.find(".video-controls");
-          controls.css({ bottom: "0", opacity: 1 });
-        }
-      }
-      
-      // 重新调整布局
-      adjustVideoControlsLayout();
-    }
-    
+    $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
     panel
       .find("#player-slideshow-mode")
       .prop("disabled", settings.playMode === "random");
@@ -2351,11 +2230,11 @@ const setupSettingsEvents = () => {
     }
   });
 
-  // 基础设置项变更绑定（确保所有输入框都有保存事件）
+  // 基础设置项变更绑定
   panel
     .find(
       "#player-service-url, #player-interval, #player-ai-cooldown, #player-polling-interval, " +
-        "#image-max-size, #video-max-size, #show-media-update-toast, #player-scan-directory"
+        "#image-max-size, #video-max-size, #show-media-update-toast"
     )
     .on("change", saveCurrentSettings);
 
@@ -2364,7 +2243,7 @@ const setupSettingsEvents = () => {
     .find(
       "#player-slideshow-mode, #player-video-loop, #player-show-info, #player-preload-images, " +
         "#player-preload-videos, #player-show-video-controls, #player-ai-detect, #player-player-detect, " +
-        "#master-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, " +
+        "#extension-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, " +
         "#custom-show-loop, #custom-show-time"
     )
     .on("change", function () {
@@ -2636,40 +2515,34 @@ const addMenuButton = () => {
 const initExtension = async () => {
   const settings = getExtensionSettings();
 
-  // 总开关禁用：清理所有资源并终止初始化
+  // 总开关禁用：终止初始化
   if (!settings.masterEnabled) {
-    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，清理资源并终止初始化`);
-    
-    // 清理所有资源（类似disableExtension函数）
-    if (pollingTimer) clearTimeout(pollingTimer);
-    if (switchTimer) clearTimeout(switchTimer);
-    if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-    stopProgressUpdate();
-
-    // 关闭WebSocket
-    if (ws) {
-      ws.close();
-      ws = null;
-    }
-
-    // 隐藏播放器窗口和设置面板
-    $(`#${PLAYER_WINDOW_ID}`).remove();
-    $(`#${SETTINGS_PANEL_ID}`).remove();
-
-    // 移除菜单按钮
-    $(`#ext_menu_${EXTENSION_ID}`).remove();
-
-    // 重置状态
-    mediaList = [];
-    currentMediaIndex = 0;
-    serviceStatus = { active: false };
-
-    // 创建最小化设置面板以便重新启用
+    console.log(`[${EXTENSION_ID}] 扩展总开关关闭，不进行初始化`);
+    // 即使总开关关闭，也显示一个最小化的设置面板以便重新启用
     createMinimalSettingsPanel();
     return;
   }
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
+    // 1. 初始化全局设置容器（兼容老版本存储）
+    if (typeof window.extension_settings === "undefined") {
+      window.extension_settings = {};
+    }
+    if (!window.extension_settings[EXTENSION_ID]) {
+      // 用JSON深拷贝快速覆盖所有默认设置，避免手动复制遗漏
+      window.extension_settings[EXTENSION_ID] = JSON.parse(
+        JSON.stringify(settings)
+      );
+      // 补充修复相关字段（覆盖默认值）
+      window.extension_settings[EXTENSION_ID].isMediaLoading = false;
+      window.extension_settings[EXTENSION_ID].currentRandomIndex = -1;
+      window.extension_settings[EXTENSION_ID].showMediaUpdateToast = false;
+      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
+      window.extension_settings[EXTENSION_ID].filterTriggerSource = null;
+      // 修复：将save和log缩进进if块内，且删除多余的“};”
+      saveSafeSettings();
+      console.log(`[${EXTENSION_ID}] 初始化默认扩展设置`);
+    }
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
     addMenuButton();
     await createPlayerWindow();
@@ -2725,32 +2598,60 @@ const initExtension = async () => {
   }
 };
 
-// ==================== 页面就绪触发（采用LittleWhiteBox模式） ====================
-jQuery(async () => {
-  try {
-    console.log(`[${EXTENSION_ID}] 脚本开始加载(LittleWhiteBox模式)`);
-    
-    // 获取设置
-    const settings = getExtensionSettings();
-    
-    // 设置全局变量（类似LittleWhiteBox的做法）
-    window.stImagePlayerEnabled = settings.masterEnabled;
-    
-    console.log(`[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`);
+// ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
+jQuery(() => {
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
+  const initWhenReady = () => {
+    // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
+    const checkGlobalSettings = () => {
+      const globalSettings = getSafeGlobal("extension_settings", {});
+      // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
+      const isDOMReady =
+        document.getElementById("extensionsMenu") &&
+        document.getElementById("extensions_settings");
+      // 条件2：全局设置已加载（或超时强制尝试）
+      const isSettingsReady =
+        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
 
-    // 根据总开关状态决定是否初始化扩展
-    if (settings.masterEnabled) {
-      await initExtension();
-    } else {
-      createMinimalSettingsPanel();
-    }
+      if (isDOMReady && isSettingsReady) {
+        clearInterval(checkTimer);
+        const settings = getExtensionSettings();
+        console.log(
+          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
+        );
 
-    console.log(`[${EXTENSION_ID}] 初始化完成(LittleWhiteBox模式)`);
-  } catch (error) {
-    console.error(`[${EXTENSION_ID}] 初始化错误:`, error);
-    // 出错时创建最小化设置面板
-    createMinimalSettingsPanel();
-  }
+        // 根据总开关状态决定是否初始化扩展
+        if (settings.masterEnabled) {
+          initExtension();
+        } else {
+          createMinimalSettingsPanel();
+        }
+
+        console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
+        return;
+      }
+
+      // 超时保护：5秒后强制初始化（避免无限等待）
+      if (Date.now() - startTime > 5000) {
+        clearInterval(checkTimer);
+        const finalDOMReady =
+          document.getElementById("extensionsMenu") &&
+          document.getElementById("extensions_settings");
+        if (finalDOMReady) {
+          console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
+          initExtension();
+        } else {
+          console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
+          toastr.error("扩展初始化失败,核心DOM未加载");
+        }
+      }
+    };
+
+    const startTime = Date.now();
+    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms检查一次
+  };
+
+  initWhenReady();
 });
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
