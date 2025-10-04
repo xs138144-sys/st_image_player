@@ -1323,10 +1323,15 @@ const applyTransitionEffect = (imgElement, effect) => {
   imgElement.classList.remove(
     "fade-transition",
     "slide-transition",
-    "zoom-transition"
+    "zoom-transition",
+    "show"
   );
   if (effect !== "none") {
     imgElement.classList.add(`${effect}-transition`);
+    // 延迟添加show类以触发过渡效果
+    setTimeout(() => {
+      imgElement.classList.add("show");
+    }, 10);
   }
 };
 
