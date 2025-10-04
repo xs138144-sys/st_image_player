@@ -228,10 +228,30 @@ const createMinimalSettingsPanel = () => {
       saveSafeSettings();
 
       if (settings.masterEnabled) {
-        // 启用扩展
+        // 启用扩展 - 确保完整初始化
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
-        initExtension();
-        toastr.success("媒体播放器扩展已启用");
+        
+        // 延迟一小段时间确保DOM完全清理后再重新初始化
+        setTimeout(() => {
+          initExtension().then(() => {
+            toastr.success("媒体播放器扩展已启用");
+            
+            // 确保设置面板正确显示
+            setTimeout(() => {
+              const settingsPanel = $(`#${SETTINGS_PANEL_ID}`);
+              if (settingsPanel.length) {
+                settingsPanel.show();
+                console.log(`[${EXTENSION_ID}] 完整设置面板已显示`);
+              } else {
+                console.error(`[${EXTENSION_ID}] 完整设置面板未找到，重新创建`);
+                createSettingsPanel();
+              }
+            }, 100);
+          }).catch(error => {
+            console.error(`[${EXTENSION_ID}] 重新启用扩展失败:`, error);
+            toastr.error("启用扩展失败，请刷新页面重试");
+          });
+        }, 50);
       }
     }
   );
@@ -1658,7 +1678,13 @@ const updateStatusDisplay = () => {
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
+  if (!settings.masterEnabled) return;
+  
+  // 如果设置面板已存在，先移除再重新创建（确保刷新后正确显示）
+  if ($(`#${SETTINGS_PANEL_ID}`).length) {
+    $(`#${SETTINGS_PANEL_ID}`).remove();
+    console.log(`[${EXTENSION_ID}] 移除已存在的设置面板，重新创建`);
+  }
 
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
