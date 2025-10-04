@@ -5,11 +5,65 @@ import {
 } from "../../../../script.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
-const EXTENSION_NAME = "媒体播放器";
-const PLAYER_WINDOW_ID = "st-image-player-window";
-const SETTINGS_PANEL_ID = "st-image-player-settings";
-const eventSource = importedEventSource || window.eventSource;
-const event_types = importedEventTypes || window.event_types;
+window.extension_settings = window.extension_settings || {};
+window.extension_settings[EXTENSION_ID] = window.extension_settings[EXTENSION_ID] || {
+  masterEnabled: true,
+  enabled: true,
+  serviceUrl: "http://localhost:9000",
+  playMode: "random",
+  autoSwitchMode: "timer",
+  switchInterval: 5000,
+  position: { x: 100, y: 100, width: 600, height: 400 },
+  isLocked: false,
+  isWindowVisible: true,
+  showInfo: false,
+  aiResponseCooldown: 3000,
+  lastAISwitchTime: 0,
+  randomPlayedIndices: [],
+  randomMediaList: [],
+  isPlaying: false,
+  transitionEffect: "fade",
+  preloadImages: true,
+  preloadVideos: false,
+  playerDetectEnabled: true,
+  aiDetectEnabled: true,
+  pollingInterval: 30000,
+  slideshowMode: false,
+  videoLoop: false,
+  videoVolume: 0.8,
+  mediaFilter: "all",
+  showVideoControls: true,
+  hideBorder: false,
+  customVideoControls: {
+    showProgress: true,
+    showVolume: true,
+    showLoop: true,
+    showTime: true,
+  },
+  progressUpdateInterval: null,
+  serviceDirectory: "",
+  isMediaLoading: false,
+  currentRandomIndex: -1,
+  showMediaUpdateToast: false,
+  aiEventRegistered: false,
+  filterTriggerSource: null,
+  mediaConfig: {},
+};
+const settings = window.extension_settings[EXTENSION_ID];
+
+// 2. 获取设置时直接返回全局对象
+const getExtensionSettings = () => window.extension_settings[EXTENSION_ID];
+
+// 3. 保存设置时只需调用 SillyTavern 的保存方法
+const saveSafeSettings = () => {
+  if (typeof window.saveSettingsDebounced === "function") {
+    window.saveSettingsDebounced();
+    console.log(`[${EXTENSION_ID}] 设置已保存:`, window.extension_settings[EXTENSION_ID]);
+  } else {
+    console.warn(`[${EXTENSION_ID}] saveSettingsDebounced 不可用，设置未持久化`);
+  }
+};
+
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -23,85 +77,6 @@ const getSafeToastr = () => {
   );
 };
 const toastr = getSafeToastr();
-
-const getExtensionSettings = () => {
-  // 优先读取 SillyTavern 全局设置（含本地存储）
-  if (
-    typeof window.extension_settings !== "undefined" &&
-    window.extension_settings[EXTENSION_ID]
-  ) {
-    return window.extension_settings[EXTENSION_ID];
-  }
-
-  // 若无则创建默认设置并写入全局
-  const defaultSettings = {
-    masterEnabled: true,
-    enabled: true,
-    serviceUrl: "http://localhost:9000",
-    playMode: "random",
-    autoSwitchMode: "timer",
-    switchInterval: 5000,
-    position: { x: 100, y: 100, width: 600, height: 400 },
-    isLocked: false,
-    isWindowVisible: true,
-    showInfo: false,
-    aiResponseCooldown: 3000,
-    lastAISwitchTime: 0,
-    randomPlayedIndices: [],
-    randomMediaList: [],
-    isPlaying: false,
-    transitionEffect: "fade",
-    preloadImages: true,
-    preloadVideos: false,
-    playerDetectEnabled: true,
-    aiDetectEnabled: true,
-    pollingInterval: 30000,
-    slideshowMode: false,
-    videoLoop: false,
-    videoVolume: 0.8,
-    mediaFilter: "all",
-    showVideoControls: true,
-    hideBorder: false,
-    customVideoControls: {
-      showProgress: true,
-      showVolume: true,
-      showLoop: true,
-      showTime: true,
-    },
-    progressUpdateInterval: null,
-    serviceDirectory: "",
-    isMediaLoading: false,
-    currentRandomIndex: -1,
-    showMediaUpdateToast: false,
-    aiEventRegistered: false,
-    filterTriggerSource: null,
-    mediaConfig: {},
-  };
-  // 写入全局对象
-  if (typeof window.extension_settings === "undefined") {
-    window.extension_settings = {};
-  }
-  window.extension_settings[EXTENSION_ID] = defaultSettings;
-  return window.extension_settings[EXTENSION_ID];
-};
-
-const saveSafeSettings = () => {
-  // 获取当前设置对象
-  const settings = getExtensionSettings();
-  // 强制写入全局对象
-  window.extension_settings[EXTENSION_ID] = settings;
-  // SillyTavern 扩展设置持久化方法
-  if (typeof window.saveExtensionSettings === "function") {
-    window.saveExtensionSettings();
-    console.log(`[${EXTENSION_ID}] 设置已保存到 SillyTavern 扩展存储:`, settings);
-  } else if (typeof window.saveSettingsDebounced === "function") {
-    // 兼容老版本
-    window.saveSettingsDebounced();
-    console.log(`[${EXTENSION_ID}] 设置已保存（兼容模式）:`, settings);
-  } else {
-    console.warn(`[${EXTENSION_ID}] 没有可用的保存方法，设置未持久化`);
-  }
-};
 
 // 全局状态（沿用老版本简单管理）
 let mediaList = [];
