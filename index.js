@@ -1,5 +1,6 @@
-import { extension_settings, getContext } from "../../extensions.js";
-import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../script.js";
+// 使用与LittleWhiteBox相同的导入路径
+import { extension_settings, getContext } from "../../../extensions.js";
+import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
@@ -64,13 +65,17 @@ const defaultSettings = {
   filterTriggerSource: null,
 };
 
-// 完全按照LittleWhiteBox的模式：直接赋值给extension_settings
-// 使用 || 操作符确保设置正确初始化
-extension_settings[EXTENSION_ID] = extension_settings[EXTENSION_ID] || defaultSettings;
+// 安全初始化设置（避免在导入时执行）
+const initializeSettings = () => {
+  if (!extension_settings[EXTENSION_ID]) {
+    extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(defaultSettings));
+  }
+  return extension_settings[EXTENSION_ID];
+};
 
 const getExtensionSettings = () => {
-  // 直接返回全局设置（与LittleWhiteBox保持一致）
-  return extension_settings[EXTENSION_ID];
+  // 延迟初始化设置
+  return initializeSettings();
 };
 
 const saveSafeSettings = () => {
