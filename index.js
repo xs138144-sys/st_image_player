@@ -225,15 +225,17 @@ const createMinimalSettingsPanel = () => {
     function () {
       const settings = getExtensionSettings();
       settings.masterEnabled = $(this).prop("checked");
+      // 强制同步到全局
+      if (window.extension_settings && window.extension_settings[EXTENSION_ID]) {
+        window.extension_settings[EXTENSION_ID].masterEnabled = settings.masterEnabled;
+      }
       saveSafeSettings();
 
       if (settings.masterEnabled) {
-        // 启用扩展
-        $(`#${SETTINGS_PANEL_ID}-minimal`).remove(); // 先移除最小面板
-        // 强制创建完整设置面板
+        $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
         setTimeout(() => {
           initExtension();
-        }, 100); // 延迟一点，确保DOM刷新
+        }, 100);
         toastr.success("媒体播放器扩展已启用");
       }
     }
@@ -2598,6 +2600,9 @@ const addMenuButton = () => {
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
   const settings = getExtensionSettings();
+  
+  // 添加调试日志
+  console.log(`[${EXTENSION_ID}] initExtension: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`);
 
   // 总开关禁用：终止初始化
   if (!settings.masterEnabled) {
