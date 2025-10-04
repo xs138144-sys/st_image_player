@@ -839,11 +839,13 @@ const positionWindow = () => {
       container.off("mouseenter mouseleave");
       container.on("mouseenter", () => {
         controls.css({ bottom: 0, opacity: 1 });
+        adjustVideoControlsLayout(); // 鼠标进入时调整布局
       });
       container.on("mouseleave", () => {
         setTimeout(() => {
           if (!progressDrag && !volumeDrag) {
             controls.css({ bottom: "-40px", opacity: 0 });
+            adjustVideoControlsLayout(); // 鼠标离开时调整布局
           }
         }, 3000);
       });
@@ -861,10 +863,17 @@ const positionWindow = () => {
 
 const adjustVideoControlsLayout = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
-  const controlsHeight = win.find(".video-controls").outerHeight() || 40;
-  win
-    .find(".image-container")
-    .css("height", `calc(100% - ${controlsHeight}px)`);
+  const settings = getExtensionSettings();
+  const videoControls = win.find(".video-controls");
+  
+  // 只有当视频控制栏显示时才调整容器高度
+  if (settings.showVideoControls && videoControls.is(":visible")) {
+    const controlsHeight = videoControls.outerHeight() || 40;
+    win.find(".image-container").css("height", `calc(100% - ${controlsHeight}px)`);
+  } else {
+    // 控制栏隐藏时，容器高度恢复为100%
+    win.find(".image-container").css("height", "100%");
+  }
 };
 
 // 应用媒体自适应模式
