@@ -605,8 +605,8 @@ const bindVideoControls = () => {
 // ==================== 播放器窗口（修复媒体筛选同步） ====================
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
-  // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.masterEnabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+  // 如果播放器窗口已存在，直接返回
+  if ($(`#${PLAYER_WINDOW_ID}`).length) return;
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
@@ -2536,9 +2536,6 @@ const addMenuButton = () => {
   if ($(`#${menuBtnId}`).length) return;
   const settings = getExtensionSettings();
 
-  // 总开关禁用：不添加菜单按钮
-  if (!settings.masterEnabled) return;
-
   // 新增“媒体信息”显示项（显示当前播放的文件名+类型）
   const btnHtml = `
     <div id="${menuBtnId}" class="list-group-item flex-container flexGap5">
@@ -2689,6 +2686,8 @@ const initExtension = async () => {
     resetSettings.isMediaLoading = false;
     resetSettings.currentRandomIndex = -1;
     saveSafeSettings();
+    // 创建最小面板，确保用户能看到界面
+    createMinimalSettingsPanel();
     setTimeout(initExtension, 1500);
   }
 };
