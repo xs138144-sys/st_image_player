@@ -836,6 +836,9 @@ const positionWindow = () => {
       // 普通模式：直接显示
       controls.css({ display: "block", bottom: 0, opacity: 1 });
     }
+  } else {
+    // 如果设置中关闭了视频控制栏，确保隐藏
+    win.find(".video-controls").hide();
   }
 
   adjustVideoControlsLayout();
@@ -1078,6 +1081,8 @@ const setupWindowEvents = () => {
       "checked",
       settings.showVideoControls
     );
+    // 重新绑定视频控制栏事件
+    bindVideoControls();
     updateExtensionMenu();
   });
 
