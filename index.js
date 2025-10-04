@@ -1150,11 +1150,12 @@ const setupWindowEvents = () => {
   win.find(".toggle-video-controls").on("click", function () {
     settings.showVideoControls = !settings.showVideoControls;
     saveSafeSettings();
-    $(this).toggleClass("active", settings.showVideoControls);
     
     // 使用positionWindow函数来正确设置控制栏显示状态
     positionWindow();
     
+    // 同步按钮样式和设置面板状态
+    $(this).toggleClass("active", settings.showVideoControls);
     $(`#${SETTINGS_PANEL_ID} #player-show-video-controls`).prop(
       "checked",
       settings.showVideoControls
