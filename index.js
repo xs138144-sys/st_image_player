@@ -1124,7 +1124,14 @@ const setupWindowEvents = () => {
     settings.showVideoControls = !settings.showVideoControls;
     saveSafeSettings();
     $(this).toggleClass("active", settings.showVideoControls);
-    win.find(".video-controls").toggle(settings.showVideoControls);
+    
+    // 修复：确保控制栏正确显示/隐藏
+    if (settings.showVideoControls) {
+      win.find(".video-controls").show();
+    } else {
+      win.find(".video-controls").hide();
+    }
+    
     adjustVideoControlsLayout();
     $(`#${SETTINGS_PANEL_ID} #player-show-video-controls`).prop(
       "checked",
@@ -2548,7 +2555,14 @@ const setupSettingsEvents = () => {
           "active",
           isChecked
         );
-        $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(isChecked);
+        
+        // 修复：确保控制栏正确显示/隐藏
+        if (isChecked) {
+          $(`#${PLAYER_WINDOW_ID} .video-controls`).show();
+        } else {
+          $(`#${PLAYER_WINDOW_ID} .video-controls`).hide();
+        }
+        
         adjustVideoControlsLayout();
       }
     });
