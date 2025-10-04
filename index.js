@@ -3,6 +3,7 @@ import {
   eventSource as importedEventSource,
   event_types as importedEventTypes,
 } from "../../../../script.js";
+import { extension_settings } from "../../../extensions.js";
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
@@ -25,7 +26,8 @@ const getSafeToastr = () => {
 const toastr = getSafeToastr();
 
 // ==================== 采用LittleWhiteBox模式：直接初始化设置 ====================
-const globalSettings = getSafeGlobal("extension_settings", {});
+// 关键修复：直接使用导入的extension_settings对象（与LittleWhiteBox完全一致）
+const globalSettings = extension_settings;
 
 // 直接初始化扩展设置（与LittleWhiteBox保持一致）
 const defaultSettings = {
