@@ -2471,9 +2471,37 @@ const setupSettingsEvents = () => {
   // AI检测切换
   panel.find("#player-ai-detect").on("change", function () {
     const settings = getExtensionSettings();
-    settings.aiDetectEnabled = $(this).prop("checked");
+    const isChecked = $(this).prop("checked");
+    settings.aiDetectEnabled = isChecked;
     saveSafeSettings();
-    console.log(`AI检测已${settings.aiDetectEnabled ? "启用" : "禁用"}`);
+    console.log(`AI检测已${isChecked ? "启用" : "禁用"}`);
+    
+    // 添加调试信息
+    console.log(`当前设置状态：`);
+    console.log(`- AI检测: ${settings.aiDetectEnabled}`);
+    console.log(`- 检测模式: ${settings.autoSwitchMode}`);
+    console.log(`- 总开关: ${settings.enabled}`);
+    console.log(`- 窗口可见: ${settings.isWindowVisible}`);
+    console.log(`- 播放状态: ${settings.isPlaying}`);
+    
+    // 检查AI检测功能是否可用的条件
+    const conditions = [
+      { name: "扩展总开关", value: settings.enabled, required: true },
+      { name: "检测模式", value: settings.autoSwitchMode === "detect", required: true },
+      { name: "播放器窗口可见", value: settings.isWindowVisible, required: true },
+      { name: "播放状态", value: settings.isPlaying, required: true }
+    ];
+    
+    const missingConditions = conditions.filter(cond => cond.required && !cond.value);
+    
+    if (isChecked && missingConditions.length > 0) {
+      const missingList = missingConditions.map(cond => cond.name).join(", ");
+      console.log(`AI检测已启用，但缺少必要条件：${missingList}`);
+      toastr.info(`AI检测已启用，请确保：${missingList}`, "AI检测设置提示");
+    } else if (isChecked) {
+      console.log("AI检测功能已完全启用，等待AI回复事件触发");
+      toastr.success("AI检测功能已启用，AI回复时将自动切换媒体", "AI检测已启用");
+    }
   });
 
   // 玩家检测切换
