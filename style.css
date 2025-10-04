@@ -6,10 +6,10 @@
     z-index: 20000;
     border-radius: 8px;
     overflow: hidden;
-    background: rgba(30, 31, 34, 0.15);
-    backdrop-filter: blur(5px);
-    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.02);
+    background: rgba(30, 31, 34, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.3s ease;
     font-family: 'Segoe UI', system-ui, sans-serif;
     min-width: 260px;
@@ -17,8 +17,8 @@
 }
 
 .image-player-window.locked {
-    border-color: rgba(114, 137, 218, 0.3);
-    box-shadow: none;
+    border-color: rgba(114, 137, 218, 0.5);
+    box-shadow: 0 4px 20px rgba(114, 137, 218, 0.2);
     cursor: default;
 }
 
@@ -29,8 +29,8 @@
     align-items: center;
     padding: 0 8px;
     height: 30px;
-    background: rgba(43, 45, 49, 0.25);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    background: rgba(43, 45, 49, 0.7);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     cursor: move;
     user-select: none;
     transition: background 0.3s;
@@ -117,10 +117,6 @@
     transition: opacity 0.4s;
     object-fit: contain;
     display: block;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
-    image-rendering: high-quality;
-    -ms-interpolation-mode: bicubic;
 }
 
 /* 视频元素样式 */
@@ -129,40 +125,19 @@
     max-height: 100%;
     object-fit: contain;
     display: none;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
-    image-rendering: high-quality;
-    -ms-interpolation-mode: bicubic;
 }
 
 /* 过渡效果（仅图片生效） */
 .fade-transition {
     transition: opacity 0.5s ease-in-out;
-    opacity: 0;
-}
-
-.fade-transition.show {
-    opacity: 1;
 }
 
 .slide-transition {
     transition: transform 0.5s ease-in-out;
-    transform: translateX(100%);
-}
-
-.slide-transition.show {
-    transform: translateX(0);
 }
 
 .zoom-transition {
     transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
-    transform: scale(0.8);
-    opacity: 0;
-}
-
-.zoom-transition.show {
-    transform: scale(1);
-    opacity: 1;
 }
 
 /* 媒体信息（图片/视频通用） */
@@ -187,15 +162,13 @@
     position: relative;
     display: flex;
     padding: 4px;
-    background: rgba(43, 45, 49, 0.25);
-    border-top: 1px solid rgba(255, 255, 255, 0.02);
+    background: rgba(43, 45, 49, 0.8);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     height: 40px;
     gap: 4px;
     align-items: center;
     box-sizing: border-box;
     justify-content: space-between;
-    cursor: move;
-    user-select: none;
 }
 
 .control-btn {
@@ -252,87 +225,16 @@
 /* ==================== 大小调整手柄 ==================== */
 .resize-handle {
     position: absolute;
+    bottom: 1px;
+    right: 1px;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
     z-index: 20;
-    background: rgba(114, 137, 218, 0.3);
-    border-radius: 1px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-/* 鼠标悬停在窗口边缘时才显示拉伸手柄 */
-.image-player-window:hover .resize-handle {
-    opacity: 0;
-}
-
-/* 鼠标悬停在拉伸手柄区域时显示 */
-.resize-handle:hover {
-    opacity: 1;
-}
-
-/* 四个角的手柄 - 缩小尺寸 */
-.resize-handle.top-left {
-    top: 0px;
-    left: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nwse-resize;
-}
-
-.resize-handle.top-right {
-    top: 0px;
-    right: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nesw-resize;
-}
-
-.resize-handle.bottom-left {
-    bottom: 0px;
-    left: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nesw-resize;
-}
-
-.resize-handle.bottom-right {
-    bottom: 0px;
-    right: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nwse-resize;
-}
-
-/* 四个边的手柄 - 缩小尺寸 */
-.resize-handle.top {
-    top: 0px;
-    left: 6px;
-    right: 6px;
-    height: 3px;
-    cursor: ns-resize;
-}
-
-.resize-handle.bottom {
-    bottom: 0px;
-    left: 6px;
-    right: 6px;
-    height: 3px;
-    cursor: ns-resize;
-}
-
-.resize-handle.left {
-    left: 0px;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    cursor: ew-resize;
-}
-
-.resize-handle.right {
-    right: 0px;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    cursor: ew-resize;
+    background:
+        linear-gradient(135deg, transparent 0%, transparent 70%,
+            rgba(114, 137, 218, 0.5) 70%, rgba(114, 137, 218, 0.5) 100%);
+    border-radius: 2px;
 }
 
 /* ==================== 设置面板样式 ==================== */
@@ -548,7 +450,7 @@
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     box-sizing: border-box;
     z-index: 15;
-    display: block;
+    display: none;
 }
 
 .progress-container {
