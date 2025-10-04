@@ -735,6 +735,15 @@
     display: block !important;
 }
 
+/* 修复：确保在非边框隐藏模式下视频控制栏正常显示 */
+.image-player-window:not(.no-border) .video-controls {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    bottom: 0 !important;
+    display: block !important;
+}
+
 .image-player-window.no-border .image-info {
     opacity: 0;
     transition: opacity 0.3s ease;
