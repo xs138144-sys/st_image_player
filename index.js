@@ -80,20 +80,11 @@ const getExtensionSettings = () => {
   // 将默认设置写入全局，供后续保存使用
   globalSettings[EXTENSION_ID] = defaultSettings;
   
-  // 关键修复：延迟保存机制 - 等待SillyTavern环境完全初始化
-  function delayedSaveSettings() {
-    // 检查saveSettingsDebounced函数是否可用
-    if (typeof saveSettingsDebounced === 'function') {
-      saveSafeSettings();
-      console.log(`[${EXTENSION_ID}] 设置已立即保存到localStorage`);
-    } else {
-      // 如果saveSettingsDebounced不可用，延迟重试（模仿LittleWhiteBox的加载机制）
-      setTimeout(delayedSaveSettings, 100);
-    }
+  // 采用LittleWhiteBox模式：直接保存设置
+  if (typeof saveSettingsDebounced === 'function') {
+    saveSettingsDebounced();
+    console.log(`[${EXTENSION_ID}] 设置已立即保存到localStorage(LittleWhiteBox模式)`);
   }
-  
-  // 立即尝试保存设置
-  delayedSaveSettings();
   
   return defaultSettings;
 };
@@ -2623,60 +2614,32 @@ const initExtension = async () => {
   }
 };
 
-// ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
-jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
-  const initWhenReady = () => {
-    // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
-    const checkGlobalSettings = () => {
-      const globalSettings = getSafeGlobal("extension_settings", {});
-      // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
-      const isDOMReady =
-        document.getElementById("extensionsMenu") &&
-        document.getElementById("extensions_settings");
-      // 条件2：全局设置已加载（或超时强制尝试）
-      const isSettingsReady =
-        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
+// ==================== 页面就绪触发（采用LittleWhiteBox模式） ====================
+jQuery(async () => {
+  try {
+    console.log(`[${EXTENSION_ID}] 脚本开始加载(LittleWhiteBox模式)`);
+    
+    // 获取设置
+    const settings = getExtensionSettings();
+    
+    // 设置全局变量（类似LittleWhiteBox的做法）
+    window.stImagePlayerEnabled = settings.masterEnabled;
+    
+    console.log(`[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`);
 
-      if (isDOMReady && isSettingsReady) {
-        clearInterval(checkTimer);
-        const settings = getExtensionSettings();
-        console.log(
-          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
-        );
+    // 根据总开关状态决定是否初始化扩展
+    if (settings.masterEnabled) {
+      await initExtension();
+    } else {
+      createMinimalSettingsPanel();
+    }
 
-        // 根据总开关状态决定是否初始化扩展
-        if (settings.masterEnabled) {
-          initExtension();
-        } else {
-          createMinimalSettingsPanel();
-        }
-
-        console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
-        return;
-      }
-
-      // 超时保护：5秒后强制初始化（避免无限等待）
-      if (Date.now() - startTime > 5000) {
-        clearInterval(checkTimer);
-        const finalDOMReady =
-          document.getElementById("extensionsMenu") &&
-          document.getElementById("extensions_settings");
-        if (finalDOMReady) {
-          console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
-          initExtension();
-        } else {
-          console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
-          toastr.error("扩展初始化失败,核心DOM未加载");
-        }
-      }
-    };
-
-    const startTime = Date.now();
-    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms检查一次
-  };
-
-  initWhenReady();
+    console.log(`[${EXTENSION_ID}] 初始化完成(LittleWhiteBox模式)`);
+  } catch (error) {
+    console.error(`[${EXTENSION_ID}] 初始化错误:`, error);
+    // 出错时创建最小化设置面板
+    createMinimalSettingsPanel();
+  }
 });
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
