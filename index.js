@@ -850,12 +850,12 @@ const positionWindow = () => {
         }, 3000);
       });
     } else {
-      // 普通模式：直接显示
+      // 普通模式：直接显示，先调整布局再显示控制栏
+      adjustVideoControlsLayout(); // 先调整容器高度
       controls.css({ display: "block", bottom: 0, opacity: 1 });
-      adjustVideoControlsLayout(); // 普通模式下调整布局
     }
   } else {
-    // 如果设置中关闭了视频控制栏，确保隐藏
+    // 如果设置中关闭了视频控制栏，先隐藏控制栏再调整布局
     controls.hide();
     adjustVideoControlsLayout(); // 控制栏隐藏时调整布局
   }
