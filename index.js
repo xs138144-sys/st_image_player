@@ -2531,21 +2531,6 @@ const setupSettingsEvents = () => {
     .on("change", function () {
       saveCurrentSettings();
 
-      // 启用播放器窗口状态变化时重新注册AI事件监听器
-      if ($(this).attr("id") === "extension-enabled") {
-        const isEnabled = $(this).prop("checked");
-        const settings = getExtensionSettings();
-        
-        // 当启用播放器窗口时，总是重新注册AI事件监听器以确保功能正常
-        if (isEnabled) {
-          console.log(`[${EXTENSION_ID}] 播放器窗口启用，重新注册AI事件监听器`);
-          // 重置注册状态，强制重新注册
-          settings.aiEventRegistered = false;
-          saveSafeSettings();
-          registerAIEventListeners();
-        }
-      }
-
       // 视频循环状态同步到播放器
       if ($(this).attr("id") === "player-video-loop") {
         const isChecked = $(this).prop("checked");
