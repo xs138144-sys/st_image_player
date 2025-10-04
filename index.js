@@ -219,6 +219,10 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
+  // 设置初始状态
+  const settings = getExtensionSettings();
+  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", settings.masterEnabled);
+
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
