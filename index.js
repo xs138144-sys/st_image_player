@@ -2468,6 +2468,22 @@ const setupSettingsEvents = () => {
     showMedia("current");
   });
 
+  // AI检测切换
+  panel.find("#player-ai-detect").on("change", function () {
+    const settings = getExtensionSettings();
+    settings.aiDetectEnabled = $(this).prop("checked");
+    saveSafeSettings();
+    console.log(`AI检测已${settings.aiDetectEnabled ? "启用" : "禁用"}`);
+  });
+
+  // 玩家检测切换
+  panel.find("#player-player-detect").on("change", function () {
+    const settings = getExtensionSettings();
+    settings.playerDetectEnabled = $(this).prop("checked");
+    saveSafeSettings();
+    console.log(`玩家检测已${settings.playerDetectEnabled ? "启用" : "禁用"}`);
+  });
+
   // 媒体筛选变更（根据触发源避免循环同步）
   panel.find("#player-media-filter").on("change", function () {
     const newFilter = $(this).val();
