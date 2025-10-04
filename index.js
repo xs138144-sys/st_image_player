@@ -1184,8 +1184,8 @@ const setupWindowEvents = () => {
 
   // 12. 切换模式（AI检测/定时）
   win.find(".switch-mode-toggle").on("click", function () {
-    settings.autoSwitchMode =
-      settings.autoSwitchMode === "detect" ? "timer" : "detect";
+    const wasDetectMode = settings.autoSwitchMode === "detect";
+    settings.autoSwitchMode = wasDetectMode ? "timer" : "detect";
     settings.isPlaying = settings.autoSwitchMode !== null;
     saveSafeSettings();
     $(this)
@@ -1200,6 +1200,12 @@ const setupWindowEvents = () => {
     if (video) video.pause();
     stopProgressUpdate();
     clearTimeout(switchTimer);
+    
+    // 切换到AI检测模式时强制注册AI事件监听器
+    if (!wasDetectMode && settings.autoSwitchMode === "detect") {
+      registerAIEventListeners(true);
+    }
+    
     if (settings.isPlaying && settings.autoSwitchMode === "timer") {
       startPlayback();
     }
@@ -2420,6 +2426,8 @@ const setupSettingsEvents = () => {
     } else {
       settings.autoSwitchMode = "detect";
       settings.isPlaying = true;
+      // 强制注册AI事件监听器，确保AI检测功能正常工作
+      registerAIEventListeners(true);
     }
 
     saveSafeSettings();
@@ -2550,6 +2558,24 @@ const setupSettingsEvents = () => {
         );
         $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(isChecked);
         adjustVideoControlsLayout();
+      }
+
+      // AI检测启用时强制注册AI事件监听器
+      if ($(this).attr("id") === "player-ai-detect") {
+        const isChecked = $(this).prop("checked");
+        settings.aiDetectEnabled = isChecked;
+        if (isChecked && settings.autoSwitchMode === "detect") {
+          registerAIEventListeners(true);
+        }
+      }
+
+      // 玩家检测启用时强制注册AI事件监听器
+      if ($(this).attr("id") === "player-player-detect") {
+        const isChecked = $(this).prop("checked");
+        settings.playerDetectEnabled = isChecked;
+        if (isChecked && settings.autoSwitchMode === "detect") {
+          registerAIEventListeners(true);
+        }
       }
     });
 }; // 闭合 setupSettingsEvents 函数
