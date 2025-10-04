@@ -1235,16 +1235,15 @@ const setupWindowEvents = () => {
 
   // 12. 切换模式（AI检测/定时）
   win.find(".switch-mode-toggle").on("click", function () {
-    // 清理定时器（但不影响播放状态）
-    clearTimeout(switchTimer);
-    switchTimer = null;
-    
-    // 注意：不暂停视频，保持当前播放状态
-    // 如果正在播放视频，继续播放；如果已暂停，保持暂停
-    
     // 切换模式
     settings.autoSwitchMode =
       settings.autoSwitchMode === "detect" ? "timer" : "detect";
+    
+    // 清理定时器（仅在切换到AI检测模式时）
+    if (settings.autoSwitchMode === "detect") {
+      clearTimeout(switchTimer);
+      switchTimer = null;
+    }
     
     // 保持当前的播放状态，不自动改变
     // settings.isPlaying 保持不变
@@ -1261,8 +1260,7 @@ const setupWindowEvents = () => {
     if (settings.isPlaying && settings.autoSwitchMode === "timer") {
       startPlayback();
     }
-    // 如果当前是播放状态但切换到AI检测模式，保持播放状态但停止定时器
-    // 视频会继续播放直到结束，然后等待AI检测
+    // 如果切换到AI检测模式，保持播放状态，AI检测会通过事件监听自动切换媒体
     
     updateExtensionMenu();
   });
