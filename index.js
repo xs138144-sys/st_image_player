@@ -2049,7 +2049,7 @@ const setupSettingsEvents = () => {
 
   const saveCurrentSettings = () => {
     // 1. 同步总开关状态（核心：绑定“启用媒体播放器”复选框）
-    settings.masterEnabled = panel.find("#extension-enabled").prop("checked");
+    settings.masterEnabled = panel.find("#master-enabled").prop("checked");
 
     // 2. 同步其他基础设置
     settings.serviceUrl = panel.find("#player-service-url").val().trim();
