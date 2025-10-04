@@ -65,43 +65,37 @@ const defaultSettings = {
   filterTriggerSource: null,
 };
 
-// 安全初始化设置（避免在导入时执行）
-const initializeSettings = () => {
-  if (!extension_settings[EXTENSION_ID]) {
-    extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(defaultSettings));
+// 完全按照LittleWhiteBox模式直接初始化设置
+extension_settings[EXTENSION_ID] = extension_settings[EXTENSION_ID] || JSON.parse(JSON.stringify(defaultSettings));
+
+// 确保customVideoControls对象存在且完整
+const settings = extension_settings[EXTENSION_ID];
+if (!settings.customVideoControls) {
+  settings.customVideoControls = {
+    showProgress: true,
+    showVolume: true,
+    showLoop: true,
+    showTime: true,
+  };
+} else {
+  // 确保所有必要的属性都存在
+  if (typeof settings.customVideoControls.showProgress === 'undefined') {
+    settings.customVideoControls.showProgress = true;
   }
-  
-  // 确保customVideoControls对象存在且完整
-  const settings = extension_settings[EXTENSION_ID];
-  if (!settings.customVideoControls) {
-    settings.customVideoControls = {
-      showProgress: true,
-      showVolume: true,
-      showLoop: true,
-      showTime: true,
-    };
-  } else {
-    // 确保所有必要的属性都存在
-    if (typeof settings.customVideoControls.showProgress === 'undefined') {
-      settings.customVideoControls.showProgress = true;
-    }
-    if (typeof settings.customVideoControls.showVolume === 'undefined') {
-      settings.customVideoControls.showVolume = true;
-    }
-    if (typeof settings.customVideoControls.showLoop === 'undefined') {
-      settings.customVideoControls.showLoop = true;
-    }
-    if (typeof settings.customVideoControls.showTime === 'undefined') {
-      settings.customVideoControls.showTime = true;
-    }
+  if (typeof settings.customVideoControls.showVolume === 'undefined') {
+    settings.customVideoControls.showVolume = true;
   }
-  
-  return settings;
-};
+  if (typeof settings.customVideoControls.showLoop === 'undefined') {
+    settings.customVideoControls.showLoop = true;
+  }
+  if (typeof settings.customVideoControls.showTime === 'undefined') {
+    settings.customVideoControls.showTime = true;
+  }
+}
 
 const getExtensionSettings = () => {
-  // 延迟初始化设置
-  return initializeSettings();
+  // 直接返回全局设置对象
+  return extension_settings[EXTENSION_ID];
 };
 
 const saveSafeSettings = () => {
