@@ -826,10 +826,8 @@ const positionWindow = () => {
     .toggleClass("no-border", settings.hideBorder);
 
   // 视频控制栏显示逻辑
-  const controls = win.find(".video-controls");
-  
   if (settings.showVideoControls) {
-    controls.show(); // 确保显示控制栏
+    const controls = win.find(".video-controls");
     
     if (settings.hideBorder) {
       // 隐藏边框模式：鼠标悬停显示
@@ -839,41 +837,32 @@ const positionWindow = () => {
       container.off("mouseenter mouseleave");
       container.on("mouseenter", () => {
         controls.css({ bottom: 0, opacity: 1 });
-        adjustVideoControlsLayout(); // 鼠标进入时调整布局
       });
       container.on("mouseleave", () => {
         setTimeout(() => {
           if (!progressDrag && !volumeDrag) {
             controls.css({ bottom: "-40px", opacity: 0 });
-            adjustVideoControlsLayout(); // 鼠标离开时调整布局
           }
         }, 3000);
       });
     } else {
-      // 普通模式：直接显示，先调整布局再显示控制栏
-      adjustVideoControlsLayout(); // 先调整容器高度
+      // 普通模式：直接显示
       controls.css({ display: "block", bottom: 0, opacity: 1 });
     }
   } else {
-    // 如果设置中关闭了视频控制栏，先隐藏控制栏再调整布局
-    controls.hide();
-    adjustVideoControlsLayout(); // 控制栏隐藏时调整布局
+    // 如果设置中关闭了视频控制栏，确保隐藏
+    win.find(".video-controls").hide();
   }
+
+  adjustVideoControlsLayout();
 };
 
 const adjustVideoControlsLayout = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
-  const settings = getExtensionSettings();
-  
-  // 直接根据settings.showVideoControls来调整容器高度，使用固定高度避免控制栏状态影响
-  if (settings.showVideoControls) {
-    // 使用固定高度40px，避免控制栏隐藏状态导致高度计算为0
-    const controlsHeight = 40;
-    win.find(".image-container").css("height", `calc(100% - ${controlsHeight}px)`);
-  } else {
-    // 控制栏隐藏时，容器高度恢复100%
-    win.find(".image-container").css("height", "100%");
-  }
+  const controlsHeight = win.find(".video-controls").outerHeight() || 40;
+  win
+    .find(".image-container")
+    .css("height", `calc(100% - ${controlsHeight}px)`);
 };
 
 // 应用媒体自适应模式
@@ -917,7 +906,7 @@ const setupWindowEvents = () => {
   const panel = $(`#${SETTINGS_PANEL_ID}`);
   const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
 
-  // 1. 窗口拖拽 - 标题栏
+  // 1. 窗口拖拽
   header.addEventListener("mousedown", (e) => {
     if (settings.isLocked || settings.hideBorder) return;
     dragData = {
@@ -926,21 +915,6 @@ const setupWindowEvents = () => {
       startLeft: win.offset().left,
       startTop: win.offset().top,
     };
-  });
-
-  // 1.1 窗口拖拽 - 底部控制栏
-  const controls = win.find(".image-player-controls")[0];
-  controls.addEventListener("mousedown", (e) => {
-    if (settings.isLocked || settings.hideBorder) return;
-    // 只有当点击在控制栏空白区域时才触发拖动，避免与按钮冲突
-    if (e.target === controls || e.target.classList.contains("control-text")) {
-      dragData = {
-        startX: e.clientX,
-        startY: e.clientY,
-        startLeft: win.offset().left,
-        startTop: win.offset().top,
-      };
-    }
   });
 
   // 2. 窗口调整大小 - 为8个拉伸手柄添加事件监听
@@ -1149,12 +1123,9 @@ const setupWindowEvents = () => {
   win.find(".toggle-video-controls").on("click", function () {
     settings.showVideoControls = !settings.showVideoControls;
     saveSafeSettings();
-    
-    // 使用positionWindow函数来正确设置控制栏显示状态
-    positionWindow();
-    
-    // 同步按钮样式和设置面板状态
     $(this).toggleClass("active", settings.showVideoControls);
+    win.find(".video-controls").toggle(settings.showVideoControls);
+    adjustVideoControlsLayout();
     $(`#${SETTINGS_PANEL_ID} #player-show-video-controls`).prop(
       "checked",
       settings.showVideoControls
@@ -2577,8 +2548,8 @@ const setupSettingsEvents = () => {
           "active",
           isChecked
         );
-        // 使用positionWindow函数统一控制显示状态
-        positionWindow();
+        $(`#${PLAYER_WINDOW_ID} .video-controls`).toggle(isChecked);
+        adjustVideoControlsLayout();
       }
     });
 }; // 闭合 setupSettingsEvents 函数
