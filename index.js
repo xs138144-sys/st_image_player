@@ -1201,78 +1201,53 @@ const setupWindowEvents = () => {
   win.find(".prev").on("click", () => {
     if (settings.isMediaLoading) return;
     
-    // 清理定时器和进度更新
+    // 清理定时器（但不影响播放状态）
     clearTimeout(switchTimer);
     switchTimer = null;
-    stopProgressUpdate();
     
-    // 暂停视频（如果正在播放）
-    const video = win.find(".image-player-video")[0];
-    if (video && !video.paused) {
-      video.pause();
-    }
-    
-    // 如果当前是播放状态，切换到暂停状态
-    if (settings.isPlaying) {
-      settings.isPlaying = false;
-      saveSafeSettings();
-      // 更新暂停图标
-      win.find(".play-pause i").removeClass("fa-pause").addClass("fa-play");
-      win.find(".control-text").text("已暂停");
-    }
+    // 注意：不暂停视频，保持当前播放状态
+    // 如果正在播放视频，继续播放；如果已暂停，保持暂停
     
     showMedia("prev");
+    
+    // 切换媒体后，如果当前是播放状态，重新开始定时播放
+    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
+      startPlayback();
+    }
   });
   win.find(".next").on("click", () => {
     if (settings.isMediaLoading) return;
     
-    // 清理定时器和进度更新
+    // 清理定时器（但不影响播放状态）
     clearTimeout(switchTimer);
     switchTimer = null;
-    stopProgressUpdate();
     
-    // 暂停视频（如果正在播放）
-    const video = win.find(".image-player-video")[0];
-    if (video && !video.paused) {
-      video.pause();
-    }
-    
-    // 如果当前是播放状态，切换到暂停状态
-    if (settings.isPlaying) {
-      settings.isPlaying = false;
-      saveSafeSettings();
-      // 更新暂停图标
-      win.find(".play-pause i").removeClass("fa-pause").addClass("fa-play");
-      win.find(".control-text").text("已暂停");
-    }
+    // 注意：不暂停视频，保持当前播放状态
+    // 如果正在播放视频，继续播放；如果已暂停，保持暂停
     
     showMedia("next");
+    
+    // 切换媒体后，如果当前是播放状态，重新开始定时播放
+    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
+      startPlayback();
+    }
   });
 
   // 12. 切换模式（AI检测/定时）
   win.find(".switch-mode-toggle").on("click", function () {
-    // 清理定时器和进度更新
+    // 清理定时器（但不影响播放状态）
     clearTimeout(switchTimer);
     switchTimer = null;
-    stopProgressUpdate();
     
-    // 暂停视频（如果正在播放）
-    const video = win.find(".image-player-video")[0];
-    if (video && !video.paused) {
-      video.pause();
-    }
+    // 注意：不暂停视频，保持当前播放状态
+    // 如果正在播放视频，继续播放；如果已暂停，保持暂停
     
     // 切换模式
     settings.autoSwitchMode =
       settings.autoSwitchMode === "detect" ? "timer" : "detect";
     
-    // 只有在切换到定时模式时才自动播放
-    if (settings.autoSwitchMode === "timer") {
-      settings.isPlaying = true;
-    } else {
-      // AI检测模式时暂停播放
-      settings.isPlaying = false;
-    }
+    // 保持当前的播放状态，不自动改变
+    // settings.isPlaying 保持不变
     
     saveSafeSettings();
     
@@ -1282,18 +1257,12 @@ const setupWindowEvents = () => {
       .find("i")
       .toggleClass("fa-robot fa-clock");
     
-    // 更新播放/暂停图标和文本
-    if (settings.isPlaying) {
-      win.find(".play-pause i").removeClass("fa-play").addClass("fa-pause");
-      win.find(".control-text").text("播放中");
-      // 如果是定时模式，开始播放
-      if (settings.autoSwitchMode === "timer") {
-        startPlayback();
-      }
-    } else {
-      win.find(".play-pause i").removeClass("fa-pause").addClass("fa-play");
-      win.find(".control-text").text("已暂停");
+    // 如果当前是播放状态且切换到定时模式，重新开始播放
+    if (settings.isPlaying && settings.autoSwitchMode === "timer") {
+      startPlayback();
     }
+    // 如果当前是播放状态但切换到AI检测模式，保持播放状态但停止定时器
+    // 视频会继续播放直到结束，然后等待AI检测
     
     updateExtensionMenu();
   });
