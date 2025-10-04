@@ -1253,6 +1253,10 @@ const preloadMediaItem = async (url, type) => {
 };
 
 const applyTransitionEffect = (imgElement, effect) => {
+  if (!imgElement) {
+    console.error(`[${EXTENSION_ID}] 图片元素未找到，跳过过渡效果`);
+    return;
+  }
   imgElement.classList.remove(
     "fade-transition",
     "slide-transition",
@@ -1266,8 +1270,8 @@ const applyTransitionEffect = (imgElement, effect) => {
 const showMedia = async (direction) => {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
-  const imgElement = win.find(".image-player-img")[0];
-  const videoElement = win.find(".image-player-video")[0];
+  let imgElement = win.find(".image-player-img")[0];
+  let videoElement = win.find(".image-player-video")[0];
   const loadingElement = win.find(".loading-animation")[0];
   const infoElement = win.find(".image-info")[0];
 
@@ -1389,10 +1393,11 @@ const showMedia = async (direction) => {
     } else if (mediaType === "video") {
       if (!videoElement) {
         console.error(`[${EXTENSION_ID}] 视频元素未找到，重新获取`);
-        videoElement = win.find(".image-player-video")[0];
-        if (!videoElement) {
+        const newVideoElement = win.find(".image-player-video")[0];
+        if (!newVideoElement) {
           throw new Error("视频元素不存在，播放器窗口可能未正确创建");
         }
+        videoElement = newVideoElement;
       }
       videoElement.currentTime = 0;
       videoElement.loop = settings.videoLoop;
