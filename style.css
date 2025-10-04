@@ -29,8 +29,8 @@
     align-items: center;
     padding: 0 8px;
     height: 30px;
-    background: rgba(43, 45, 49, 0.1);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.01);
+    background: rgba(43, 45, 49, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
     cursor: move;
     user-select: none;
     transition: background 0.3s;
@@ -187,8 +187,8 @@
     position: relative;
     display: flex;
     padding: 4px;
-    background: rgba(43, 45, 49, 0.1);
-    border-top: 1px solid rgba(255, 255, 255, 0.01);
+    background: rgba(43, 45, 49, 0.25);
+    border-top: 1px solid rgba(255, 255, 255, 0.02);
     height: 40px;
     gap: 4px;
     align-items: center;
