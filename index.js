@@ -225,15 +225,28 @@ const createMinimalSettingsPanel = () => {
     function () {
       const settings = getExtensionSettings();
       settings.masterEnabled = $(this).prop("checked");
+      console.log(`[${EXTENSION_ID}] 最小面板状态变更: masterEnabled=${settings.masterEnabled}`);
+      
       // 强制同步到全局
       if (window.extension_settings && window.extension_settings[EXTENSION_ID]) {
         window.extension_settings[EXTENSION_ID].masterEnabled = settings.masterEnabled;
+        console.log(`[${EXTENSION_ID}] 已同步到全局设置: ${window.extension_settings[EXTENSION_ID].masterEnabled}`);
+      } else {
+        window.extension_settings = window.extension_settings || {};
+        window.extension_settings[EXTENSION_ID] = settings;
+        console.log(`[${EXTENSION_ID}] 创建全局设置对象`);
       }
       saveSafeSettings();
 
       if (settings.masterEnabled) {
+        console.log(`[${EXTENSION_ID}] 启用扩展，移除最小面板`);
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
+        // 再次获取最新设置，确保 masterEnabled 为 true
         setTimeout(() => {
+          const latestSettings = getExtensionSettings();
+          latestSettings.masterEnabled = true;
+          window.extension_settings[EXTENSION_ID].masterEnabled = true;
+          console.log(`[${EXTENSION_ID}] 延迟初始化前状态: latestSettings.masterEnabled=${latestSettings.masterEnabled}, 全局=${window.extension_settings[EXTENSION_ID].masterEnabled}`);
           initExtension();
         }, 100);
         toastr.success("媒体播放器扩展已启用");
