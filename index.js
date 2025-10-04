@@ -6,76 +6,10 @@ import {
 // 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
-const SETTINGS_PANEL_ID = "image_player_settings_panel";
-const PLAYER_WINDOW_ID = "image_player_window";
-
-// 兼容 SillyTavern 主程序的事件源和事件类型（如果主程序没有自动挂载）
-const eventSource = typeof importedEventSource !== "undefined" ? importedEventSource : window.eventSource;
-const event_types = typeof importedEventTypes !== "undefined" ? importedEventTypes : window.event_types;
-
-window.extension_settings = window.extension_settings || {};
-window.extension_settings[EXTENSION_ID] = window.extension_settings[EXTENSION_ID] || {
-  masterEnabled: true,
-  enabled: true,
-  serviceUrl: "http://localhost:9000",
-  playMode: "random",
-  autoSwitchMode: "timer",
-  switchInterval: 5000,
-  position: { x: 100, y: 100, width: 600, height: 400 },
-  isLocked: false,
-  isWindowVisible: true,
-  showInfo: false,
-  aiResponseCooldown: 3000,
-  lastAISwitchTime: 0,
-  randomPlayedIndices: [],
-  randomMediaList: [],
-  isPlaying: false,
-  transitionEffect: "fade",
-  preloadImages: true,
-  preloadVideos: false,
-  playerDetectEnabled: true,
-  aiDetectEnabled: true,
-  pollingInterval: 30000,
-  slideshowMode: false,
-  videoLoop: false,
-  videoVolume: 0.8,
-  mediaFilter: "all",
-  showVideoControls: true,
-  hideBorder: false,
-  customVideoControls: {
-    showProgress: true,
-    showVolume: true,
-    showLoop: true,
-    showTime: true,
-  },
-  progressUpdateInterval: null,
-  serviceDirectory: "",
-  isMediaLoading: false,
-  currentRandomIndex: -1,
-  showMediaUpdateToast: false,
-  aiEventRegistered: false,
-  filterTriggerSource: null,
-  mediaConfig: {},
-};
-const settings = window.extension_settings[EXTENSION_ID];
-
-// 2. 获取设置时直接返回全局对象
-const getExtensionSettings = () => window.extension_settings[EXTENSION_ID];
-
-// 3. 保存设置时只需调用 SillyTavern 的保存方法
-const saveSafeSettings = () => {
-  localStorage.setItem(
-    `st_ext_settings_${EXTENSION_ID}`,
-    JSON.stringify(window.extension_settings[EXTENSION_ID])
-  );
-  if (typeof window.saveSettingsDebounced === "function") {
-    window.saveSettingsDebounced();
-    console.log(`[${EXTENSION_ID}] 设置已保存:`, window.extension_settings[EXTENSION_ID]);
-  } else {
-    console.warn(`[${EXTENSION_ID}] saveSettingsDebounced 不可用，设置未持久化`);
-  }
-};
-
+const PLAYER_WINDOW_ID = "st-image-player-window";
+const SETTINGS_PANEL_ID = "st-image-player-settings";
+const eventSource = importedEventSource || window.eventSource;
+const event_types = importedEventTypes || window.event_types;
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -89,6 +23,150 @@ const getSafeToastr = () => {
   );
 };
 const toastr = getSafeToastr();
+
+// 本地存储键名
+const STORAGE_KEY = `st_image_player_settings`;
+
+// 从本地存储加载设置
+const loadSettingsFromStorage = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      console.log(`[${EXTENSION_ID}] 从本地存储加载设置`);
+      return parsed;
+    }
+  } catch (error) {
+    console.warn(`[${EXTENSION_ID}] 加载本地设置失败:`, error);
+  }
+  return null;
+};
+
+// 保存设置到本地存储
+const saveSettingsToStorage = (settings) => {
+  try {
+    // 过滤掉不需要保存的临时状态
+    const settingsToSave = {
+      masterEnabled: settings.masterEnabled,
+      enabled: settings.enabled,
+      serviceUrl: settings.serviceUrl,
+      playMode: settings.playMode,
+      autoSwitchMode: settings.autoSwitchMode,
+      switchInterval: settings.switchInterval,
+      position: settings.position,
+      isLocked: settings.isLocked,
+      isWindowVisible: settings.isWindowVisible,
+      showInfo: settings.showInfo,
+      aiResponseCooldown: settings.aiResponseCooldown,
+      lastAISwitchTime: settings.lastAISwitchTime,
+      randomPlayedIndices: settings.randomPlayedIndices,
+      randomMediaList: settings.randomMediaList,
+      isPlaying: settings.isPlaying,
+      transitionEffect: settings.transitionEffect,
+      preloadImages: settings.preloadImages,
+      preloadVideos: settings.preloadVideos,
+      playerDetectEnabled: settings.playerDetectEnabled,
+      aiDetectEnabled: settings.aiDetectEnabled,
+      pollingInterval: settings.pollingInterval,
+      slideshowMode: settings.slideshowMode,
+      videoLoop: settings.videoLoop,
+      videoVolume: settings.videoVolume,
+      mediaFilter: settings.mediaFilter,
+      showVideoControls: settings.showVideoControls,
+      hideBorder: settings.hideBorder,
+      customVideoControls: settings.customVideoControls,
+      serviceDirectory: settings.serviceDirectory,
+      showMediaUpdateToast: settings.showMediaUpdateToast,
+    };
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
+    console.log(`[${EXTENSION_ID}] 设置已保存到本地存储`);
+  } catch (error) {
+    console.error(`[${EXTENSION_ID}] 保存设置到本地存储失败:`, error);
+  }
+};
+
+const getExtensionSettings = () => {
+  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
+  const globalSettings = getSafeGlobal("extension_settings", {});
+  
+  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+  if (globalSettings[EXTENSION_ID]) {
+    return globalSettings[EXTENSION_ID];
+  }
+
+  // 尝试从本地存储加载设置
+  const storedSettings = loadSettingsFromStorage();
+  if (storedSettings) {
+    globalSettings[EXTENSION_ID] = storedSettings;
+    return storedSettings;
+  }
+
+  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
+  const defaultSettings = {
+    masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
+    enabled: true, // 播放器启用状态
+    serviceUrl: "http://localhost:9000",
+    playMode: "random",
+    autoSwitchMode: "timer",
+    switchInterval: 5000,
+    position: { x: 100, y: 100, width: 600, height: 400 },
+    isLocked: false,
+    isWindowVisible: true,
+    showInfo: false,
+    aiResponseCooldown: 3000,
+    lastAISwitchTime: 0,
+    randomPlayedIndices: [],
+    randomMediaList: [],
+    isPlaying: false,
+    transitionEffect: "fade",
+    preloadImages: true,
+    preloadVideos: false,
+    playerDetectEnabled: true,
+    aiDetectEnabled: true,
+    pollingInterval: 30000,
+    slideshowMode: false,
+    videoLoop: false,
+    videoVolume: 0.8,
+    mediaFilter: "all",
+    showVideoControls: true,
+    hideBorder: false,
+    customVideoControls: {
+      showProgress: true,
+      showVolume: true,
+      showLoop: true,
+      showTime: true,
+    },
+    progressUpdateInterval: null,
+    serviceDirectory: "",
+    isMediaLoading: false,
+    currentRandomIndex: -1,
+    showMediaUpdateToast: false,
+    aiEventRegistered: false,
+    filterTriggerSource: null,
+  };
+
+  // 将默认设置写入全局，供后续保存使用
+  globalSettings[EXTENSION_ID] = defaultSettings;
+  return defaultSettings;
+};
+
+const saveSafeSettings = () => {
+  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  const settings = getExtensionSettings();
+  
+  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
+  if (saveFn && typeof saveFn === "function") {
+    saveFn();
+  }
+  
+  // 同时保存到本地存储
+  saveSettingsToStorage(settings);
+  
+  console.log(
+    `[${EXTENSION_ID}] 设置已保存: enabled=${settings.enabled}`
+  );
+};
 
 // 全局状态（沿用老版本简单管理）
 let mediaList = [];
@@ -908,7 +986,7 @@ const setupWindowEvents = () => {
     } else {
       if (isVideoVisible) {
         video.play().catch((err) => {
-          console.warn("视频自动播放失败:", err);
+          console.warn("视频自动播放失败（浏览器限制）:", err);
           toastr.warning("请点击视频手动播放");
         });
         startProgressUpdate();
@@ -1980,7 +2058,6 @@ const setupSettingsEvents = () => {
       .prop("checked");
     settings.transitionEffect = panel.find("#player-transition-effect").val();
     settings.pollingInterval =
-     
       parseInt(panel.find("#player-polling-interval").val()) || 30000;
     settings.switchInterval =
       parseInt(panel.find("#player-interval").val()) || 5000;
@@ -2351,7 +2428,6 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-
 // ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
