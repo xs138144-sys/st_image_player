@@ -235,6 +235,8 @@ const createMinimalSettingsPanel = () => {
       if (isChecked) {
         // 启用扩展
         try {
+          // 确保设置已保存后再调用initExtension
+          await new Promise(resolve => setTimeout(resolve, 100));
           await initExtension();
           // 只有在成功启用后才移除最小面板
           $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
