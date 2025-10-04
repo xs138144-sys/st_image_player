@@ -228,43 +228,10 @@ const createMinimalSettingsPanel = () => {
       saveSafeSettings();
 
       if (settings.masterEnabled) {
-        // 启用扩展 - 确保完整初始化
+        // 启用扩展
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
-        
-        // 延迟一小段时间确保DOM完全清理后再重新初始化
-        setTimeout(() => {
-          initExtension().then(() => {
-            toastr.success("媒体播放器扩展已启用");
-            
-            // 确保设置面板正确显示
-            setTimeout(() => {
-              const settingsPanel = $(`#${SETTINGS_PANEL_ID}`);
-              if (settingsPanel.length) {
-                settingsPanel.show();
-                console.log(`[${EXTENSION_ID}] 完整设置面板已显示`);
-              } else {
-                console.error(`[${EXTENSION_ID}] 完整设置面板未找到，重新创建`);
-                createSettingsPanel().then(() => {
-                  console.log(`[${EXTENSION_ID}] 完整设置面板重新创建完成`);
-                  // 再次检查并显示面板
-                  const newPanel = $(`#${SETTINGS_PANEL_ID}`);
-                  if (newPanel.length) {
-                    newPanel.show();
-                    console.log(`[${EXTENSION_ID}] 重新创建的面板已显示`);
-                  } else {
-                    console.error(`[${EXTENSION_ID}] 重新创建的面板仍未找到`);
-                  }
-                }).catch(error => {
-                  console.error(`[${EXTENSION_ID}] 重新创建设置面板失败:`, error);
-                  toastr.error("设置面板创建失败，请刷新页面重试");
-                });
-              }
-            }, 100);
-          }).catch(error => {
-            console.error(`[${EXTENSION_ID}] 重新启用扩展失败:`, error);
-            toastr.error("启用扩展失败，请刷新页面重试");
-          });
-        }, 50);
+        initExtension();
+        toastr.success("媒体播放器扩展已启用");
       }
     }
   );
@@ -1690,27 +1657,9 @@ const updateStatusDisplay = () => {
 
 const createSettingsPanel = async () => {
   const settings = getExtensionSettings();
-  console.log(`[${EXTENSION_ID}] 开始创建设置面板，masterEnabled=${settings.masterEnabled}`);
-  
   // 总开关禁用：不创建设置面板（核心修复）
-  if (!settings.masterEnabled) {
-    console.log(`[${EXTENSION_ID}] 总开关关闭，不创建设置面板`);
-    return;
-  }
-  
-  // 如果设置面板已存在，先移除再重新创建（确保刷新后正确显示）
-  if ($(`#${SETTINGS_PANEL_ID}`).length) {
-    $(`#${SETTINGS_PANEL_ID}`).remove();
-    console.log(`[${EXTENSION_ID}] 移除已存在的设置面板，重新创建`);
-  }
+  if (!settings.masterEnabled || $(`#${SETTINGS_PANEL_ID}`).length) return;
 
-  // 检查扩展设置容器是否存在
-  if (!$("#extensions_settings").length) {
-    console.error(`[${EXTENSION_ID}] 扩展设置容器不存在，无法创建设置面板`);
-    return;
-  }
-
-  console.log(`[${EXTENSION_ID}] 开始检查服务状态`);
   await checkServiceStatus();
   const serviceActive = serviceStatus.active ? "已连接" : "服务离线";
   const observerStatus = serviceStatus.observerActive ? "已启用" : "已禁用";
@@ -2072,17 +2021,10 @@ const setupSettingsEvents = () => {
 
     if (settings.masterEnabled) {
       // 启用扩展
-      console.log(`[${EXTENSION_ID}] 总开关启用，开始初始化扩展`);
-      initExtension().then(() => {
-        console.log(`[${EXTENSION_ID}] 扩展初始化完成`);
-        toastr.success("媒体播放器扩展已启用");
-      }).catch(error => {
-        console.error(`[${EXTENSION_ID}] 扩展初始化失败:`, error);
-        toastr.error("扩展启用失败，请检查控制台");
-      });
+      initExtension();
+      toastr.success("媒体播放器扩展已启用");
     } else {
       // 禁用扩展
-      console.log(`[${EXTENSION_ID}] 总开关禁用，清理扩展资源`);
       disableExtension();
       toastr.info("媒体播放器扩展已禁用");
     }
