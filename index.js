@@ -543,7 +543,12 @@ const bindVideoControls = () => {
 const createPlayerWindow = async () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不创建播放器窗口（核心修复）
-  if (!settings.enabled || $(`#${PLAYER_WINDOW_ID}`).length) return;
+  if (!settings.enabled) return;
+  
+  // 如果播放器窗口已存在但可能损坏，先移除再重新创建
+  if ($(`#${PLAYER_WINDOW_ID}`).length) {
+    $(`#${PLAYER_WINDOW_ID}`).remove();
+  }
 
   // （以下为原函数的HTML创建、事件绑定等逻辑，无需修改）
   const videoControlsHtml = settings.showVideoControls
@@ -2263,6 +2268,12 @@ const setupSettingsEvents = () => {
   panel.find("#show-player").on("click", () => {
     settings.isWindowVisible = true;
     saveSafeSettings();
+    
+    // 确保播放器窗口存在，如果不存在则先创建
+    if (!$(`#${PLAYER_WINDOW_ID}`).length) {
+      createPlayerWindow();
+    }
+    
     $(`#${PLAYER_WINDOW_ID}`).show();
     if (mediaList.length === 0) {
       toastr.info("未检测到媒体，请先配置扫描目录");
