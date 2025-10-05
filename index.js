@@ -847,31 +847,7 @@ const setupWindowEvents = () => {
         top: `${dragData.startTop + diffY}px`,
       });
     }
-    if (controlBarDrag) {
-      const diffX = e.clientX - controlBarDragData.startX;
-      const diffY = e.clientY - controlBarDragData.startY;
-      const newLeft = controlBarDragData.startLeft + diffX;
-      const newTop = controlBarDragData.startTop + diffY;
-      
-      // 限制控制栏在窗口范围内移动
-      const winWidth = win.width();
-      const winHeight = win.height();
-      const controlBarWidth = win.find(".video-controls").outerWidth() || 300;
-      const controlBarHeight = win.find(".video-controls").outerHeight() || 40;
-      
-      const maxLeft = winWidth - controlBarWidth;
-      const maxTop = winHeight - controlBarHeight;
-      
-      const clampedLeft = Math.max(0, Math.min(newLeft, maxLeft));
-      const clampedTop = Math.max(0, Math.min(newTop, maxTop));
-      
-      win.find(".video-controls").css({
-        left: `${clampedLeft}px`,
-        top: `${clampedTop}px`,
-        right: "auto",
-        bottom: "auto"
-      });
-    }
+
     if (resizeData) {
       const diffX = e.clientX - resizeData.startX;
       const diffY = e.clientY - resizeData.startY;
@@ -939,17 +915,7 @@ const setupWindowEvents = () => {
       dragData = null;
       resizeData = null;
     }
-    if (controlBarDrag) {
-      // 保存控制栏位置到设置
-      const controlBar = win.find(".video-controls");
-      settings.controlBarPosition = {
-        left: parseInt(controlBar.css("left")) || 0,
-        top: parseInt(controlBar.css("top")) || 0
-      };
-      saveSafeSettings();
-      controlBarDrag = false;
-      controlBarDragData = null;
-    }
+
     if (progressDrag && settings.customVideoControls.showProgress) {
       const video = win.find(".image-player-video")[0];
       if (video && settings.isPlaying && video.paused) {
@@ -1042,16 +1008,19 @@ const setupWindowEvents = () => {
     updateExtensionMenu();
   });
 
-  // 10. 控制栏拖拽移动
-  win.find(".video-controls").on("mousedown", function (e) {
+  // 10. 底部控制栏拖拽移动播放器窗口
+  win.find(".image-player-controls").on("mousedown", function (e) {
     if (settings.isLocked) return;
-    e.preventDefault();
-    controlBarDrag = true;
-    const controlBar = $(this);
-    const currentLeft = parseInt(controlBar.css("left")) || 0;
-    const currentTop = parseInt(controlBar.css("top")) || 0;
+    // 排除按钮点击，只响应控制栏空白区域拖拽
+    if ($(e.target).is("button, .control-btn, .media-filter-btn, .progress-bar, .volume-slider")) return;
     
-    controlBarDragData = {
+    e.preventDefault();
+    isDragging = true;
+    const winElement = win[0];
+    const currentLeft = parseInt(win.css("left")) || 0;
+    const currentTop = parseInt(win.css("top")) || 0;
+    
+    dragData = {
       startX: e.clientX,
       startY: e.clientY,
       startLeft: currentLeft,
