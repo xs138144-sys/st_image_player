@@ -248,6 +248,11 @@
     gap: 1px;
 }
 
+.controls-group.center {
+    margin: 0 auto;
+    gap: 2px;
+}
+
 /* ==================== 大小调整手柄 ==================== */
 .resize-handle {
     position: absolute;
@@ -819,5 +824,15 @@
 }
 
 .image-player-window.no-border .image-container:hover .image-info {
+    opacity: 1;
+}
+
+/* 无边框模式下的切换边框按钮自动隐藏 */
+.image-player-window.no-border .toggle-border {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-player-window.no-border:hover .toggle-border {
     opacity: 1;
 }

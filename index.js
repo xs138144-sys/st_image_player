@@ -738,7 +738,7 @@ const createPlayerWindow = async () => {
                     </button>
 
                 </div>
-                <div class="controls-group">
+                <div class="controls-group center">
                     <button class="control-btn prev" title="上一个"><i class="fa-solid fa-backward-step"></i></button>
                     <div class="control-text">${settings.playMode === "random"
       ? "随机模式"
@@ -814,16 +814,22 @@ const positionWindow = () => {
   if (settings.hideBorder && settings.showVideoControls) {
     const container = win.find(".image-container");
     const controls = win.find(".video-controls");
+    const toggleBorderBtn = win.find(".toggle-border");
+    
+    // 初始状态隐藏
     controls.css({ bottom: "-40px", opacity: 0 });
+    toggleBorderBtn.css({ opacity: 0 });
 
     container.off("mouseenter mouseleave");
     container.on("mouseenter", () => {
       controls.css({ bottom: 0, opacity: 1 });
+      toggleBorderBtn.css({ opacity: 1 });
     });
     container.on("mouseleave", () => {
       setTimeout(() => {
         if (!progressDrag && !volumeDrag) {
           controls.css({ bottom: "-40px", opacity: 0 });
+          toggleBorderBtn.css({ opacity: 0 });
         }
       }, 3000);
     });
@@ -1582,20 +1588,20 @@ const showMedia = async (direction) => {
 
     if (mediaType === "image") {
       applyTransitionEffect(imgElement, settings.transitionEffect);
-      $(imgElement).attr("src", mediaUrl);
       
-      // 确保图片加载完成后再显示
+      // 直接使用img元素加载图片
       await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
+        imgElement.onload = () => {
           $(imgElement).show();
           resolve();
         };
-        img.onerror = () => {
+        imgElement.onerror = () => {
           console.error("图片加载失败:", mediaUrl);
-          reject(new Error("图片加载失败"));
+          $(imgElement).attr("src", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg==");
+          $(imgElement).show();
+          resolve(); // 即使加载失败也继续显示占位图
         };
-        img.src = mediaUrl;
+        $(imgElement).attr("src", mediaUrl);
       });
       
       $(videoElement).hide();
