@@ -2703,11 +2703,31 @@ const registerAIEventListeners = () => {
         }
       };
       
-      // AI回复事件（修复：直接调用事件处理函数）
-      bindEvent(currentEventTypes.MESSAGE_RECEIVED, onAIResponse);
+      // AI回复事件（修复：添加条件判断，与没有保存设置的版本保持一致）
+      bindEvent(currentEventTypes.MESSAGE_RECEIVED, () => {
+        const settings = getExtensionSettings();
+        if (
+          settings.enabled &&
+          settings.autoSwitchMode === "detect" &&
+          settings.aiDetectEnabled &&
+          settings.isWindowVisible
+        ) {
+          onAIResponse();
+        }
+      });
       
-      // 玩家消息事件（修复：直接调用事件处理函数）
-      bindEvent(currentEventTypes.MESSAGE_SENT, onPlayerMessage);
+      // 玩家消息事件（修复：添加条件判断，与没有保存设置的版本保持一致）
+      bindEvent(currentEventTypes.MESSAGE_SENT, () => {
+        const settings = getExtensionSettings();
+        if (
+          settings.enabled &&
+          settings.autoSwitchMode === "detect" &&
+          settings.playerDetectEnabled &&
+          settings.isWindowVisible
+        ) {
+          onPlayerMessage();
+        }
+      });
       // 标记注册成功，避免重复尝试
       const settings = getExtensionSettings();
       settings.aiEventRegistered = true;
