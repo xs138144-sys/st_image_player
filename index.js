@@ -2689,30 +2689,28 @@ const registerAIEventListeners = () => {
         }
       };
       
-      // AI回复事件（修复：添加条件判断，与没有保存设置的版本保持一致）
+      // AI回复事件（修复：移除窗口可见性检查，让AI检测在窗口隐藏时也能工作）
       if (event_types.MESSAGE_RECEIVED) {
         bindEvent(event_types.MESSAGE_RECEIVED, () => {
           const settings = getExtensionSettings();
           if (
             settings.enabled &&
             settings.autoSwitchMode === "detect" &&
-            settings.aiDetectEnabled &&
-            settings.isWindowVisible
+            settings.aiDetectEnabled
           ) {
             onAIResponse();
           }
         });
       }
       
-      // 玩家消息事件（修复：添加条件判断，与没有保存设置的版本保持一致）
+      // 玩家消息事件（修复：移除窗口可见性检查，让玩家检测在窗口隐藏时也能工作）
       if (event_types.MESSAGE_SENT) {
         bindEvent(event_types.MESSAGE_SENT, () => {
           const settings = getExtensionSettings();
           if (
             settings.enabled &&
             settings.autoSwitchMode === "detect" &&
-            settings.playerDetectEnabled &&
-            settings.isWindowVisible
+            settings.playerDetectEnabled
           ) {
             onPlayerMessage();
           }
