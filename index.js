@@ -902,13 +902,29 @@ const applyMediaFitMode = () => {
 const setupWindowEvents = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const header = win.find(".image-player-header")[0];
+  const controls = win.find(".image-player-controls")[0];
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
   const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
 
-  // 1. 窗口拖拽
+  // 1. 窗口拖拽 - 标题栏
   header.addEventListener("mousedown", (e) => {
     if (settings.isLocked || settings.hideBorder) return;
+    dragData = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: win.offset().left,
+      startTop: win.offset().top,
+    };
+  });
+
+  // 2. 窗口拖拽 - 控制栏
+  controls.addEventListener("mousedown", (e) => {
+    if (settings.isLocked || settings.hideBorder) return;
+    // 排除控制按钮的点击，只允许控制栏空白区域拖拽
+    if (e.target.closest('.control-btn') || e.target.closest('.controls-group')) {
+      return;
+    }
     dragData = {
       startX: e.clientX,
       startY: e.clientY,

@@ -194,6 +194,13 @@
     align-items: center;
     box-sizing: border-box;
     justify-content: space-between;
+    cursor: move;
+    user-select: none;
+    transition: background 0.3s;
+}
+
+.image-player-controls:hover {
+    background: rgba(43, 45, 49, 0.4);
 }
 
 .control-btn {
