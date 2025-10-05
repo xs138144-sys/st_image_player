@@ -3294,3 +3294,12 @@ const showTransitionEffectPanel = () => {
     }
   });
 };
+
+// ==================== 全局函数导出 ====================
+// 将关键函数导出到全局作用域，方便调试
+window.registerAIEventListeners = registerAIEventListeners;
+window.getExtensionSettings = getExtensionSettings;
+window.onAIResponse = onAIResponse;
+window.onPlayerMessage = onPlayerMessage;
+
+console.log(`[${EXTENSION_ID}] 全局调试函数已导出: registerAIEventListeners, getExtensionSettings, onAIResponse, onPlayerMessage`);
