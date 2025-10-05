@@ -249,7 +249,16 @@
 }
 
 .controls-group.center {
-    margin: 0 auto;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    gap: 2px;
+    display: flex;
+    align-items: center;
+}
+
+.controls-group.left {
+    margin-right: auto;
     gap: 2px;
 }
 

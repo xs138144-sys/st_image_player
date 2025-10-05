@@ -701,10 +701,12 @@ const createPlayerWindow = async () => {
                         <i class="fa-solid fa-video"></i>
                     </button>
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
-                <button class="toggle-border ${settings.hideBorder ? "active" : ""
+                </div>
+                <div class="controls-group left">
+                    <button class="control-btn toggle-border ${settings.hideBorder ? "active" : ""
     }" title="${settings.hideBorder ? "显示边框" : "隐藏边框"
     }"><i class="fa-solid fa-border-none"></i></button>
-            </div>
+                </div>
             </div>
             <div class="image-player-body">
                 <div class="image-container">
@@ -1589,19 +1591,20 @@ const showMedia = async (direction) => {
     if (mediaType === "image") {
       applyTransitionEffect(imgElement, settings.transitionEffect);
       
-      // 直接使用img元素加载图片
+      // 使用新的Image对象加载图片，确保事件能正确触发
       await new Promise((resolve, reject) => {
-        imgElement.onload = () => {
-          $(imgElement).show();
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          $(imgElement).attr("src", mediaUrl).show();
           resolve();
         };
-        imgElement.onerror = () => {
+        tempImg.onerror = () => {
           console.error("图片加载失败:", mediaUrl);
           $(imgElement).attr("src", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg==");
           $(imgElement).show();
           resolve(); // 即使加载失败也继续显示占位图
         };
-        $(imgElement).attr("src", mediaUrl);
+        tempImg.src = mediaUrl;
       });
       
       $(videoElement).hide();
