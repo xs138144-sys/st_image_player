@@ -936,31 +936,29 @@
     border-color: rgba(255, 255, 255, 0.8);
 }
 
-/* 有边框模式：切换按钮显示在标题栏内 */
+/* 有边框模式：切换按钮在标题栏右上角 */
 .image-player-window:not(.no-border) .toggle-border {
     position: absolute;
     top: 5px;
     right: 5px;
     width: 24px;
     height: 24px;
-    border-radius: 3px;
-    background: rgba(43, 45, 49, 0.7);
     border: none;
+    background: rgba(43, 45, 49, 0.7);
     color: #b0b0b0;
-    opacity: 1 !important;
-    pointer-events: auto;
+    border-radius: 3px;
     z-index: 10;
     transition: all 0.2s ease;
 }
 
 .image-player-window:not(.no-border) .toggle-border:hover {
-    background: rgba(114, 137, 218, 0.3);
-    color: #7289da;
+    background: rgba(43, 45, 49, 0.9);
+    color: #fff;
 }
 
 .image-player-window:not(.no-border) .toggle-border.active {
-    background: rgba(114, 137, 218, 0.5);
-    color: #7289da;
+    background: rgba(66, 135, 245, 0.8);
+    color: #fff;
 }
 
 /* 无边框模式：切换按钮跟随控制栏自动隐藏 */
@@ -977,7 +975,7 @@
     opacity: 0;
     pointer-events: none;
     z-index: 1000;
-    transition: all 0.3s ease;
+    transition: opacity 0.3s ease;
 }
 
 .image-player-window.no-border:hover .toggle-border {

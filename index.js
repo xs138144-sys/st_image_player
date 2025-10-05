@@ -1120,6 +1120,34 @@ const setupWindowEvents = () => {
       startLeft: currentLeft,
       startTop: currentTop
     };
+
+    // 添加mousemove事件处理
+    $(document).on("mousemove.controlBarDrag", function (e) {
+      if (dragData && isDragging) {
+        const diffX = e.clientX - dragData.startX;
+        const diffY = e.clientY - dragData.startY;
+        win.css({
+          left: `${dragData.startLeft + diffX}px`,
+          top: `${dragData.startTop + diffY}px`
+        });
+      }
+    });
+
+    // 添加mouseup事件处理
+    $(document).on("mouseup.controlBarDrag", function () {
+      if (dragData) {
+        settings.position = {
+          x: win.offset().left,
+          y: win.offset().top,
+          width: win.width(),
+          height: win.height(),
+        };
+        saveSafeSettings();
+        dragData = null;
+      }
+      isDragging = false;
+      $(document).off("mousemove.controlBarDrag mouseup.controlBarDrag");
+    });
   });
 
   // 11. 媒体自适应模式切换
