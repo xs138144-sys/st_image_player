@@ -1450,9 +1450,10 @@ const applyTransitionEffect = (imgElement, effect) => {
     return;
   }
   
-  imgElement.classList.remove(
+  // 清除所有过渡效果类和show类，避免样式冲突
+  const transitionClasses = [
     "fade-transition",
-    "slide-transition",
+    "slide-transition", 
     "zoom-transition",
     "drift-transition",
     "push-transition",
@@ -1460,8 +1461,22 @@ const applyTransitionEffect = (imgElement, effect) => {
     "bounce-transition",
     "flip-transition",
     "fade-scale-transition",
+    "smooth-transition",
+    "quick-fade-transition",
     "show"
-  );
+  ];
+  
+  transitionClasses.forEach(className => {
+    imgElement.classList.remove(className);
+  });
+  
+  // 重置CSS样式，确保过渡效果干净
+  $(imgElement).css({
+    opacity: "",
+    transform: "",
+    transition: ""
+  });
+  
   if (effect !== "none") {
     imgElement.classList.add(`${effect}-transition`);
   }
@@ -1643,14 +1658,17 @@ const showMedia = async (direction) => {
     }, 150);
 
     if (mediaType === "image") {
-      // 优化：先设置src再应用过渡效果，减少闪烁
-      $(imgElement).attr("src", mediaUrl);
-      
-      // 立即显示图片，但设置透明度为0准备过渡
+      // 修复：确保先完全隐藏旧图片，再显示新图片
       $(imgElement).css({
         opacity: 0,
-        display: "block"
+        display: "none"
       });
+      
+      // 清除所有过渡效果类，避免样式冲突
+      imgElement.className = "image-player-img";
+      
+      // 设置新图片源
+      $(imgElement).attr("src", mediaUrl);
       
       // 应用过渡效果
       applyTransitionEffect(imgElement, settings.transitionEffect);
@@ -1659,21 +1677,35 @@ const showMedia = async (direction) => {
       await new Promise((resolve, reject) => {
         const tempImg = new Image();
         tempImg.onload = () => {
-          // 图片加载完成后，立即触发过渡动画
-          setTimeout(() => {
+          // 图片加载完成后，先显示图片但透明度为0
+          $(imgElement).css({
+            opacity: 0,
+            display: "block"
+          });
+          
+          // 使用requestAnimationFrame确保动画流畅
+          requestAnimationFrame(() => {
+            // 触发过渡动画
             $(imgElement).css("opacity", 1);
             imgElement.classList.add("show");
             resolve();
-          }, 10); // 减少延迟时间
+          });
         };
         tempImg.onerror = () => {
           console.error("图片加载失败:", mediaUrl);
           $(imgElement).attr("src", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg==");
-          setTimeout(() => {
+          
+          // 错误处理时也确保正确显示
+          $(imgElement).css({
+            opacity: 0,
+            display: "block"
+          });
+          
+          requestAnimationFrame(() => {
             $(imgElement).css("opacity", 1);
             imgElement.classList.add("show");
             resolve();
-          }, 10);
+          });
         };
         tempImg.src = mediaUrl;
       });
