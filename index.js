@@ -2815,13 +2815,25 @@ const registerAIEventListeners = () => {
     try {
       console.log(`[${EXTENSION_ID}] 第${retries + 1}次注册尝试（共${maxRetries + 1}次机会）`);
       
+      // 详细检查依赖状态
+      console.log(`[${EXTENSION_ID}] 依赖状态检查:`);
+      console.log(`[${EXTENSION_ID}]   - eventSource: ${!!eventSource} (${typeof eventSource})`);
+      console.log(`[${EXTENSION_ID}]   - event_types: ${!!event_types} (${typeof event_types})`);
+      
+      if (event_types) {
+        console.log(`[${EXTENSION_ID}]   - MESSAGE_RECEIVED: ${!!event_types.MESSAGE_RECEIVED} (${event_types.MESSAGE_RECEIVED})`);
+        console.log(`[${EXTENSION_ID}]   - MESSAGE_SENT: ${!!event_types.MESSAGE_SENT} (${event_types.MESSAGE_SENT})`);
+      }
+      
       // 检查依赖是否就绪
       if (!eventSource) {
+        console.warn(`[${EXTENSION_ID}] ❌ eventSource未就绪，等待重试`);
         throw new Error('eventSource未就绪');
       }
       
       // 检查event_types是否就绪（允许使用兜底值）
       if (!event_types) {
+        console.warn(`[${EXTENSION_ID}] ❌ event_types未就绪，等待重试`);
         throw new Error('event_types未就绪');
       }
       
@@ -2830,12 +2842,13 @@ const registerAIEventListeners = () => {
                                    event_types.MESSAGE_SENT === "MESSAGE_SENT";
       
       if (!isFallbackEventTypes && (!event_types.MESSAGE_RECEIVED || !event_types.MESSAGE_SENT)) {
+        console.warn(`[${EXTENSION_ID}] ❌ 事件类型未就绪，等待重试`);
         throw new Error(
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}, MESSAGE_RECEIVED=${!!event_types?.MESSAGE_RECEIVED}, MESSAGE_SENT=${!!event_types?.MESSAGE_SENT}`
         );
       }
       
-      console.log(`[${EXTENSION_ID}] 依赖检查通过，开始注册事件监听器`);
+      console.log(`[${EXTENSION_ID}] ✅ 依赖检查通过，开始注册事件监听器`);
       
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
@@ -3136,17 +3149,20 @@ const initExtension = async () => {
     const triggerAIRegister = () => {
       const currentSettings = getExtensionSettings();
       if (currentSettings.aiEventRegistered) {
-        console.log(`[${EXTENSION_ID}] AI事件已注册,无需重复触发`);
+        console.log(`[${EXTENSION_ID}] ✅ AI事件已注册,无需重复触发`);
         return;
       }
-      console.log(`[${EXTENSION_ID}] 触发AI事件注册(首次尝试）`);
+      console.log(`[${EXTENSION_ID}] 🚀 触发AI事件注册(首次尝试）`);
+      console.log(`[${EXTENSION_ID}] 📋 注册条件检查: masterEnabled=${currentSettings.masterEnabled}, enabled=${currentSettings.enabled}, aiEventRegistered=${currentSettings.aiEventRegistered}`);
       registerAIEventListeners();
       // 兜底：3秒后检查是否注册成功，未成功则重试一次
       setTimeout(() => {
         const checkSettings = getExtensionSettings();
         if (!checkSettings.aiEventRegistered) {
-          console.warn(`[${EXTENSION_ID}] AI注册未成功,启动二次重试`);
+          console.warn(`[${EXTENSION_ID}] ⚠️ AI注册未成功,启动二次重试`);
           registerAIEventListeners();
+        } else {
+          console.log(`[${EXTENSION_ID}] ✅ AI事件注册成功确认`);
         }
       }, 3000);
     };
