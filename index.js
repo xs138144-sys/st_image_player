@@ -2443,6 +2443,24 @@ const setupSettingsEvents = () => {
     updateExtensionMenu();
   });
 
+  // AI检测开关变更
+  panel.find("#player-ai-detect").on("change", function () {
+    const settings = getExtensionSettings();
+    settings.aiDetectEnabled = $(this).prop("checked");
+    saveSafeSettings();
+    console.log(`[${EXTENSION_ID}] AI检测开关: ${settings.aiDetectEnabled ? "启用" : "禁用"}`);
+    toastr.info(`AI检测${settings.aiDetectEnabled ? "已启用" : "已禁用"}`);
+  });
+
+  // 玩家检测开关变更
+  panel.find("#player-player-detect").on("change", function () {
+    const settings = getExtensionSettings();
+    settings.playerDetectEnabled = $(this).prop("checked");
+    saveSafeSettings();
+    console.log(`[${EXTENSION_ID}] 玩家检测开关: ${settings.playerDetectEnabled ? "启用" : "禁用"}`);
+    toastr.info(`玩家检测${settings.playerDetectEnabled ? "已启用" : "已禁用"}`);
+  });
+
   // 播放模式变更
   panel.find("#player-play-mode").on("change", function () {
     const newMode = $(this).val();
