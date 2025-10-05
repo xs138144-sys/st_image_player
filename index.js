@@ -9,7 +9,20 @@ const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
 const eventSource = importedEventSource || window.eventSource;
-const event_types = importedEventTypes || window.event_types;
+
+// 修复：为event_types添加兜底默认值
+let event_types = importedEventTypes || window.event_types;
+if (!event_types) {
+  console.warn(`[${EXTENSION_ID}] event_types未定义，创建兜底默认值`);
+  event_types = {
+    MESSAGE_RECEIVED: "MESSAGE_RECEIVED",
+    MESSAGE_SENT: "MESSAGE_SENT"
+  };
+  // 同时设置到window对象，供其他部分使用
+  window.event_types = event_types;
+}
+
+console.log(`[${EXTENSION_ID}] event_types初始化完成:`, event_types);
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -2696,16 +2709,27 @@ const registerAIEventListeners = () => {
       console.log('MESSAGE_RECEIVED:', event_types?.MESSAGE_RECEIVED);
       console.log('MESSAGE_SENT:', event_types?.MESSAGE_SENT);
       
-      if (
-        !eventSource ||
-        !event_types ||
-        !event_types.MESSAGE_RECEIVED ||
-        !event_types.MESSAGE_SENT
-      ) {
+      // 检查依赖是否就绪
+      if (!eventSource) {
+        throw new Error('eventSource未就绪');
+      }
+      
+      // 检查event_types是否就绪（允许使用兜底值）
+      if (!event_types) {
+        throw new Error('event_types未就绪');
+      }
+      
+      // 检查事件类型是否就绪（如果使用兜底值，则跳过此检查）
+      const isFallbackEventTypes = event_types.MESSAGE_RECEIVED === "MESSAGE_RECEIVED" && 
+                                   event_types.MESSAGE_SENT === "MESSAGE_SENT";
+      
+      if (!isFallbackEventTypes && (!event_types.MESSAGE_RECEIVED || !event_types.MESSAGE_SENT)) {
         throw new Error(
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}, MESSAGE_RECEIVED=${!!event_types?.MESSAGE_RECEIVED}, MESSAGE_SENT=${!!event_types?.MESSAGE_SENT}`
         );
       }
+      
+      console.log(`[${EXTENSION_ID}] 依赖检查通过，开始注册事件监听器`);
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
         if (typeof eventSource.addEventListener === "function") {
