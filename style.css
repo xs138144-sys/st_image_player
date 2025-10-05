@@ -949,7 +949,7 @@
     color: #b0b0b0;
     opacity: 1 !important;
     pointer-events: auto;
-    z-index: 1000;
+    z-index: 10;
     transition: all 0.2s ease;
 }
 

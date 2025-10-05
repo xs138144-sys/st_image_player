@@ -167,6 +167,9 @@ let wsReconnectTimer = null;
 const createMinimalSettingsPanel = () => {
   if ($(`#${SETTINGS_PANEL_ID}-minimal`).length) return;
 
+  // 先获取设置
+  const settings = getExtensionSettings();
+  
   const html = `
     <div id="${SETTINGS_PANEL_ID}-minimal">
       <div class="extension_settings inline-drawer">
@@ -181,7 +184,7 @@ const createMinimalSettingsPanel = () => {
             <!-- 总开关 -->
             <div class="settings-row">
               <label class="checkbox_label" style="min-width:auto;">
-                <input type="checkbox" id="master-enabled-minimal" />
+                <input type="checkbox" id="master-enabled-minimal" ${settings.masterEnabled ? 'checked' : ''} />
                 <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
               </label>
             </div>
@@ -199,9 +202,6 @@ const createMinimalSettingsPanel = () => {
   `;
 
   $("#extensions_settings").append(html);
-
-  // 初始化复选框状态
-  const settings = getExtensionSettings();
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", settings.masterEnabled);
 
   // 设置事件
@@ -1431,6 +1431,11 @@ const preloadMediaItem = async (url, type) => {
 };
 
 const applyTransitionEffect = (imgElement, effect) => {
+  if (!imgElement || !imgElement.classList) {
+    console.warn(`[${EXTENSION_ID}] applyTransitionEffect: imgElement无效`, imgElement);
+    return;
+  }
+  
   imgElement.classList.remove(
     "fade-transition",
     "slide-transition",
