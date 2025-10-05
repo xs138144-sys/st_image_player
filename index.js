@@ -196,6 +196,10 @@ const createMinimalSettingsPanel = () => {
 
   $("#extensions_settings").append(html);
 
+  // 初始化复选框状态
+  const settings = getExtensionSettings();
+  $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).prop("checked", settings.masterEnabled);
+  
   // 设置事件
   $(`#${SETTINGS_PANEL_ID}-minimal #master-enabled-minimal`).on(
     "change",
