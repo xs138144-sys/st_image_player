@@ -684,6 +684,15 @@ const createPlayerWindow = async () => {
                         <i class="fa-solid fa-video"></i>
                     </button>
                 </div>
+                <div class="controls-group">
+                    <button class="control-btn media-fit-toggle ${
+                      settings.mediaFitMode === 'fill' ? 'active' : ''
+                    }" title="${settings.mediaFitMode === 'fill' ? '填充模式' : '自适应模式'}">
+                        <i class="fa-solid ${
+                          settings.mediaFitMode === 'fill' ? 'fa-expand' : 'fa-compress'
+                        }"></i>
+                    </button>
+                </div>
             </div>
             <!-- 四边四角拉伸手柄 -->
             <div class="resize-handle top-left"></div>
