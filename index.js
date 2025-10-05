@@ -144,6 +144,8 @@ const getExtensionSettings = () => {
     showMediaUpdateToast: false,
     aiEventRegistered: false,
     filterTriggerSource: null,
+    // 新增：媒体自适应模式
+    mediaFitMode: "contain", // contain: 保持比例自适应, fill: 填充窗口
   };
 
   // 将默认设置写入全局，供后续保存使用
@@ -181,6 +183,7 @@ let serviceStatus = {
 let retryCount = 0;
 let pollingTimer = null;
 let preloadedMedia = null;
+let preloadedMediaCache = new Map(); // 预加载媒体缓存，支持多张图片
 let currentMediaType = "image";
 let ws = null;
 let dragData = null;
@@ -604,6 +607,18 @@ const bindVideoControls = () => {
   $(document).on("mousedown", `${winSelector} .volume-slider`, () => {
     volumeDrag = true;
   });
+
+  // 音量滑块鼠标移动事件
+  $(document).off("mousemove", `${winSelector} .volume-slider`);
+  $(document).on("mousemove", `${winSelector} .volume-slider`, (e) => {
+    if (volumeDrag) {
+      const slider = e.currentTarget;
+      const rect = slider.getBoundingClientRect();
+      const clickX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      const volume = clickX / rect.width;
+      updateVolume(volume);
+    }
+  });
 };
 
 // ==================== 播放器窗口（修复媒体筛选同步） ====================
@@ -693,6 +708,15 @@ const createPlayerWindow = async () => {
   }">
                         <i class="fa-solid fa-video"></i>
                     </button>
+                    <button class="toggle-fit-mode ${
+                      settings.mediaFitMode === "fill" ? "active" : ""
+                    }" title="${
+    settings.mediaFitMode === "fill" ? "填充模式" : "自适应模式"
+  }">
+                        <i class="fa-solid ${
+                          settings.mediaFitMode === "fill" ? "fa-expand" : "fa-compress"
+                        }"></i>
+                    </button>
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
                 </div>
             </div>
@@ -772,6 +796,8 @@ const createPlayerWindow = async () => {
   setupWindowEvents();
   positionWindow();
   bindVideoControls();
+  // 应用媒体自适应模式
+  applyMediaFitMode();
 
   // 初始化筛选状态（修复同步）
   const filterBtn = $(
@@ -799,22 +825,33 @@ const positionWindow = () => {
     .toggle(settings.isWindowVisible)
     .toggleClass("no-border", settings.hideBorder);
 
-  if (settings.hideBorder && settings.showVideoControls) {
-    const container = win.find(".image-container");
+  // 视频控制栏显示逻辑
+  if (settings.showVideoControls) {
     const controls = win.find(".video-controls");
-    controls.css({ bottom: "-40px", opacity: 0 });
+    
+    if (settings.hideBorder) {
+      // 隐藏边框模式：鼠标悬停显示
+      const container = win.find(".image-container");
+      controls.css({ bottom: "-40px", opacity: 0 });
 
-    container.off("mouseenter mouseleave");
-    container.on("mouseenter", () => {
-      controls.css({ bottom: 0, opacity: 1 });
-    });
-    container.on("mouseleave", () => {
-      setTimeout(() => {
-        if (!progressDrag && !volumeDrag) {
-          controls.css({ bottom: "-40px", opacity: 0 });
-        }
-      }, 3000);
-    });
+      container.off("mouseenter mouseleave");
+      container.on("mouseenter", () => {
+        controls.css({ bottom: 0, opacity: 1 });
+      });
+      container.on("mouseleave", () => {
+        setTimeout(() => {
+          if (!progressDrag && !volumeDrag) {
+            controls.css({ bottom: "-40px", opacity: 0 });
+          }
+        }, 3000);
+      });
+    } else {
+      // 普通模式：直接显示
+      controls.css({ display: "block", bottom: 0, opacity: 1 });
+    }
+  } else {
+    // 如果设置中关闭了视频控制栏，确保隐藏
+    win.find(".video-controls").hide();
   }
 
   adjustVideoControlsLayout();
@@ -826,6 +863,40 @@ const adjustVideoControlsLayout = () => {
   win
     .find(".image-container")
     .css("height", `calc(100% - ${controlsHeight}px)`);
+};
+
+// 应用媒体自适应模式
+const applyMediaFitMode = () => {
+  const settings = getExtensionSettings();
+  const win = $(`#${PLAYER_WINDOW_ID}`);
+  const imgElement = win.find(".image-player-img")[0];
+  const videoElement = win.find(".image-player-video")[0];
+  
+  if (settings.mediaFitMode === "fill") {
+    // 填充模式：媒体填充整个容器
+    $(imgElement).css({
+      "object-fit": "fill",
+      "width": "100%",
+      "height": "100%"
+    });
+    $(videoElement).css({
+      "object-fit": "fill", 
+      "width": "100%",
+      "height": "100%"
+    });
+  } else {
+    // 自适应模式（默认）：保持比例自适应
+    $(imgElement).css({
+      "object-fit": "contain",
+      "max-width": "100%",
+      "max-height": "100%"
+    });
+    $(videoElement).css({
+      "object-fit": "contain",
+      "max-width": "100%", 
+      "max-height": "100%"
+    });
+  }
 };
 
 const setupWindowEvents = () => {
@@ -967,6 +1038,8 @@ const setupWindowEvents = () => {
       saveSafeSettings();
       dragData = null;
       resizeData = null;
+      // 窗口大小调整结束后重新应用媒体自适应模式
+      applyMediaFitMode();
     }
     if (progressDrag && settings.customVideoControls.showProgress) {
       const video = win.find(".image-player-video")[0];
@@ -1057,6 +1130,22 @@ const setupWindowEvents = () => {
       "checked",
       settings.showVideoControls
     );
+    // 重新绑定视频控制栏事件
+    bindVideoControls();
+    updateExtensionMenu();
+  });
+
+  // 10. 媒体自适应模式切换
+  win.find(".toggle-fit-mode").on("click", function () {
+    settings.mediaFitMode = settings.mediaFitMode === "contain" ? "fill" : "contain";
+    saveSafeSettings();
+    $(this).toggleClass("active", settings.mediaFitMode === "fill");
+    $(this).attr("title", settings.mediaFitMode === "fill" ? "填充模式" : "自适应模式");
+    $(this).find("i")
+      .toggleClass("fa-expand", settings.mediaFitMode === "fill")
+      .toggleClass("fa-compress", settings.mediaFitMode === "contain");
+    // 重新应用媒体显示样式
+    applyMediaFitMode();
     updateExtensionMenu();
   });
 
@@ -1249,8 +1338,8 @@ const startPlayback = () => {
         settings.isPlaying &&
         settings.autoSwitchMode === "timer"
       ) {
-        // 额外防护：避免定时器延迟累积（用当前时间计算准确间隔）
-        const delay = Math.max(1000, settings.switchInterval); // 最低1秒间隔，防止卡死
+        // 完全使用用户设置的间隔时间，不强制最低间隔
+        const delay = settings.switchInterval;
         switchTimer = setTimeout(startPlayback, delay);
       }
     }
@@ -1296,8 +1385,14 @@ const preloadMediaItem = async (url, type) => {
     return null;
   }
 
+  // 检查缓存中是否已存在
+  if (preloadedMediaCache.has(url)) {
+    console.log(`[${EXTENSION_ID}] 使用缓存预加载: ${url}`);
+    return preloadedMediaCache.get(url);
+  }
+
   try {
-    return await new Promise((resolve, reject) => {
+    const media = await new Promise((resolve, reject) => {
       if (type === "image") {
         const img = new Image();
         img.onload = () => resolve(img);
@@ -1313,6 +1408,18 @@ const preloadMediaItem = async (url, type) => {
         resolve(null);
       }
     });
+    
+    // 缓存预加载的媒体对象
+    if (media) {
+      preloadedMediaCache.set(url, media);
+      // 限制缓存大小，避免内存泄漏
+      if (preloadedMediaCache.size > 10) {
+        const firstKey = preloadedMediaCache.keys().next().value;
+        preloadedMediaCache.delete(firstKey);
+      }
+    }
+    
+    return media;
   } catch (e) {
     console.warn(`[${EXTENSION_ID}] 预加载${type}失败`, e);
     return null;
@@ -1323,10 +1430,15 @@ const applyTransitionEffect = (imgElement, effect) => {
   imgElement.classList.remove(
     "fade-transition",
     "slide-transition",
-    "zoom-transition"
+    "zoom-transition",
+    "show"
   );
   if (effect !== "none") {
     imgElement.classList.add(`${effect}-transition`);
+    // 延迟添加show类以触发过渡效果
+    setTimeout(() => {
+      imgElement.classList.add("show");
+    }, 10);
   }
 };
 
@@ -1441,9 +1553,18 @@ const showMedia = async (direction) => {
 
     if (mediaType === "image") {
       applyTransitionEffect(imgElement, settings.transitionEffect);
-      if (preloadedMedia && preloadedMedia.src === mediaUrl) {
+      // 检查缓存中是否有预加载的图片
+      if (preloadedMediaCache.has(mediaUrl)) {
+        // 使用缓存中的预加载图片
+        const cachedMedia = preloadedMediaCache.get(mediaUrl);
         $(imgElement).attr("src", mediaUrl).show();
+        console.log(`[${EXTENSION_ID}] 使用缓存预加载图片: ${mediaUrl}`);
+      } else if (preloadedMedia && preloadedMedia.src === mediaUrl) {
+        // 使用当前预加载的图片
+        $(imgElement).attr("src", mediaUrl).show();
+        console.log(`[${EXTENSION_ID}] 使用预加载图片: ${mediaUrl}`);
       } else {
+        // 没有预加载，正常加载图片
         const img = new Image();
         img.src = mediaUrl;
         await new Promise((resolve, reject) => {
@@ -1451,6 +1572,7 @@ const showMedia = async (direction) => {
           img.onerror = () => reject(new Error("图片加载失败"));
         });
         $(imgElement).attr("src", mediaUrl).show();
+        console.log(`[${EXTENSION_ID}] 直接加载图片: ${mediaUrl}`);
       }
       $(videoElement).hide();
     } else if (mediaType === "video") {
@@ -1508,32 +1630,79 @@ const showMedia = async (direction) => {
       );
 
     retryCount = 0;
-    let nextUrl, nextType;
-    if (settings.playMode === "random") {
-      const nextIndex = getRandomMediaIndex();
-      if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
-        const nextMedia = settings.randomMediaList[nextIndex];
-        nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-          nextMedia.rel_path
-        )}`;
-        nextType = nextMedia.media_type;
+    
+    // 异步执行预加载，不阻塞当前媒体显示
+    setTimeout(async () => {
+      const preloadCount = 3; // 预加载3张图片
+      const urlsToPreload = [];
+      
+      // 计算要预加载的媒体URL，避免重复预加载
+      const usedIndices = new Set(); // 记录已使用的索引，避免重复
+      for (let i = 1; i <= preloadCount; i++) {
+        let nextUrl, nextType;
+        if (settings.playMode === "random") {
+          // 随机模式下，确保预加载的媒体不在已播放列表中
+          let nextIndex;
+          let attempts = 0;
+          const maxAttempts = 10; // 最大尝试次数，避免无限循环
+          
+          do {
+            nextIndex = getRandomMediaIndex();
+            attempts++;
+          } while (
+            attempts < maxAttempts && 
+            (settings.randomPlayedIndices.includes(nextIndex) || usedIndices.has(nextIndex))
+          );
+          
+          if (attempts >= maxAttempts) {
+            console.warn(`[${EXTENSION_ID}] 无法找到未播放的媒体进行预加载，跳过`);
+            continue;
+          }
+          
+          if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
+            const nextMedia = settings.randomMediaList[nextIndex];
+            nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
+              nextMedia.rel_path
+            )}`;
+            nextType = nextMedia.media_type;
+            usedIndices.add(nextIndex); // 记录已使用的索引
+          }
+        } else {
+          // 顺序模式下，直接计算后续索引
+          const nextIndex = (currentMediaIndex + i) % mediaList.length;
+          const nextMedia = mediaList[nextIndex];
+          nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
+            nextMedia.rel_path
+          )}`;
+          nextType = nextMedia.media_type;
+        }
+        
+        if (nextUrl && nextType) {
+          urlsToPreload.push({ url: nextUrl, type: nextType });
+        }
       }
-    } else {
-      const nextIndex = (currentMediaIndex + 1) % mediaList.length;
-      const nextMedia = mediaList[nextIndex];
-      nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-        nextMedia.rel_path
-      )}`;
-      nextType = nextMedia.media_type;
-    }
-
-    if (nextUrl && nextType) {
-      preloadedMedia = await preloadMediaItem(nextUrl, nextType);
-      if (!preloadedMedia) {
-        console.warn(`[${EXTENSION_ID}] 预加载媒体失败: ${nextUrl}`);
-        // 可选：不重置 preloadedMedia，保留上一次有效预加载
-      }
-    }
+      
+      // 并行预加载多张图片
+      const preloadPromises = urlsToPreload.map(async ({ url, type }, index) => {
+        try {
+          const media = await preloadMediaItem(url, type);
+          if (media) {
+            console.log(`[${EXTENSION_ID}] 预加载成功 (${index + 1}/${preloadCount}): ${url}`);
+            // 设置第一张预加载的图片为当前预加载媒体
+            if (index === 0) {
+              preloadedMedia = media;
+            }
+          } else {
+            console.warn(`[${EXTENSION_ID}] 预加载媒体失败: ${url}`);
+          }
+        } catch (error) {
+          console.warn(`[${EXTENSION_ID}] 预加载异常: ${error.message}`);
+        }
+      });
+      
+      await Promise.all(preloadPromises);
+      console.log(`[${EXTENSION_ID}] 批量预加载完成，缓存大小: ${preloadedMediaCache.size}`);
+    }, 100); // 延迟100ms执行预加载，确保当前媒体显示优先
 
     return Promise.resolve();
   } catch (e) {
@@ -1557,6 +1726,8 @@ const showMedia = async (direction) => {
     return Promise.reject(e);
   } finally {
     settings.isMediaLoading = false;
+    // 媒体显示完成后应用媒体自适应模式
+    applyMediaFitMode();
   }
 };
 
