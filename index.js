@@ -2814,26 +2814,42 @@ const initExtension = async () => {
     await createPlayerWindow();
     await createSettingsPanel();
     
-    // 修复抽屉组件事件冲突：阻止事件冒泡
-    $(`#${SETTINGS_PANEL_ID} .inline-drawer-toggle`).off('click').on('click', function(e) {
-      e.stopPropagation();
-      e.preventDefault();
-      
-      const $toggle = $(this);
-      const $drawer = $toggle.closest('.inline-drawer');
-      const $content = $drawer.find('.inline-drawer-content');
-      const $icon = $toggle.find('.glyphicon');
-      
-      if ($drawer.hasClass('open')) {
-        $drawer.removeClass('open');
-        $content.slideUp(200);
-        $icon.removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
-      } else {
-        $drawer.addClass('open');
-        $content.slideDown(200);
-        $icon.removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+    // 修复ST抽屉组件：手动触发ST的抽屉初始化
+    setTimeout(() => {
+      const $drawer = $(`#${SETTINGS_PANEL_ID} .inline-drawer`);
+      if ($drawer.length > 0) {
+        console.log(`[${EXTENSION_ID}] 手动初始化ST抽屉组件`);
+        
+        // 绑定ST标准的抽屉点击事件
+        $drawer.find('.inline-drawer-toggle').off('click').on('click', function(e) {
+          e.stopPropagation();
+          
+          const $this = $(this);
+          const $parentDrawer = $this.closest('.inline-drawer');
+          const $content = $parentDrawer.find('.inline-drawer-content');
+          const $icon = $this.find('.glyphicon');
+          
+          if ($parentDrawer.hasClass('is-open')) {
+            $parentDrawer.removeClass('is-open');
+            $content.slideUp(200);
+            $icon.removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
+          } else {
+            $parentDrawer.addClass('is-open');
+            $content.slideDown(200);
+            $icon.removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+          }
+        });
+        
+        // 初始状态：默认展开
+        $drawer.addClass('is-open');
+        $drawer.find('.inline-drawer-content').show();
+        $drawer.find('.inline-drawer-toggle .glyphicon')
+          .removeClass('glyphicon-chevron-down')
+          .addClass('glyphicon-chevron-up');
+          
+        console.log(`[${EXTENSION_ID}] ST抽屉组件初始化完成`);
       }
-    });
+    }, 100);
     
     // 3. 初始化服务通信（WebSocket+轮询）
     initWebSocket();
