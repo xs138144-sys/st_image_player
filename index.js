@@ -10,6 +10,68 @@ const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
 const eventSource = importedEventSource || window.eventSource;
 const event_types = importedEventTypes || window.event_types;
+
+// SillyTavern 扩展注册函数
+const registerExtension = () => {
+  try {
+    // 检查是否存在扩展注册API
+    if (window.registerExtension && typeof window.registerExtension === "function") {
+      window.registerExtension(EXTENSION_ID, {
+        name: EXTENSION_NAME,
+        description: "AI对话触发的媒体播放器扩展",
+        version: "1.0.0",
+        author: "st_image_player",
+        onLoad: () => {
+          console.log(`[${EXTENSION_ID}] 扩展已成功注册到SillyTavern核心`);
+          // 扩展加载完成后初始化
+          initExtension();
+        },
+        onUnload: () => {
+          console.log(`[${EXTENSION_ID}] 扩展已从SillyTavern核心卸载`);
+          // 清理资源
+          cleanupExtension();
+        }
+      });
+      console.log(`[${EXTENSION_ID}] 已调用SillyTavern扩展注册API`);
+      return true;
+    } else {
+      console.warn(`[${EXTENSION_ID}] SillyTavern扩展注册API不可用，使用备用注册方式`);
+      // 备用注册方式：直接初始化
+      setTimeout(() => initExtension(), 1000);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[${EXTENSION_ID}] 扩展注册失败:`, error);
+    // 注册失败时使用备用方式
+    setTimeout(() => initExtension(), 1000);
+    return false;
+  }
+};
+
+// 扩展清理函数
+const cleanupExtension = () => {
+  // 清理定时器
+  if (switchTimer) {
+    clearTimeout(switchTimer);
+    switchTimer = null;
+  }
+  if (pollingTimer) {
+    clearTimeout(pollingTimer);
+    pollingTimer = null;
+  }
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  
+  // 清理WebSocket连接
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  
+  console.log(`[${EXTENSION_ID}] 扩展资源已清理`);
+};
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
