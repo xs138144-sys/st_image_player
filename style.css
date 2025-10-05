@@ -914,6 +914,22 @@
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    width: 30px;
+    height: 30px;
+}
+
+.toggle-border:hover {
+    background: rgba(0, 0, 0, 0.9);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.toggle-border.active {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 /* 有边框模式：切换按钮在标题栏内 */

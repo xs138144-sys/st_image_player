@@ -687,15 +687,9 @@ const createPlayerWindow = async () => {
             <div class="image-player-header">
                 <div class="title"><i class="fa-solid fa-film"></i> ${EXTENSION_NAME}</div>
                 <div class="window-controls">
-                    <!-- 切换边框按钮 - 放在标题栏内部，避免遮挡 -->
-                    <button class="toggle-border ${settings.hideBorder ? "active" : ""}" title="${settings.hideBorder ? "显示边框" : "隐藏边框"}"><i class="fa-solid fa-border-none"></i></button>
-                    <button class="lock"><i class="fa-solid ${settings.isLocked ? "fa-lock" : "fa-lock-open"
-    }"></i></button>
-                    <button class="toggle-info ${settings.showInfo ? "active" : ""
-    }"><i class="fa-solid fa-circle-info"></i></button>
-                    <button class="toggle-video-controls ${settings.showVideoControls ? "active" : ""
-    }" title="${settings.showVideoControls ? "隐藏视频控制" : "显示视频控制"
-    }">
+                    <button class="lock"><i class="fa-solid ${settings.isLocked ? "fa-lock" : "fa-lock-open"}"></i></button>
+                    <button class="toggle-info ${settings.showInfo ? "active" : ""}"><i class="fa-solid fa-circle-info"></i></button>
+                    <button class="toggle-video-controls ${settings.showVideoControls ? "active" : ""}" title="${settings.showVideoControls ? "隐藏视频控制" : "显示视频控制"}">
                         <i class="fa-solid fa-video"></i>
                     </button>
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
@@ -753,6 +747,10 @@ const createPlayerWindow = async () => {
                             <i class="fa-solid fa-video"></i>
                         </button>
                     </div>
+                    <!-- 切换边框按钮 - 移到设置栏，跟随设置栏自动浮现隐藏 -->
+                    <button class="control-btn toggle-border ${settings.hideBorder ? "active" : ""}" title="${settings.hideBorder ? "显示边框" : "隐藏边框"}">
+                        <i class="fa-solid fa-border-none"></i>
+                    </button>
                     <button class="control-btn transition-effect-toggle" title="过渡效果: ${settings.transitionEffect === 'none' ? '无效果' : 
       settings.transitionEffect === 'fade' ? '淡入淡出' :
       settings.transitionEffect === 'slide' ? '滑动' :
