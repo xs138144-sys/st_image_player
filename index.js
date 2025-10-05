@@ -687,6 +687,8 @@ const createPlayerWindow = async () => {
             <div class="image-player-header">
                 <div class="title"><i class="fa-solid fa-film"></i> ${EXTENSION_NAME}</div>
                 <div class="window-controls">
+                    <!-- 切换边框按钮 - 放在标题栏内部，避免遮挡 -->
+                    <button class="toggle-border ${settings.hideBorder ? "active" : ""}" title="${settings.hideBorder ? "显示边框" : "隐藏边框"}"><i class="fa-solid fa-border-none"></i></button>
                     <button class="lock"><i class="fa-solid ${settings.isLocked ? "fa-lock" : "fa-lock-open"
     }"></i></button>
                     <button class="toggle-info ${settings.showInfo ? "active" : ""
@@ -699,8 +701,6 @@ const createPlayerWindow = async () => {
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
                 </div>
             </div>
-            <!-- 切换边框按钮 - 独立放在窗口右上角，不挤占标题栏空间 -->
-            <button class="toggle-border ${settings.hideBorder ? "active" : ""}" title="${settings.hideBorder ? "显示边框" : "隐藏边框"}"><i class="fa-solid fa-border-none"></i></button>
             <div class="image-player-body">
                 <div class="image-container">
                     <div class="loading-animation">加载中...</div>
@@ -1102,52 +1102,19 @@ const setupWindowEvents = () => {
     updateExtensionMenu();
   });
 
-  // 10. 底部控制栏拖拽移动播放器窗口
+  // 10. 底部控制栏拖拽移动播放器窗口（使用与标题栏相同的拖拽逻辑）
   win.find(".image-player-controls").on("mousedown", function (e) {
-    if (settings.isLocked) return;
+    if (settings.isLocked || settings.hideBorder) return;
     // 排除按钮点击，只响应控制栏空白区域拖拽
     if ($(e.target).is("button, .control-btn, .media-filter-btn, .progress-bar, .volume-slider, .volume-btn, .loop-btn, .time-display")) return;
 
     e.preventDefault();
-    isDragging = true;
-    const winElement = win[0];
-    const currentLeft = parseInt(win.css("left")) || 0;
-    const currentTop = parseInt(win.css("top")) || 0;
-
     dragData = {
       startX: e.clientX,
       startY: e.clientY,
-      startLeft: currentLeft,
-      startTop: currentTop
+      startLeft: win.offset().left,
+      startTop: win.offset().top,
     };
-
-    // 添加mousemove事件处理
-    $(document).on("mousemove.controlBarDrag", function (e) {
-      if (dragData && isDragging) {
-        const diffX = e.clientX - dragData.startX;
-        const diffY = e.clientY - dragData.startY;
-        win.css({
-          left: `${dragData.startLeft + diffX}px`,
-          top: `${dragData.startTop + diffY}px`
-        });
-      }
-    });
-
-    // 添加mouseup事件处理
-    $(document).on("mouseup.controlBarDrag", function () {
-      if (dragData) {
-        settings.position = {
-          x: win.offset().left,
-          y: win.offset().top,
-          width: win.width(),
-          height: win.height(),
-        };
-        saveSafeSettings();
-        dragData = null;
-      }
-      isDragging = false;
-      $(document).off("mousemove.controlBarDrag mouseup.controlBarDrag");
-    });
   });
 
   // 11. 媒体自适应模式切换

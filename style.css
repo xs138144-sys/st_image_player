@@ -907,47 +907,25 @@
     opacity: 1;
 }
 
-/* 切换边框按钮样式 */
+/* 切换边框按钮基础样式 */
 .toggle-border {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
     transition: all 0.3s ease;
 }
 
-.toggle-border:hover {
-    background: rgba(0, 0, 0, 0.9);
-    border-color: rgba(255, 255, 255, 0.6);
-}
-
-.toggle-border.active {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.8);
-}
-
-/* 有边框模式：切换按钮在标题栏右上角 */
+/* 有边框模式：切换按钮在标题栏内 */
 .image-player-window:not(.no-border) .toggle-border {
-    position: absolute;
-    top: 5px;
-    right: 5px;
+    position: static;
     width: 24px;
     height: 24px;
     border: none;
     background: rgba(43, 45, 49, 0.7);
     color: #b0b0b0;
     border-radius: 3px;
-    z-index: 10;
+    margin-left: 5px;
     transition: all 0.2s ease;
 }
 
