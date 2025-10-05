@@ -23,6 +23,9 @@ if (!event_types) {
 }
 
 console.log(`[${EXTENSION_ID}] event_types初始化完成:`, event_types);
+
+// 将event_types导出到全局作用域，供控制台调试使用
+window.event_types = event_types;
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
