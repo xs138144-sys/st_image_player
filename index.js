@@ -1,27 +1,18 @@
-// 全局依赖通过安全函数获取（新版本实现，解决保存问题）
+import {
+  saveSettingsDebounced,
+  eventSource as importedEventSource,
+  event_types as importedEventTypes,
+} from "../../../../script.js";
+// 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
-
-// 安全获取全局变量的函数（新版本实现）
-const getSillyTavernCore = () => {
-  return window.SillyTavern || window.st || window.extension_core || null;
-};
-
-const getEventSource = () => {
-  const core = getSillyTavernCore();
-  return core?.eventSource || window.eventSource || null;
-};
-
-const getEventTypes = () => {
-  const core = getSillyTavernCore();
-  return core?.event_types || window.event_types || null;
-};
+const eventSource = importedEventSource || window.eventSource;
+const event_types = importedEventTypes || window.event_types;
 
 const getSaveSettingsDebounced = () => {
-  const core = getSillyTavernCore();
-  return core?.saveSettingsDebounced || window.saveSettingsDebounced || null;
+  return saveSettingsDebounced || window.saveSettingsDebounced || null;
 };
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
@@ -2662,30 +2653,27 @@ const registerAIEventListeners = () => {
   console.log(`[st_image_player] registerAIEventListeners 函数开始执行（强制注册模式）`);
   
   try {
-    // 直接尝试获取事件源和事件类型，不进行严格检查
-    const currentEventSource = getEventSource();
-    const currentEventTypes = getEventTypes();
-    
+    // 使用直接导入的全局变量，不进行严格检查
     console.log(
-      `[st_image_player] 强制注册模式: eventSource=${!!currentEventSource}, event_types=${!!currentEventTypes}`
+      `[st_image_player] 强制注册模式: eventSource=${!!eventSource}, event_types=${!!event_types}`
     );
     
     // 即使依赖不完整也尝试注册
-    if (currentEventSource && currentEventTypes) {
+    if (eventSource && event_types) {
       // 修复事件绑定逻辑：使用正确的参数顺序
       const bindEvent = (eventType, callback) => {
-        if (typeof currentEventSource.addEventListener === "function") {
-          currentEventSource.addEventListener(eventType, callback);
-        } else if (typeof currentEventSource.on === "function") {
-          currentEventSource.on(eventType, callback);
+        if (typeof eventSource.addEventListener === "function") {
+          eventSource.addEventListener(eventType, callback);
+        } else if (typeof eventSource.on === "function") {
+          eventSource.on(eventType, callback);
         } else {
           console.warn(`[${EXTENSION_ID}] eventSource 不支持标准事件绑定方法`);
         }
       };
       
       // AI回复事件（修复：添加条件判断，与没有保存设置的版本保持一致）
-      if (currentEventTypes.MESSAGE_RECEIVED) {
-        bindEvent(currentEventTypes.MESSAGE_RECEIVED, () => {
+      if (event_types.MESSAGE_RECEIVED) {
+        bindEvent(event_types.MESSAGE_RECEIVED, () => {
           const settings = getExtensionSettings();
           if (
             settings.enabled &&
@@ -2699,8 +2687,8 @@ const registerAIEventListeners = () => {
       }
       
       // 玩家消息事件（修复：添加条件判断，与没有保存设置的版本保持一致）
-      if (currentEventTypes.MESSAGE_SENT) {
-        bindEvent(currentEventTypes.MESSAGE_SENT, () => {
+      if (event_types.MESSAGE_SENT) {
+        bindEvent(event_types.MESSAGE_SENT, () => {
           const settings = getExtensionSettings();
           if (
             settings.enabled &&
