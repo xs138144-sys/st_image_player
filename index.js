@@ -2813,6 +2813,28 @@ const initExtension = async () => {
     addMenuButton();
     await createPlayerWindow();
     await createSettingsPanel();
+    
+    // 修复抽屉组件事件冲突：阻止事件冒泡
+    $(`#${SETTINGS_PANEL_ID} .inline-drawer-toggle`).off('click').on('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      
+      const $toggle = $(this);
+      const $drawer = $toggle.closest('.inline-drawer');
+      const $content = $drawer.find('.inline-drawer-content');
+      const $icon = $toggle.find('.glyphicon');
+      
+      if ($drawer.hasClass('open')) {
+        $drawer.removeClass('open');
+        $content.slideUp(200);
+        $icon.removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
+      } else {
+        $drawer.addClass('open');
+        $content.slideDown(200);
+        $icon.removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+      }
+    });
+    
     // 3. 初始化服务通信（WebSocket+轮询）
     initWebSocket();
     startPollingService();
