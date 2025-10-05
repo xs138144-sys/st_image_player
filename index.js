@@ -2663,12 +2663,14 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-// ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
+// ==================== AI事件注册（不依赖设置保存的独立注册机制） ====================
 const registerAIEventListeners = () => {
-  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
+  console.log(`[st_image_player] registerAIEventListeners 函数开始执行（独立注册机制）`);
   const maxRetries = 8;
   const retryDelay = 1500;
   let retries = 0;
+  let aiEventRegistered = false; // 独立注册状态，不依赖设置保存
+  
   const tryRegister = () => {
     try {
       console.log(
@@ -2684,6 +2686,13 @@ const registerAIEventListeners = () => {
           `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
         );
       }
+      
+      // 检查是否已注册，避免重复注册
+      if (aiEventRegistered) {
+        console.log(`[${EXTENSION_ID}] AI事件已注册，跳过重复注册`);
+        return;
+      }
+      
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
         if (typeof eventSource.addEventListener === "function") {
@@ -2696,6 +2705,7 @@ const registerAIEventListeners = () => {
           );
         }
       };
+      
       // AI回复事件（使用兼容的绑定方法）
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
@@ -2708,6 +2718,7 @@ const registerAIEventListeners = () => {
           onAIResponse();
         }
       });
+      
       // 玩家消息事件（同上）
       bindEvent(event_types.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
@@ -2720,14 +2731,14 @@ const registerAIEventListeners = () => {
           onPlayerMessage();
         }
       });
-      // 标记注册成功，避免重复尝试
-      const settings = getExtensionSettings();
-      settings.aiEventRegistered = true;
-      saveSafeSettings();
+      
+      // 标记注册成功（使用独立状态，不依赖设置保存）
+      aiEventRegistered = true;
       console.log(
-        `[${EXTENSION_ID}] AI/玩家事件监听注册成功（老版本原生方式）`
+        `[${EXTENSION_ID}] AI/玩家事件监听注册成功（独立注册机制）`
       );
       toastr.success("AI检测/玩家消息切换功能就绪");
+      
     } catch (error) {
       console.error(`[st_image_player] AI事件注册失败原因:${error.message}`);
       retries++;
@@ -2742,6 +2753,7 @@ const registerAIEventListeners = () => {
       }
     }
   };
+  
   // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
   setTimeout(tryRegister, 3000);
 };
@@ -2877,22 +2889,14 @@ const initExtension = async () => {
       .removeClass("fa-pause")
       .addClass("fa-play");
     saveSafeSettings();
-    // 6. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试
+    // 6. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试（不依赖设置保存）
     const triggerAIRegister = () => {
-      const currentSettings = getExtensionSettings();
-      if (currentSettings.aiEventRegistered) {
-        console.log(`[${EXTENSION_ID}] AI事件已注册,无需重复触发`);
-        return;
-      }
       console.log(`[${EXTENSION_ID}] 触发AI事件注册(首次尝试）`);
       registerAIEventListeners();
-      // 兜底：3秒后检查是否注册成功，未成功则重试一次
+      // 兜底：3秒后重试一次确保注册成功（不依赖设置保存状态检查）
       setTimeout(() => {
-        const checkSettings = getExtensionSettings();
-        if (!checkSettings.aiEventRegistered) {
-          console.warn(`[${EXTENSION_ID}] AI注册未成功,启动二次重试`);
-          registerAIEventListeners();
-        }
+        console.log(`[${EXTENSION_ID}] 执行AI事件注册兜底重试`);
+        registerAIEventListeners();
       }, 3000);
     };
     // 延迟3秒触发（给eventSource最终初始化留足时间）
