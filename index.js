@@ -1,15 +1,28 @@
-import {
-  saveSettingsDebounced,
-  eventSource as importedEventSource,
-  event_types as importedEventTypes,
-} from "../../../../script.js";
-// 全局依赖直接使用导入的变量（老版本兼容，避免导入时机问题）
+// 全局依赖通过安全函数获取（新版本实现，解决保存问题）
 const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
-const eventSource = importedEventSource || window.eventSource;
-const event_types = importedEventTypes || window.event_types;
+
+// 安全获取全局变量的函数（新版本实现）
+const getSillyTavernCore = () => {
+  return window.SillyTavern || window.st || window.extension_core || null;
+};
+
+const getEventSource = () => {
+  const core = getSillyTavernCore();
+  return core?.eventSource || window.eventSource || null;
+};
+
+const getEventTypes = () => {
+  const core = getSillyTavernCore();
+  return core?.event_types || window.event_types || null;
+};
+
+const getSaveSettingsDebounced = () => {
+  const core = getSillyTavernCore();
+  return core?.saveSettingsDebounced || window.saveSettingsDebounced || null;
+};
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -154,7 +167,7 @@ const getExtensionSettings = () => {
 };
 
 const saveSafeSettings = () => {
-  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  const saveFn = getSaveSettingsDebounced();
   // 关键：通过 SillyTavern 核心函数保存设置到本地存储
   if (saveFn && typeof saveFn === "function") {
     saveFn();
@@ -162,6 +175,9 @@ const saveSafeSettings = () => {
       `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
     );
   }
+  // 同时保存到本地存储（双重保险）
+  const settings = getExtensionSettings();
+  saveSettingsToStorage(settings);
 };
 
 // 全局状态（沿用老版本简单管理）
@@ -2653,25 +2669,27 @@ const registerAIEventListeners = () => {
   let retries = 0;
   const tryRegister = () => {
     try {
+      const currentEventSource = getEventSource();
+      const currentEventTypes = getEventTypes();
       console.log(
-        `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
+        `[st_image_player] 动态依赖检查: eventSource=${!!currentEventSource}, event_types=${!!currentEventTypes}`
       );
       if (
-        !eventSource ||
-        !event_types ||
-        !event_types.MESSAGE_RECEIVED ||
-        !event_types.MESSAGE_SENT
+        !currentEventSource ||
+        !currentEventTypes ||
+        !currentEventTypes.MESSAGE_RECEIVED ||
+        !currentEventTypes.MESSAGE_SENT
       ) {
         throw new Error(
-          `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
+          `依赖未就绪: eventSource=${!!currentEventSource}, event_types=${!!currentEventTypes}`
         );
       }
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
-        if (typeof eventSource.addEventListener === "function") {
-          eventSource.addEventListener(eventName, callback);
-        } else if (typeof eventSource.on === "function") {
-          eventSource.on(eventName, callback);
+        if (typeof currentEventSource.addEventListener === "function") {
+          currentEventSource.addEventListener(eventName, callback);
+        } else if (typeof currentEventSource.on === "function") {
+          currentEventSource.on(eventName, callback);
         } else {
           throw new Error(
             `eventSource 不支持事件绑定（无 addEventListener/on 方法）`
@@ -2679,7 +2697,7 @@ const registerAIEventListeners = () => {
         }
       };
       // AI回复事件（使用兼容的绑定方法）
-      bindEvent(event_types.MESSAGE_RECEIVED, () => {
+      bindEvent(currentEventTypes.MESSAGE_RECEIVED, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
@@ -2691,7 +2709,7 @@ const registerAIEventListeners = () => {
         }
       });
       // 玩家消息事件（同上）
-      bindEvent(event_types.MESSAGE_SENT, () => {
+      bindEvent(currentEventTypes.MESSAGE_SENT, () => {
         const settings = getExtensionSettings();
         if (
           settings.enabled &&
