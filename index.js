@@ -702,15 +702,13 @@ const createPlayerWindow = async () => {
                     </button>
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
                 </div>
-                <!-- 切换边框按钮 - 放在右上角 -->
-                <button class="toggle-border ${settings.hideBorder ? "active" : ""
-    }" title="${settings.hideBorder ? "显示边框" : "隐藏边框"
-    }"><i class="fa-solid fa-border-none"></i></button>
             </div>
+            <!-- 切换边框按钮 - 独立放在窗口右上角，不挤占标题栏空间 -->
+            <button class="toggle-border ${settings.hideBorder ? "active" : ""}" title="${settings.hideBorder ? "显示边框" : "隐藏边框"}"><i class="fa-solid fa-border-none"></i></button>
             <div class="image-player-body">
                 <div class="image-container">
                     <div class="loading-animation">加载中...</div>
-                    <img class="image-player-img" onerror="this.onerror=null;this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg=='" />
+                    <img class="image-player-img fade-transition" onerror="this.onerror=null;this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg=='" />
                     <video class="image-player-video" preload="metadata" ${settings.videoLoop ? "loop" : ""
     }>您的浏览器不支持HTML5视频</video>
                     ${videoControlsHtml}
@@ -759,6 +757,18 @@ const createPlayerWindow = async () => {
                             <i class="fa-solid fa-video"></i>
                         </button>
                     </div>
+                    <button class="control-btn transition-effect-toggle" title="过渡效果: ${settings.transitionEffect === 'none' ? '无效果' : 
+      settings.transitionEffect === 'fade' ? '淡入淡出' :
+      settings.transitionEffect === 'slide' ? '滑动' :
+      settings.transitionEffect === 'zoom' ? '缩放' :
+      settings.transitionEffect === 'drift' ? '动态漂移' :
+      settings.transitionEffect === 'push' ? '推动' :
+      settings.transitionEffect === 'rotate' ? '旋转' :
+      settings.transitionEffect === 'bounce' ? '弹跳' :
+      settings.transitionEffect === 'flip' ? '翻转' :
+      '淡入缩放'}">
+                        <i class="fa-solid fa-paint-brush"></i>
+                    </button>
                     <button class="control-btn media-fit-toggle ${settings.mediaFitMode === 'fill' ? 'active' : ''
     }" title="${settings.mediaFitMode === 'fill' ? '填充模式' : '自适应模式'}">
                         <i class="fa-solid ${settings.mediaFitMode === 'fill' ? 'fa-expand' : 'fa-compress'
@@ -836,12 +846,16 @@ const positionWindow = () => {
       }, 3000);
     });
   } else {
-    // 有边框模式：控制栏正常显示，切换按钮显示在标题栏
+    // 有边框模式：控制栏正常显示，切换按钮始终显示在右上角
     if (settings.showVideoControls) {
       win.find(".video-controls").show();
     }
-    // 确保切换按钮在有边框模式下正常显示
+    // 确保切换按钮在有边框模式下正常显示且不自动隐藏
     win.find(".toggle-border").css({ opacity: 1 });
+    
+    // 移除有边框模式下的自动隐藏逻辑
+    const container = win.find(".image-container");
+    container.off("mouseenter mouseleave");
   }
 
   adjustVideoControlsLayout();
@@ -1227,7 +1241,13 @@ const setupWindowEvents = () => {
     updateExtensionMenu();
   });
 
-  // 17. 播放器媒体筛选
+  // 17. 播放器过渡效果切换
+  win.find(".transition-effect-toggle").on("click", function (e) {
+    e.stopPropagation();
+    showTransitionEffectPanel();
+  });
+
+  // 18. 播放器媒体筛选
   win.find(".media-filter-btn").on("click", function (e) {
     e.stopPropagation();
     const filterType = $(this).data("type");
@@ -1433,7 +1453,13 @@ const applyTransitionEffect = (imgElement, effect) => {
   imgElement.classList.remove(
     "fade-transition",
     "slide-transition",
-    "zoom-transition"
+    "zoom-transition",
+    "drift-transition",
+    "push-transition",
+    "rotate-transition",
+    "bounce-transition",
+    "flip-transition",
+    "fade-scale-transition"
   );
   if (effect !== "none") {
     imgElement.classList.add(`${effect}-transition`);
@@ -1593,20 +1619,31 @@ const showMedia = async (direction) => {
     $(loadingElement).hide();
 
     if (mediaType === "image") {
+      // 先隐藏图片，应用过渡效果
+      $(imgElement).hide();
       applyTransitionEffect(imgElement, settings.transitionEffect);
       
       // 使用新的Image对象加载图片，确保事件能正确触发
       await new Promise((resolve, reject) => {
         const tempImg = new Image();
         tempImg.onload = () => {
-          $(imgElement).attr("src", mediaUrl).show();
-          resolve();
+          $(imgElement).attr("src", mediaUrl);
+          // 延迟显示以触发过渡效果
+          setTimeout(() => {
+            $(imgElement).show();
+            // 添加show类触发过渡动画
+            imgElement.classList.add("show");
+            resolve();
+          }, 50);
         };
         tempImg.onerror = () => {
           console.error("图片加载失败:", mediaUrl);
           $(imgElement).attr("src", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg==");
-          $(imgElement).show();
-          resolve(); // 即使加载失败也继续显示占位图
+          setTimeout(() => {
+            $(imgElement).show();
+            imgElement.classList.add("show");
+            resolve();
+          }, 50);
         };
         tempImg.src = mediaUrl;
       });
@@ -1669,30 +1706,62 @@ const showMedia = async (direction) => {
     applyMediaFitMode();
 
     retryCount = 0;
-    let nextUrl, nextType;
+    
+    // 增强预加载：预加载接下来3张图片
+    const preloadUrls = [];
+    const preloadTypes = [];
+    
     if (settings.playMode === "random") {
-      const nextIndex = getRandomMediaIndex();
-      if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
-        const nextMedia = settings.randomMediaList[nextIndex];
-        nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-          nextMedia.rel_path
-        )}`;
-        nextType = nextMedia.media_type;
+      // 随机模式：预加载接下来3个随机索引
+      for (let i = 0; i < 3; i++) {
+        const nextIndex = getRandomMediaIndex();
+        if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
+          const nextMedia = settings.randomMediaList[nextIndex];
+          preloadUrls.push(`${settings.serviceUrl}/file/${encodeURIComponent(
+            nextMedia.rel_path
+          )}`);
+          preloadTypes.push(nextMedia.media_type);
+        }
       }
     } else {
-      const nextIndex = (currentMediaIndex + 1) % mediaList.length;
-      const nextMedia = mediaList[nextIndex];
-      nextUrl = `${settings.serviceUrl}/file/${encodeURIComponent(
-        nextMedia.rel_path
-      )}`;
-      nextType = nextMedia.media_type;
+      // 顺序模式：预加载接下来3张图片
+      for (let i = 1; i <= 3; i++) {
+        const nextIndex = (currentMediaIndex + i) % mediaList.length;
+        const nextMedia = mediaList[nextIndex];
+        preloadUrls.push(`${settings.serviceUrl}/file/${encodeURIComponent(
+          nextMedia.rel_path
+        )}`);
+        preloadTypes.push(nextMedia.media_type);
+      }
     }
 
-    if (nextUrl && nextType) {
-      preloadedMedia = await preloadMediaItem(nextUrl, nextType);
-      if (!preloadedMedia) {
-        console.warn(`[${EXTENSION_ID}] 预加载媒体失败: ${nextUrl}`);
-        // 可选：不重置 preloadedMedia，保留上一次有效预加载
+    // 并行预加载多张图片
+    if (preloadUrls.length > 0) {
+      const preloadPromises = preloadUrls.map((url, index) => 
+        preloadMediaItem(url, preloadTypes[index])
+      );
+      
+      try {
+        const preloadedResults = await Promise.allSettled(preloadPromises);
+        let successCount = 0;
+        
+        preloadedResults.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            successCount++;
+            console.log(`[${EXTENSION_ID}] 预加载成功: ${preloadUrls[index]}`);
+          } else {
+            console.warn(`[${EXTENSION_ID}] 预加载失败: ${preloadUrls[index]}`);
+          }
+        });
+        
+        console.log(`[${EXTENSION_ID}] 预加载完成: ${successCount}/${preloadUrls.length} 成功`);
+        
+        // 主预加载对象设为第一张预加载图片
+        preloadedMedia = preloadedResults[0].status === "fulfilled" ? preloadedResults[0].value : null;
+        
+      } catch (e) {
+        console.warn(`[${EXTENSION_ID}] 预加载过程中出错:`, e);
+        preloadedMedia = null;
       }
     }
 
@@ -2115,6 +2184,30 @@ const createSettingsPanel = async () => {
       ? "selected"
       : ""
     }>缩放</option>
+                                <option value="drift" ${settings.transitionEffect === "drift"
+      ? "selected"
+      : ""
+    }>动态漂移</option>
+                                <option value="push" ${settings.transitionEffect === "push"
+      ? "selected"
+      : ""
+    }>推动效果</option>
+                                <option value="rotate" ${settings.transitionEffect === "rotate"
+      ? "selected"
+      : ""
+    }>旋转进入</option>
+                                <option value="bounce" ${settings.transitionEffect === "bounce"
+      ? "selected"
+      : ""
+    }>弹跳效果</option>
+                                <option value="flip" ${settings.transitionEffect === "flip"
+      ? "selected"
+      : ""
+    }>翻转效果</option>
+                                <option value="fade-scale" ${settings.transitionEffect === "fade-scale"
+      ? "selected"
+      : ""
+    }>淡入缩放</option>
                             </select>
                         </div>
                         
@@ -2984,3 +3077,202 @@ jQuery(() => {
 });
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
+
+// ==================== 过渡效果选择面板 ====================
+const showTransitionEffectPanel = () => {
+  const settings = getExtensionSettings();
+  const win = $(`#${PLAYER_WINDOW_ID}`);
+  
+  // 移除已存在的面板
+  $(".transition-effect-panel").remove();
+  
+  // 创建过渡效果选择面板
+  const panelHtml = `
+    <div class="transition-effect-panel" style="
+      position: absolute;
+      top: 50px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 15px;
+      z-index: 1000;
+      min-width: 200px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    ">
+      <div style="
+        color: #fff;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #444;
+        padding-bottom: 8px;
+      ">
+        <i class="fa-solid fa-paint-brush"></i> 过渡效果
+      </div>
+      <div class="transition-options" style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+        <button class="transition-option ${settings.transitionEffect === 'none' ? 'active' : ''}" data-effect="none" style="
+          background: ${settings.transitionEffect === 'none' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">无效果</button>
+        <button class="transition-option ${settings.transitionEffect === 'fade' ? 'active' : ''}" data-effect="fade" style="
+          background: ${settings.transitionEffect === 'fade' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">淡入淡出</button>
+        <button class="transition-option ${settings.transitionEffect === 'slide' ? 'active' : ''}" data-effect="slide" style="
+          background: ${settings.transitionEffect === 'slide' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">滑动效果</button>
+        <button class="transition-option ${settings.transitionEffect === 'zoom' ? 'active' : ''}" data-effect="zoom" style="
+          background: ${settings.transitionEffect === 'zoom' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">缩放效果</button>
+        <button class="transition-option ${settings.transitionEffect === 'drift' ? 'active' : ''}" data-effect="drift" style="
+          background: ${settings.transitionEffect === 'drift' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">动态漂移</button>
+        <button class="transition-option ${settings.transitionEffect === 'push' ? 'active' : ''}" data-effect="push" style="
+          background: ${settings.transitionEffect === 'push' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">推动效果</button>
+        <button class="transition-option ${settings.transitionEffect === 'rotate' ? 'active' : ''}" data-effect="rotate" style="
+          background: ${settings.transitionEffect === 'rotate' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">旋转进入</button>
+        <button class="transition-option ${settings.transitionEffect === 'bounce' ? 'active' : ''}" data-effect="bounce" style="
+          background: ${settings.transitionEffect === 'bounce' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">弹跳效果</button>
+        <button class="transition-option ${settings.transitionEffect === 'flip' ? 'active' : ''}" data-effect="flip" style="
+          background: ${settings.transitionEffect === 'flip' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">翻转效果</button>
+        <button class="transition-option ${settings.transitionEffect === 'fade-scale' ? 'active' : ''}" data-effect="fade-scale" style="
+          background: ${settings.transitionEffect === 'fade-scale' ? '#007bff' : '#333'};
+          color: white;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          text-align: left;
+          font-size: 12px;
+          transition: all 0.2s;
+        ">淡入缩放</button>
+      </div>
+    </div>
+  `;
+  
+  // 添加到播放器窗口
+  win.append(panelHtml);
+  
+  // 绑定选项点击事件
+  win.find(".transition-option").on("click", function(e) {
+    e.stopPropagation();
+    const effect = $(this).data("effect");
+    settings.transitionEffect = effect;
+    saveSafeSettings();
+    
+    // 更新按钮标题
+    win.find(".transition-effect-toggle").attr("title", `过渡效果: ${
+      effect === 'none' ? '无效果' :
+      effect === 'fade' ? '淡入淡出' :
+      effect === 'slide' ? '滑动' :
+      effect === 'zoom' ? '缩放' :
+      effect === 'drift' ? '动态漂移' :
+      effect === 'push' ? '推动' :
+      effect === 'rotate' ? '旋转' :
+      effect === 'bounce' ? '弹跳' :
+      effect === 'flip' ? '翻转' :
+      '淡入缩放'
+    }`);
+    
+    // 更新设置面板中的选项
+    $(`#player-transition-effect`).val(effect);
+    
+    // 关闭面板
+    $(".transition-effect-panel").remove();
+    
+    toastr.success(`已切换到${effect === 'none' ? '无效果' :
+      effect === 'fade' ? '淡入淡出' :
+      effect === 'slide' ? '滑动' :
+      effect === 'zoom' ? '缩放' :
+      effect === 'drift' ? '动态漂移' :
+      effect === 'push' ? '推动' :
+      effect === 'rotate' ? '旋转' :
+      effect === 'bounce' ? '弹跳' :
+      effect === 'flip' ? '翻转' :
+      '淡入缩放'}过渡效果`);
+  });
+  
+  // 点击其他地方关闭面板
+  $(document).on("click.transition-panel", function(e) {
+    if (!$(e.target).closest(".transition-effect-panel").length && 
+        !$(e.target).closest(".transition-effect-toggle").length) {
+      $(".transition-effect-panel").remove();
+      $(document).off("click.transition-panel");
+    }
+  });
+};

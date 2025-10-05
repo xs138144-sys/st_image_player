@@ -165,6 +165,72 @@
     opacity: 1;
 }
 
+/* 动态漂移效果 */
+.drift-transition {
+    transition: transform 0.6s ease-out, opacity 0.6s ease-out;
+    transform: translateX(-50px) translateY(30px) rotate(-5deg);
+    opacity: 0;
+}
+
+.drift-transition.show {
+    transform: translateX(0) translateY(0) rotate(0deg);
+    opacity: 1;
+}
+
+/* 推动效果 */
+.push-transition {
+    transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transform: translateX(-100%) scale(0.9);
+}
+
+.push-transition.show {
+    transform: translateX(0) scale(1);
+}
+
+/* 旋转进入效果 */
+.rotate-transition {
+    transition: transform 0.7s ease-out, opacity 0.7s ease-out;
+    transform: rotate(-180deg) scale(0.5);
+    opacity: 0;
+}
+
+.rotate-transition.show {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
+}
+
+/* 弹跳效果 */
+.bounce-transition {
+    transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    transform: scale(0.3) translateY(100px);
+}
+
+.bounce-transition.show {
+    transform: scale(1) translateY(0);
+}
+
+/* 翻转效果 */
+.flip-transition {
+    transition: transform 0.6s ease-in-out;
+    transform: perspective(1000px) rotateY(90deg);
+}
+
+.flip-transition.show {
+    transform: perspective(1000px) rotateY(0deg);
+}
+
+/* 淡入缩放效果 */
+.fade-scale-transition {
+    transition: transform 0.5s ease-out, opacity 0.5s ease-out;
+    transform: scale(1.2);
+    opacity: 0;
+}
+
+.fade-scale-transition.show {
+    transform: scale(1);
+    opacity: 1;
+}
+
 /* 媒体信息（图片/视频通用） */
 .image-info {
     padding: 2px 4px;
@@ -838,46 +904,46 @@
 
 /* 切换边框按钮样式 */
 .toggle-border {
+    position: absolute;
+    top: 10px;
+    right: 10px;
     width: 30px;
     height: 30px;
     border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
-    background: rgba(114, 137, 218, 0.3);
-    color: white;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 12px;
+    z-index: 1000;
+    transition: all 0.3s ease;
 }
 
 .toggle-border:hover {
-    background: rgba(114, 137, 218, 0.5);
-    transform: scale(1.08);
+    background: rgba(0, 0, 0, 0.9);
+    border-color: rgba(255, 255, 255, 0.6);
 }
 
 .toggle-border.active {
-    background: rgba(67, 181, 129, 0.5);
-    box-shadow: 0 0 0 2px rgba(67, 181, 129, 0.7);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
-/* 有边框模式：切换按钮显示在标题栏 */
+/* 有边框模式：切换按钮始终显示在右上角 */
 .image-player-window:not(.no-border) .toggle-border {
-    position: static;
-    opacity: 1;
+    opacity: 1 !important;
+    pointer-events: auto;
 }
 
-/* 无边框模式：切换按钮显示在右上角并自动隐藏 */
+/* 无边框模式：切换按钮跟随控制栏自动隐藏 */
 .image-player-window.no-border .toggle-border {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 25;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    pointer-events: none;
 }
 
 .image-player-window.no-border:hover .toggle-border {
     opacity: 1;
+    pointer-events: auto;
 }
