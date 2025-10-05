@@ -127,25 +127,21 @@ let slideshowTimer = null;
 function setupBorderlessModeInteractions() {
   const settings = getExtensionSettings();
   const win = $(`#${PLAYER_WINDOW_ID}`);
-  const controls = win.find('.image-player-controls');
 
   if (settings.hideBorder) {
-    // 无边框模式下，控制栏默认隐藏
-    controls.hide();
-
-    // 鼠标进入窗口时显示控制栏
-    win.on('mouseenter', function () {
-      controls.stop().fadeIn(200);
-    });
-
-    // 鼠标离开窗口时隐藏控制栏
-    win.on('mouseleave', function () {
-      controls.stop().fadeOut(200);
-    });
-  } else {
-    // 有边框模式下，移除鼠标事件
+    // 无边框模式下：依赖CSS自动隐藏逻辑
+    // CSS中已定义：.image-player-window.no-border .image-player-controls { opacity: 0; }
+    // CSS中已定义：.image-player-window.no-border:hover .image-player-controls { opacity: 1; }
+    // CSS中已定义：.image-player-window.no-border .toggle-border { opacity: 0; }
+    // CSS中已定义：.image-player-window.no-border:hover .toggle-border { opacity: 1; }
+    
+    // 移除JavaScript中的冲突逻辑，让CSS生效
     win.off('mouseenter mouseleave');
-    controls.show();
+  } else {
+    // 有边框模式下，移除鼠标事件，控制栏和切换按钮始终显示
+    win.off('mouseenter mouseleave');
+    win.find('.image-player-controls').show();
+    win.find('.toggle-border').show();
   }
 }
 let serviceStatus = {
@@ -233,18 +229,6 @@ const createMinimalSettingsPanel = () => {
         console.error(`[${EXTENSION_ID}] 本地存储覆盖失败:`, error);
       }
 
-      // 播放器开关事件
-      $(`#${SETTINGS_PANEL_ID}-minimal .toggle-player-enabled`).on("change", function () {
-        const settings = getExtensionSettings();
-        settings.enabled = $(this).prop("checked");
-        saveSafeSettings();
-
-        // 显示状态提示
-        toastr.success(`媒体播放器${settings.enabled ? "已启用" : "已关闭"}`);
-
-        console.log(`[${EXTENSION_ID}] 播放器状态切换: enabled=${settings.enabled}`);
-      });
-
       saveSafeSettings();
 
       if (settings.masterEnabled) {
@@ -273,6 +257,18 @@ const createMinimalSettingsPanel = () => {
       }
     }
   );
+
+  // 播放器开关事件（单独绑定）
+  $(`#${SETTINGS_PANEL_ID}-minimal .toggle-player-enabled`).on("change", function () {
+    const settings = getExtensionSettings();
+    settings.enabled = $(this).prop("checked");
+    saveSafeSettings();
+
+    // 显示状态提示
+    toastr.success(`媒体播放器${settings.enabled ? "已启用" : "已关闭"}`);
+
+    console.log(`[${EXTENSION_ID}] 播放器状态切换: enabled=${settings.enabled}`);
+  });
 };
 
 const disableExtension = () => {
@@ -822,29 +818,14 @@ const positionWindow = () => {
     .toggle(settings.isWindowVisible)
     .toggleClass("no-border", settings.hideBorder);
 
-  if (settings.hideBorder && settings.showVideoControls) {
-    // 无边框模式：控制栏和切换按钮自动隐藏
-    const container = win.find(".image-container");
-    const controls = win.find(".video-controls");
-    const toggleBorderBtn = win.find(".toggle-border");
+  if (settings.hideBorder) {
+    // 无边框模式：依赖CSS自动隐藏逻辑
+    // CSS中已定义：.image-player-window.no-border .image-player-controls { opacity: 0; }
+    // CSS中已定义：.image-player-window.no-border:hover .image-player-controls { opacity: 1; }
     
-    // 初始状态隐藏
-    controls.css({ bottom: "-40px", opacity: 0 });
-    toggleBorderBtn.css({ opacity: 0 });
-
+    // 移除JavaScript中的冲突逻辑，让CSS生效
+    const container = win.find(".image-container");
     container.off("mouseenter mouseleave");
-    container.on("mouseenter", () => {
-      controls.css({ bottom: 0, opacity: 1 });
-      toggleBorderBtn.css({ opacity: 1 });
-    });
-    container.on("mouseleave", () => {
-      setTimeout(() => {
-        if (!progressDrag && !volumeDrag) {
-          controls.css({ bottom: "-40px", opacity: 0 });
-          toggleBorderBtn.css({ opacity: 0 });
-        }
-      }, 3000);
-    });
   } else {
     // 有边框模式：控制栏正常显示，切换按钮始终显示在右上角
     if (settings.showVideoControls) {
@@ -1459,7 +1440,8 @@ const applyTransitionEffect = (imgElement, effect) => {
     "rotate-transition",
     "bounce-transition",
     "flip-transition",
-    "fade-scale-transition"
+    "fade-scale-transition",
+    "show"
   );
   if (effect !== "none") {
     imgElement.classList.add(`${effect}-transition`);
@@ -2880,7 +2862,12 @@ const initExtension = async () => {
   if (!settings.masterEnabled) {
     console.log(`[${EXTENSION_ID}] 扩展总开关关闭，不进行初始化`);
     // 即使总开关关闭，也显示一个最小化的设置面板以便重新启用
-    createMinimalSettingsPanel();
+    // 先检查extensions_settings容器是否存在
+    if ($("#extensions_settings").length) {
+      createMinimalSettingsPanel();
+    } else {
+      console.warn(`[${EXTENSION_ID}] extensions_settings容器不存在，无法创建最小面板`);
+    }
     return;
   }
 

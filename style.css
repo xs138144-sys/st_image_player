@@ -894,6 +894,11 @@
     opacity: 1;
 }
 
+.image-player-window.no-border .video-controls {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
 .image-player-window.no-border .image-container:hover .video-controls {
     opacity: 1;
 }
@@ -931,16 +936,48 @@
     border-color: rgba(255, 255, 255, 0.8);
 }
 
-/* 有边框模式：切换按钮始终显示在右上角 */
+/* 有边框模式：切换按钮显示在标题栏内 */
 .image-player-window:not(.no-border) .toggle-border {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    border-radius: 3px;
+    background: rgba(43, 45, 49, 0.7);
+    border: none;
+    color: #b0b0b0;
     opacity: 1 !important;
     pointer-events: auto;
+    z-index: 1000;
+    transition: all 0.2s ease;
+}
+
+.image-player-window:not(.no-border) .toggle-border:hover {
+    background: rgba(114, 137, 218, 0.3);
+    color: #7289da;
+}
+
+.image-player-window:not(.no-border) .toggle-border.active {
+    background: rgba(114, 137, 218, 0.5);
+    color: #7289da;
 }
 
 /* 无边框模式：切换按钮跟随控制栏自动隐藏 */
 .image-player-window.no-border .toggle-border {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
     opacity: 0;
     pointer-events: none;
+    z-index: 1000;
+    transition: all 0.3s ease;
 }
 
 .image-player-window.no-border:hover .toggle-border {
