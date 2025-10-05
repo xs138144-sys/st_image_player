@@ -1777,9 +1777,15 @@ const showMedia = async (direction) => {
 
 // ==================== AI/玩家消息检测（无修改） ====================
 const onAIResponse = () => {
-  console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
+  console.log(`[${EXTENSION_ID}] ========== onAIResponse函数被调用 ==========`);
+  console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`);
   const settings = getExtensionSettings();
-  if (!settings.enabled || settings.isMediaLoading) return;
+  console.log(`[${EXTENSION_ID}] 进入onAIResponse时的设置状态: enabled=${settings.enabled}, isMediaLoading=${settings.isMediaLoading}`);
+  
+  if (!settings.enabled || settings.isMediaLoading) {
+    console.log(`[${EXTENSION_ID}] 条件不满足，退出onAIResponse: enabled=${settings.enabled}, isMediaLoading=${settings.isMediaLoading}`);
+    return;
+  }
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
@@ -2684,9 +2690,12 @@ const registerAIEventListeners = () => {
   let retries = 0;
   const tryRegister = () => {
     try {
-      console.log(
-        `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
-      );
+      console.log(`[st_image_player] 第${retries + 1}次尝试注册AI事件监听器`);
+      console.log('eventSource:', eventSource);
+      console.log('event_types:', event_types);
+      console.log('MESSAGE_RECEIVED:', event_types?.MESSAGE_RECEIVED);
+      console.log('MESSAGE_SENT:', event_types?.MESSAGE_SENT);
+      
       if (
         !eventSource ||
         !event_types ||
@@ -2694,7 +2703,7 @@ const registerAIEventListeners = () => {
         !event_types.MESSAGE_SENT
       ) {
         throw new Error(
-          `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
+          `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}, MESSAGE_RECEIVED=${!!event_types?.MESSAGE_RECEIVED}, MESSAGE_SENT=${!!event_types?.MESSAGE_SENT}`
         );
       }
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
@@ -2711,26 +2720,36 @@ const registerAIEventListeners = () => {
       };
       // AI回复事件（使用兼容的绑定方法）
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
+        console.log(`[${EXTENSION_ID}] MESSAGE_RECEIVED事件触发`);
         const settings = getExtensionSettings();
+        console.log(`[${EXTENSION_ID}] 设置状态检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isWindowVisible
         ) {
+          console.log(`[${EXTENSION_ID}] 条件满足，调用onAIResponse`);
           onAIResponse();
+        } else {
+          console.log(`[${EXTENSION_ID}] 条件不满足，跳过AI响应`);
         }
       });
       // 玩家消息事件（同上）
       bindEvent(event_types.MESSAGE_SENT, () => {
+        console.log(`[${EXTENSION_ID}] MESSAGE_SENT事件触发`);
         const settings = getExtensionSettings();
+        console.log(`[${EXTENSION_ID}] 设置状态检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isWindowVisible
         ) {
+          console.log(`[${EXTENSION_ID}] 条件满足，调用onPlayerMessage`);
           onPlayerMessage();
+        } else {
+          console.log(`[${EXTENSION_ID}] 条件不满足，跳过玩家消息响应`);
         }
       });
       // 标记注册成功，避免重复尝试
@@ -2919,12 +2938,21 @@ const initExtension = async () => {
           const $parentDrawer = $this.closest('.inline-drawer');
           const $content = $parentDrawer.find('.inline-drawer-content');
           const $icon = $this.find('.glyphicon');
+          
+          // 添加设置面板切换时的状态确认日志
+          const settings = getExtensionSettings();
+          console.log(`[${EXTENSION_ID}] ========== 设置面板切换事件触发 ==========`);
+          console.log(`[${EXTENSION_ID}] 当前设置状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}, isWindowVisible=${settings.isWindowVisible}`);
+          console.log(`[${EXTENSION_ID}] 检测模式: autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}, playerDetectEnabled=${settings.playerDetectEnabled}`);
+          console.log(`[${EXTENSION_ID}] 面板当前状态: is-open=${$parentDrawer.hasClass('is-open')}`);
 
           if ($parentDrawer.hasClass('is-open')) {
+            console.log(`[${EXTENSION_ID}] 设置面板正在关闭`);
             $parentDrawer.removeClass('is-open');
             $content.slideUp(200);
             $icon.removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
           } else {
+            console.log(`[${EXTENSION_ID}] 设置面板正在打开`);
             $parentDrawer.addClass('is-open');
             $content.slideDown(200);
             $icon.removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
