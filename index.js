@@ -209,9 +209,11 @@ const createMinimalSettingsPanel = () => {
       saveSafeSettings();
 
       if (settings.masterEnabled) {
-        // 启用扩展
+        // 启用扩展：先移除最小面板，再延迟初始化确保状态同步
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
-        initExtension();
+        setTimeout(() => {
+          initExtension(); // 延迟初始化，确保状态已同步
+        }, 100); // 延迟100ms
         toastr.success("媒体播放器扩展已启用");
       }
     }
