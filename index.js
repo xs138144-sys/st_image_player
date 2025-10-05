@@ -746,25 +746,23 @@ const createPlayerWindow = async () => {
     }</div>
                     <button class="control-btn next" title="下一个"><i class="fa-solid fa-forward-step"></i></button>
                 </div>
-                <div class="controls-group media-filter-group">
-                    <button class="control-btn media-filter-btn" data-type="all" title="所有媒体">
-                        <i class="fa-solid fa-film"></i>
-                    </button>
-                    <button class="control-btn media-filter-btn" data-type="image" title="仅图片">
-                        <i class="fa-solid fa-image"></i>
-                    </button>
-                    <button class="control-btn media-filter-btn" data-type="video" title="仅视频">
-                        <i class="fa-solid fa-video"></i>
-                    </button>
-                </div>
-                <div class="controls-group">
+                <div class="controls-group right">
+                    <div class="media-filter-group">
+                        <button class="control-btn media-filter-btn" data-type="all" title="所有媒体">
+                            <i class="fa-solid fa-film"></i>
+                        </button>
+                        <button class="control-btn media-filter-btn" data-type="image" title="仅图片">
+                            <i class="fa-solid fa-image"></i>
+                        </button>
+                        <button class="control-btn media-filter-btn" data-type="video" title="仅视频">
+                            <i class="fa-solid fa-video"></i>
+                        </button>
+                    </div>
                     <button class="control-btn media-fit-toggle ${settings.mediaFitMode === 'fill' ? 'active' : ''
     }" title="${settings.mediaFitMode === 'fill' ? '填充模式' : '自适应模式'}">
                         <i class="fa-solid ${settings.mediaFitMode === 'fill' ? 'fa-expand' : 'fa-compress'
     }"></i>
                     </button>
-                </div>
-                <div class="controls-group">
                     <button class="control-btn toggle-controls-custom" title="自定义控制栏">
                         <i class="fa-solid fa-sliders"></i>
                     </button>
@@ -829,6 +827,9 @@ const positionWindow = () => {
         }
       }, 3000);
     });
+  } else if (settings.showVideoControls) {
+    // 非无边框模式下，确保控制栏正常显示
+    win.find(".video-controls").show();
   }
 
   adjustVideoControlsLayout();
@@ -1035,7 +1036,7 @@ const setupWindowEvents = () => {
       if (isVideoVisible && !video.paused) {
         video.pause();
       }
-      win.find(".control-text").text(oldIsPlaying ? "已暂停" : "播放中");
+      win.find(".control-text").text("已暂停");
     } else {
       if (isVideoVisible) {
         video.play().catch((err) => {
@@ -1047,6 +1048,7 @@ const setupWindowEvents = () => {
         clearTimeout(switchTimer);
         startPlayback();
       }
+      win.find(".control-text").text("播放中");
     }
   });
 
@@ -1097,7 +1099,7 @@ const setupWindowEvents = () => {
   win.find(".image-player-controls").on("mousedown", function (e) {
     if (settings.isLocked) return;
     // 排除按钮点击，只响应控制栏空白区域拖拽
-    if ($(e.target).is("button, .control-btn, .media-filter-btn, .progress-bar, .volume-slider")) return;
+    if ($(e.target).is("button, .control-btn, .media-filter-btn, .progress-bar, .volume-slider, .volume-btn, .loop-btn, .time-display")) return;
 
     e.preventDefault();
     isDragging = true;
@@ -1580,17 +1582,22 @@ const showMedia = async (direction) => {
 
     if (mediaType === "image") {
       applyTransitionEffect(imgElement, settings.transitionEffect);
-      if (preloadedMedia && preloadedMedia.src === mediaUrl) {
-        $(imgElement).attr("src", mediaUrl).show();
-      } else {
+      $(imgElement).attr("src", mediaUrl);
+      
+      // 确保图片加载完成后再显示
+      await new Promise((resolve, reject) => {
         const img = new Image();
+        img.onload = () => {
+          $(imgElement).show();
+          resolve();
+        };
+        img.onerror = () => {
+          console.error("图片加载失败:", mediaUrl);
+          reject(new Error("图片加载失败"));
+        };
         img.src = mediaUrl;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = () => reject(new Error("图片加载失败"));
-        });
-        $(imgElement).attr("src", mediaUrl).show();
-      }
+      });
+      
       $(videoElement).hide();
     } else if (mediaType === "video") {
       videoElement.currentTime = 0;

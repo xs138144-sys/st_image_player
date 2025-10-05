@@ -238,8 +238,14 @@
 
 .controls-group {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     align-items: center;
+    margin: 0 2px;
+}
+
+.controls-group.right {
+    margin-left: auto;
+    gap: 1px;
 }
 
 /* ==================== 大小调整手柄 ==================== */
@@ -748,17 +754,33 @@
 /* ==================== 媒体筛选按钮组（新增） ==================== */
 .media-filter-group {
     display: flex;
-    gap: 2px;
+    gap: 1px;
+    margin: 0 2px;
 }
 
 .media-filter-btn {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     background: rgba(43, 45, 49, 0.7);
+    border-radius: 3px;
+    border: none;
+    color: #b0b0b0;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+}
+
+.media-filter-btn:hover {
+    background: rgba(114, 137, 218, 0.3);
+    color: #7289da;
 }
 
 .media-filter-btn.active {
     background: rgba(114, 137, 218, 0.5);
+    color: #7289da;
     box-shadow: none;
 }
 
@@ -771,6 +793,10 @@
     backdrop-filter: none;
 }
 
+.image-player-window.no-border .image-player-header {
+    display: none !important;
+}
+
 .image-player-window.no-border .resize-handle {
     display: none;
 }
@@ -779,8 +805,17 @@
     border-radius: 0;
 }
 
-.image-player-window.no-border .image-container:hover .video-controls {
+.image-player-window.no-border .image-player-controls {
     opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.image-player-window.no-border:hover .image-player-controls {
+    opacity: 1;
+}
+
+.image-player-window.no-border .image-container:hover .video-controls {
+    opacity: 1;
 }
 
 .image-player-window.no-border .image-container:hover .image-info {
