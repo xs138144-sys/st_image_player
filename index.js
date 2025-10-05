@@ -10,10 +10,6 @@ const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
 const eventSource = importedEventSource || window.eventSource;
 const event_types = importedEventTypes || window.event_types;
-
-const getSaveSettingsDebounced = () => {
-  return saveSettingsDebounced || window.saveSettingsDebounced || null;
-};
 const getSafeGlobal = (name, defaultValue) =>
   window[name] === undefined ? defaultValue : window[name];
 const getSafeToastr = () => {
@@ -158,17 +154,20 @@ const getExtensionSettings = () => {
 };
 
 const saveSafeSettings = () => {
-  const saveFn = getSaveSettingsDebounced();
+  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+  const settings = getExtensionSettings();
+  
   // 关键：通过 SillyTavern 核心函数保存设置到本地存储
   if (saveFn && typeof saveFn === "function") {
     saveFn();
-    console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
-    );
   }
-  // 同时保存到本地存储（双重保险）
-  const settings = getExtensionSettings();
+  
+  // 同时保存到本地存储
   saveSettingsToStorage(settings);
+  
+  console.log(
+    `[${EXTENSION_ID}] 设置已保存: enabled=${settings.enabled}`
+  );
 };
 
 // 全局状态（沿用老版本简单管理）
@@ -903,29 +902,13 @@ const applyMediaFitMode = () => {
 const setupWindowEvents = () => {
   const win = $(`#${PLAYER_WINDOW_ID}`);
   const header = win.find(".image-player-header")[0];
-  const controls = win.find(".image-player-controls")[0];
   const settings = getExtensionSettings();
   const panel = $(`#${SETTINGS_PANEL_ID}`);
   const menuBtn = $(`#ext_menu_${EXTENSION_ID}`);
 
-  // 1. 窗口拖拽 - 标题栏
+  // 1. 窗口拖拽
   header.addEventListener("mousedown", (e) => {
     if (settings.isLocked || settings.hideBorder) return;
-    dragData = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startLeft: win.offset().left,
-      startTop: win.offset().top,
-    };
-  });
-
-  // 2. 窗口拖拽 - 控制栏
-  controls.addEventListener("mousedown", (e) => {
-    if (settings.isLocked || settings.hideBorder) return;
-    // 排除控制按钮的点击，只允许控制栏空白区域拖拽
-    if (e.target.closest('.control-btn') || e.target.closest('.controls-group')) {
-      return;
-    }
     dragData = {
       startX: e.clientX,
       startY: e.clientY,
@@ -1752,19 +1735,24 @@ const showMedia = async (direction) => {
 const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
-  
-  // 简化判定条件：只检查核心开关和冷却时间
   if (!settings.enabled || settings.isMediaLoading) return;
-  
-  // 移除窗口可见性检查，避免误判
-  if (settings.autoSwitchMode !== "detect" || !settings.aiDetectEnabled) {
-    console.log(`[${EXTENSION_ID}] AI检测未启用: autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}`);
+
+  const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
+  if (video && video.style.display !== "none" && settings.videoLoop) {
+    console.log(`[${EXTENSION_ID}] 视频循环中,跳过AI切换`);
+    return;
+  }
+
+  if (
+    settings.autoSwitchMode !== "detect" ||
+    !settings.aiDetectEnabled ||
+    !settings.isWindowVisible
+  ) {
     return;
   }
 
   const now = performance.now();
   if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
-    console.log(`[${EXTENSION_ID}] AI检测冷却中: ${now - settings.lastAISwitchTime}ms < ${settings.aiResponseCooldown}ms`);
     return;
   }
 
@@ -1775,21 +1763,25 @@ const onAIResponse = () => {
 };
 
 const onPlayerMessage = () => {
-  console.log(`[${EXTENSION_ID}] 检测到玩家消息事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
-  
-  // 简化判定条件：只检查核心开关和冷却时间
   if (!settings.enabled || settings.isMediaLoading) return;
-  
-  // 移除窗口可见性检查，避免误判
-  if (settings.autoSwitchMode !== "detect" || !settings.playerDetectEnabled) {
-    console.log(`[${EXTENSION_ID}] 玩家检测未启用: autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}`);
+
+  const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
+  if (video && video.style.display !== "none" && settings.videoLoop) {
+    console.log(`[${EXTENSION_ID}] 视频循环中，跳过玩家切换`);
+    return;
+  }
+
+  if (
+    settings.autoSwitchMode !== "detect" ||
+    !settings.playerDetectEnabled ||
+    !settings.isWindowVisible
+  ) {
     return;
   }
 
   const now = performance.now();
   if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
-    console.log(`[${EXTENSION_ID}] 玩家检测冷却中: ${now - settings.lastAISwitchTime}ms < ${settings.aiResponseCooldown}ms`);
     return;
   }
 
@@ -2428,12 +2420,6 @@ const setupSettingsEvents = () => {
     } else {
       settings.autoSwitchMode = "detect";
       settings.isPlaying = true;
-      
-      // 强制注册AI检测功能（如果未启用）
-      if (!settings.aiEventRegistered) {
-        console.log(`[${EXTENSION_ID}] 检测到AI检测模式启用但事件未注册，强制注册AI事件监听器`);
-        registerAIEventListeners();
-      }
     }
 
     saveSafeSettings();
@@ -2441,24 +2427,6 @@ const setupSettingsEvents = () => {
     panel.find("#toggle-timer-mode").removeClass("active");
     panel.find("#detect-sub-options").toggle(!wasActive);
     updateExtensionMenu();
-  });
-
-  // AI检测开关变更
-  panel.find("#player-ai-detect").on("change", function () {
-    const settings = getExtensionSettings();
-    settings.aiDetectEnabled = $(this).prop("checked");
-    saveSafeSettings();
-    console.log(`[${EXTENSION_ID}] AI检测开关: ${settings.aiDetectEnabled ? "启用" : "禁用"}`);
-    toastr.info(`AI检测${settings.aiDetectEnabled ? "已启用" : "已禁用"}`);
-  });
-
-  // 玩家检测开关变更
-  panel.find("#player-player-detect").on("change", function () {
-    const settings = getExtensionSettings();
-    settings.playerDetectEnabled = $(this).prop("checked");
-    saveSafeSettings();
-    console.log(`[${EXTENSION_ID}] 玩家检测开关: ${settings.playerDetectEnabled ? "启用" : "禁用"}`);
-    toastr.info(`玩家检测${settings.playerDetectEnabled ? "已启用" : "已禁用"}`);
   });
 
   // 播放模式变更
@@ -2552,13 +2520,42 @@ const setupSettingsEvents = () => {
     )
     .on("change", saveCurrentSettings);
 
-  // 复选框类设置项变更绑定（同步所有状态）
+  // AI检测开关独立事件绑定
+  panel.find("#player-ai-detect").on("change", function () {
+    const isChecked = $(this).prop("checked");
+    settings.aiDetectEnabled = isChecked;
+    saveSafeSettings();
+    
+    console.log(`[${EXTENSION_ID}] AI检测开关状态: ${isChecked}`);
+    
+    // 如果启用了AI检测，确保AI事件监听器已注册
+    if (isChecked && !settings.aiEventRegistered) {
+      registerAIEventListeners();
+    }
+    
+    // 更新检测模式状态显示
+    updateExtensionMenu();
+  });
+
+  // 玩家检测开关独立事件绑定
+  panel.find("#player-player-detect").on("change", function () {
+    const isChecked = $(this).prop("checked");
+    settings.playerDetectEnabled = isChecked;
+    saveSafeSettings();
+    
+    console.log(`[${EXTENSION_ID}] 玩家检测开关状态: ${isChecked}`);
+    
+    // 更新检测模式状态显示
+    updateExtensionMenu();
+  });
+
+  // 其他复选框类设置项变更绑定（同步所有状态）
   panel
     .find(
       "#player-slideshow-mode, #player-video-loop, #player-show-info, #player-preload-images, " +
-        "#player-preload-videos, #player-show-video-controls, #player-ai-detect, #player-player-detect, " +
-        "#extension-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, " +
-        "#custom-show-loop, #custom-show-time"
+      "#player-preload-videos, #player-show-video-controls, " +
+      "#extension-enabled, #player-hide-border, #custom-show-progress, #custom-show-volume, " +
+      "#custom-show-loop, #custom-show-time"
     )
     .on("change", function () {
       saveCurrentSettings();
@@ -2666,80 +2663,87 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-// ==================== AI事件注册（强制注册，不检查依赖） ====================
+// ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
 const registerAIEventListeners = () => {
-  console.log(`[st_image_player] registerAIEventListeners 函数开始执行（强制注册模式）`);
-  
-  try {
-    // 使用直接导入的全局变量，不进行严格检查
-    console.log(
-      `[st_image_player] 强制注册模式: eventSource=${!!eventSource}, event_types=${!!event_types}`
-    );
-    
-    // 即使依赖不完整也尝试注册
-    if (eventSource && event_types) {
-      // 修复事件绑定逻辑：使用正确的参数顺序
-      const bindEvent = (eventType, callback) => {
+  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
+  const maxRetries = 8;
+  const retryDelay = 1500;
+  let retries = 0;
+  const tryRegister = () => {
+    try {
+      console.log(
+        `[st_image_player] 动态依赖检查: eventSource=${!!eventSource}, event_types=${!!event_types}`
+      );
+      if (
+        !eventSource ||
+        !event_types ||
+        !event_types.MESSAGE_RECEIVED ||
+        !event_types.MESSAGE_SENT
+      ) {
+        throw new Error(
+          `依赖未就绪: eventSource=${!!eventSource}, event_types=${!!event_types}`
+        );
+      }
+      // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
+      const bindEvent = (eventName, callback) => {
         if (typeof eventSource.addEventListener === "function") {
-          eventSource.addEventListener(eventType, callback);
+          eventSource.addEventListener(eventName, callback);
         } else if (typeof eventSource.on === "function") {
-          eventSource.on(eventType, callback);
+          eventSource.on(eventName, callback);
         } else {
-          console.warn(`[${EXTENSION_ID}] eventSource 不支持标准事件绑定方法`);
+          throw new Error(
+            `eventSource 不支持事件绑定（无 addEventListener/on 方法）`
+          );
         }
       };
-      
-      // AI回复事件（修复：移除窗口可见性检查，让AI检测在窗口隐藏时也能工作）
-      if (event_types.MESSAGE_RECEIVED) {
-        bindEvent(event_types.MESSAGE_RECEIVED, () => {
-          const settings = getExtensionSettings();
-          if (
-            settings.enabled &&
-            settings.autoSwitchMode === "detect" &&
-            settings.aiDetectEnabled
-          ) {
-            onAIResponse();
-          }
-        });
-      }
-      
-      // 玩家消息事件（修复：移除窗口可见性检查，让玩家检测在窗口隐藏时也能工作）
-      if (event_types.MESSAGE_SENT) {
-        bindEvent(event_types.MESSAGE_SENT, () => {
-          const settings = getExtensionSettings();
-          if (
-            settings.enabled &&
-            settings.autoSwitchMode === "detect" &&
-            settings.playerDetectEnabled
-          ) {
-            onPlayerMessage();
-          }
-        });
-      }
-      
-      // 标记注册成功
+      // AI回复事件（使用兼容的绑定方法）
+      bindEvent(event_types.MESSAGE_RECEIVED, () => {
+        const settings = getExtensionSettings();
+        if (
+          settings.enabled &&
+          settings.autoSwitchMode === "detect" &&
+          settings.aiDetectEnabled &&
+          settings.isWindowVisible
+        ) {
+          onAIResponse();
+        }
+      });
+      // 玩家消息事件（同上）
+      bindEvent(event_types.MESSAGE_SENT, () => {
+        const settings = getExtensionSettings();
+        if (
+          settings.enabled &&
+          settings.autoSwitchMode === "detect" &&
+          settings.playerDetectEnabled &&
+          settings.isWindowVisible
+        ) {
+          onPlayerMessage();
+        }
+      });
+      // 标记注册成功，避免重复尝试
       const settings = getExtensionSettings();
       settings.aiEventRegistered = true;
       saveSafeSettings();
-      console.log(`[${EXTENSION_ID}] AI/玩家事件监听注册成功（强制注册模式）`);
+      console.log(
+        `[${EXTENSION_ID}] AI/玩家事件监听注册成功（老版本原生方式）`
+      );
       toastr.success("AI检测/玩家消息切换功能就绪");
-    } else {
-      // 依赖不完整，但仍然标记为已注册（避免重复提示）
-      const settings = getExtensionSettings();
-      settings.aiEventRegistered = true;
-      saveSafeSettings();
-      console.log(`[${EXTENSION_ID}] 依赖不完整，但已标记为已注册状态`);
-      toastr.success("AI检测/玩家消息切换功能已启用");
+    } catch (error) {
+      console.error(`[st_image_player] AI事件注册失败原因:${error.message}`);
+      retries++;
+      if (retries < maxRetries) {
+        console.warn(
+          `[${EXTENSION_ID}] AI事件注册失败(${retries}/${maxRetries}），原因：${error.message}，${retryDelay}ms后重试`
+        );
+        setTimeout(tryRegister, retryDelay);
+      } else {
+        console.error(`[${EXTENSION_ID}] AI事件注册失败(已达最大重试次数）`);
+        toastr.error("AI/玩家消息切换功能未启用，请刷新页面重试");
+      }
     }
-  } catch (error) {
-    console.error(`[st_image_player] AI事件注册异常:${error.message}`);
-    // 即使出错也标记为已注册，避免重复提示
-    const settings = getExtensionSettings();
-    settings.aiEventRegistered = true;
-    saveSafeSettings();
-    console.log(`[${EXTENSION_ID}] 注册过程中出错，但已标记为已注册状态`);
-    toastr.success("AI检测/玩家消息切换功能已启用");
-  }
+  };
+  // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
+  setTimeout(tryRegister, 3000);
 };
 
 // ==================== 扩展菜单按钮（含筛选状态显示） ====================
@@ -2908,42 +2912,60 @@ const initExtension = async () => {
   }
 };
 
-// ==================== 页面就绪触发（强制AI事件注册） ====================
+// ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(强制AI事件注册)`);
-  
-  // 强制初始化：直接触发AI事件注册
-  const forceInitExtension = () => {
-    console.log(`[${EXTENSION_ID}] 强制初始化开始`);
-    
-    // 确保全局设置对象存在
-    if (typeof window.extension_settings === "undefined") {
-      window.extension_settings = {};
-    }
-    
-    // 初始化扩展设置
-    const settings = getExtensionSettings();
-    if (!window.extension_settings[EXTENSION_ID]) {
-      window.extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(settings));
-      // 初始化关键状态
-      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
-      saveSafeSettings();
-    }
-    
-    // 强制注册AI事件监听器（无论总开关状态）
-    console.log(`[${EXTENSION_ID}] 强制注册AI事件监听器`);
-    registerAIEventListeners();
-    
-    // 根据总开关状态决定是否完全初始化
-    if (settings.masterEnabled) {
-      initExtension();
-    } else {
-      createMinimalSettingsPanel();
-    }
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
+  const initWhenReady = () => {
+    // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
+    const checkGlobalSettings = () => {
+      const globalSettings = getSafeGlobal("extension_settings", {});
+      // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
+      const isDOMReady =
+        document.getElementById("extensionsMenu") &&
+        document.getElementById("extensions_settings");
+      // 条件2：全局设置已加载（或超时强制尝试）
+      const isSettingsReady =
+        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
+
+      if (isDOMReady && isSettingsReady) {
+        clearInterval(checkTimer);
+        const settings = getExtensionSettings();
+        console.log(
+          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
+        );
+
+        // 根据总开关状态决定是否初始化扩展
+        if (settings.masterEnabled) {
+          initExtension();
+        } else {
+          createMinimalSettingsPanel();
+        }
+
+        console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
+        return;
+      }
+
+      // 超时保护：5秒后强制初始化（避免无限等待）
+      if (Date.now() - startTime > 5000) {
+        clearInterval(checkTimer);
+        const finalDOMReady =
+          document.getElementById("extensionsMenu") &&
+          document.getElementById("extensions_settings");
+        if (finalDOMReady) {
+          console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
+          initExtension();
+        } else {
+          console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
+          toastr.error("扩展初始化失败,核心DOM未加载");
+        }
+      }
+    };
+
+    const startTime = Date.now();
+    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms检查一次
   };
-  
-  // 延迟2秒开始强制初始化
-  setTimeout(forceInitExtension, 2000);
+
+  initWhenReady();
 });
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
