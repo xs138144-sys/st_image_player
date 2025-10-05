@@ -2865,8 +2865,8 @@ jQuery(() => {
         document.getElementById("extensionsMenu") &&
         document.getElementById("extensions_settings");
       // 条件2：全局设置已加载（或超时强制尝试）
-      const isSettingsReady =
-        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
+      // 修改：即使没有全局设置也允许初始化，使用默认设置
+      const isSettingsReady = true;
 
       console.log(`[${EXTENSION_ID}] DOM检查: extensionsMenu=${!!document.getElementById("extensionsMenu")}, extensions_settings=${!!document.getElementById("extensions_settings")}`);
       console.log(`[${EXTENSION_ID}] 设置检查: globalSettings[EXTENSION_ID]=${!!globalSettings[EXTENSION_ID]}, 耗时=${Date.now() - startTime}ms`);
