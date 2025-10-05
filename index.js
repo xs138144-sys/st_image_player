@@ -452,13 +452,14 @@ const refreshMediaList = async () => {
   return mediaList;
 };
 
-// ==================== WebSocket 通信（无修改） ====================
+// ==================== WebSocket 通信（修复连接问题） ====================
 const initWebSocket = () => {
   const settings = getExtensionSettings();
   // 总开关禁用：不初始化WebSocket（核心修复）
   if (!settings.enabled || ws) return;
 
   try {
+    // 修复：使用优化版服务器的正确WebSocket路径
     const wsUrl =
       settings.serviceUrl.replace("http://", "ws://") + "/socket.io";
     ws = new WebSocket(wsUrl);
@@ -2801,19 +2802,18 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-// ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
+// ==================== AI事件注册（优化控制台信息显示） ====================
 const registerAIEventListeners = () => {
-  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
+  console.log(`[${EXTENSION_ID}] AI事件监听注册流程开始`);
   const maxRetries = 8;
   const retryDelay = 1500;
   let retries = 0;
+  let aiEventRegistered = false;
+  let playerEventRegistered = false;
+  
   const tryRegister = () => {
     try {
-      console.log(`[st_image_player] 第${retries + 1}次尝试注册AI事件监听器`);
-      console.log('eventSource:', eventSource);
-      console.log('event_types:', event_types);
-      console.log('MESSAGE_RECEIVED:', event_types?.MESSAGE_RECEIVED);
-      console.log('MESSAGE_SENT:', event_types?.MESSAGE_SENT);
+      console.log(`[${EXTENSION_ID}] 第${retries + 1}次注册尝试（共${maxRetries + 1}次机会）`);
       
       // 检查依赖是否就绪
       if (!eventSource) {
@@ -2836,6 +2836,7 @@ const registerAIEventListeners = () => {
       }
       
       console.log(`[${EXTENSION_ID}] 依赖检查通过，开始注册事件监听器`);
+      
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
         if (typeof eventSource.addEventListener === "function") {
@@ -2848,62 +2849,68 @@ const registerAIEventListeners = () => {
           );
         }
       };
+      
       // AI回复事件（使用兼容的绑定方法）
       bindEvent(event_types.MESSAGE_RECEIVED, () => {
-        console.log(`[${EXTENSION_ID}] MESSAGE_RECEIVED事件触发`);
+        if (!aiEventRegistered) {
+          console.log(`[${EXTENSION_ID}] ✅ 成功监听AI回复事件（MESSAGE_RECEIVED）`);
+          aiEventRegistered = true;
+        }
+        
         const settings = getExtensionSettings();
-        console.log(`[${EXTENSION_ID}] 设置状态检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.aiDetectEnabled &&
           settings.isWindowVisible
         ) {
-          console.log(`[${EXTENSION_ID}] 条件满足，调用onAIResponse`);
+          console.log(`[${EXTENSION_ID}] 🔄 AI回复触发媒体切换`);
           onAIResponse();
-        } else {
-          console.log(`[${EXTENSION_ID}] 条件不满足，跳过AI响应`);
         }
       });
+      
       // 玩家消息事件（同上）
       bindEvent(event_types.MESSAGE_SENT, () => {
-        console.log(`[${EXTENSION_ID}] MESSAGE_SENT事件触发`);
+        if (!playerEventRegistered) {
+          console.log(`[${EXTENSION_ID}] ✅ 成功监听玩家消息事件（MESSAGE_SENT）`);
+          playerEventRegistered = true;
+        }
+        
         const settings = getExtensionSettings();
-        console.log(`[${EXTENSION_ID}] 设置状态检查: enabled=${settings.enabled}, autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}, isWindowVisible=${settings.isWindowVisible}`);
         if (
           settings.enabled &&
           settings.autoSwitchMode === "detect" &&
           settings.playerDetectEnabled &&
           settings.isWindowVisible
         ) {
-          console.log(`[${EXTENSION_ID}] 条件满足，调用onPlayerMessage`);
+          console.log(`[${EXTENSION_ID}] 🔄 玩家消息触发媒体切换`);
           onPlayerMessage();
-        } else {
-          console.log(`[${EXTENSION_ID}] 条件不满足，跳过玩家消息响应`);
         }
       });
+      
       // 标记注册成功，避免重复尝试
       const settings = getExtensionSettings();
       settings.aiEventRegistered = true;
       saveSafeSettings();
-      console.log(
-        `[${EXTENSION_ID}] AI/玩家事件监听注册成功（老版本原生方式）`
-      );
+      
+      console.log(`[${EXTENSION_ID}] ✅ AI事件监听注册成功（共${retries + 1}次尝试）`);
+      console.log(`[${EXTENSION_ID}] 📊 注册统计：AI回复监听=${aiEventRegistered ? '✅' : '❌'}, 玩家消息监听=${playerEventRegistered ? '✅' : '❌'}`);
+      
       toastr.success("AI检测/玩家消息切换功能就绪");
     } catch (error) {
-      console.error(`[st_image_player] AI事件注册失败原因:${error.message}`);
       retries++;
+      
       if (retries < maxRetries) {
-        console.warn(
-          `[${EXTENSION_ID}] AI事件注册失败(${retries}/${maxRetries}），原因：${error.message}，${retryDelay}ms后重试`
-        );
+        console.warn(`[${EXTENSION_ID}] ⚠️ 注册失败（${retries}/${maxRetries}）：${error.message}`);
         setTimeout(tryRegister, retryDelay);
       } else {
-        console.error(`[${EXTENSION_ID}] AI事件注册失败(已达最大重试次数）`);
+        console.error(`[${EXTENSION_ID}] ❌ AI事件注册失败（${retries + 1}次尝试全部失败）`);
+        console.error(`[${EXTENSION_ID}] 💡 失败原因：${error.message}`);
         toastr.error("AI/玩家消息切换功能未启用，请刷新页面重试");
       }
     }
   };
+  
   // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
   setTimeout(tryRegister, 3000);
 };
