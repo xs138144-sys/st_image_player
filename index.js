@@ -208,17 +208,23 @@ const createMinimalSettingsPanel = () => {
       settings.masterEnabled = $(this).prop("checked");
       settings.enabled = settings.masterEnabled; // 强制同步 enabled 字段
       
+      console.log(`[${EXTENSION_ID}] 最小面板点击: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`);
+      
       // 关键：同步到全局设置
       if (window.extension_settings && window.extension_settings[EXTENSION_ID]) {
         window.extension_settings[EXTENSION_ID].masterEnabled = settings.masterEnabled;
         window.extension_settings[EXTENSION_ID].enabled = settings.enabled;
+        console.log(`[${EXTENSION_ID}] 全局设置同步完成:`, window.extension_settings[EXTENSION_ID]);
       }
       saveSafeSettings();
 
       if (settings.masterEnabled) {
+        console.log(`[${EXTENSION_ID}] 开始启用扩展，移除最小面板`);
         // 启用扩展：先移除最小面板，再延迟初始化确保状态同步
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
+        console.log(`[${EXTENSION_ID}] 最小面板已移除，延迟100ms调用initExtension`);
         setTimeout(() => {
+          console.log(`[${EXTENSION_ID}] 延迟结束，开始调用initExtension`);
           initExtension(); // 延迟初始化，确保状态已同步
         }, 100); // 延迟100ms
         toastr.success("媒体播放器扩展已启用");
@@ -2744,6 +2750,8 @@ const addMenuButton = () => {
 // ==================== 扩展核心初始化（确保AI注册时机正确） ====================
 const initExtension = async () => {
   const settings = getExtensionSettings();
+  
+  console.log(`[${EXTENSION_ID}] initExtension开始: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`);
 
   // 总开关禁用：终止初始化
   if (!settings.masterEnabled) {
@@ -2753,9 +2761,11 @@ const initExtension = async () => {
     return;
   }
   
+  console.log(`[${EXTENSION_ID}] 总开关已启用，开始清理旧面板`);
   // 关键：初始化前清理旧面板
   $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
   $(`#${SETTINGS_PANEL_ID}`).remove();
+  console.log(`[${EXTENSION_ID}] 旧面板清理完成，开始创建完整设置面板`);
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
     // 1. 初始化全局设置容器（兼容老版本存储）
