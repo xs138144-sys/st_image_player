@@ -1761,24 +1761,19 @@ const showMedia = async (direction) => {
 const onAIResponse = () => {
   console.log(`[${EXTENSION_ID}] 检测到AI回复事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
+  
+  // 简化判定条件：只检查核心开关和冷却时间
   if (!settings.enabled || settings.isMediaLoading) return;
-
-  const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-  if (video && video.style.display !== "none" && settings.videoLoop) {
-    console.log(`[${EXTENSION_ID}] 视频循环中,跳过AI切换`);
-    return;
-  }
-
-  if (
-    settings.autoSwitchMode !== "detect" ||
-    !settings.aiDetectEnabled ||
-    !settings.isWindowVisible
-  ) {
+  
+  // 移除窗口可见性检查，避免误判
+  if (settings.autoSwitchMode !== "detect" || !settings.aiDetectEnabled) {
+    console.log(`[${EXTENSION_ID}] AI检测未启用: autoSwitchMode=${settings.autoSwitchMode}, aiDetectEnabled=${settings.aiDetectEnabled}`);
     return;
   }
 
   const now = performance.now();
   if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
+    console.log(`[${EXTENSION_ID}] AI检测冷却中: ${now - settings.lastAISwitchTime}ms < ${settings.aiResponseCooldown}ms`);
     return;
   }
 
@@ -1791,24 +1786,19 @@ const onAIResponse = () => {
 const onPlayerMessage = () => {
   console.log(`[${EXTENSION_ID}] 检测到玩家消息事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
+  
+  // 简化判定条件：只检查核心开关和冷却时间
   if (!settings.enabled || settings.isMediaLoading) return;
-
-  const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
-  if (video && video.style.display !== "none" && settings.videoLoop) {
-    console.log(`[${EXTENSION_ID}] 视频循环中,跳过玩家消息切换`);
-    return;
-  }
-
-  if (
-    settings.autoSwitchMode !== "detect" ||
-    !settings.playerDetectEnabled ||
-    !settings.isWindowVisible
-  ) {
+  
+  // 移除窗口可见性检查，避免误判
+  if (settings.autoSwitchMode !== "detect" || !settings.playerDetectEnabled) {
+    console.log(`[${EXTENSION_ID}] 玩家检测未启用: autoSwitchMode=${settings.autoSwitchMode}, playerDetectEnabled=${settings.playerDetectEnabled}`);
     return;
   }
 
   const now = performance.now();
   if (now - settings.lastAISwitchTime < settings.aiResponseCooldown) {
+    console.log(`[${EXTENSION_ID}] 玩家检测冷却中: ${now - settings.lastAISwitchTime}ms < ${settings.aiResponseCooldown}ms`);
     return;
   }
 
