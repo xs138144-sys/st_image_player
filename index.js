@@ -223,8 +223,21 @@ const createMinimalSettingsPanel = () => {
         // 启用扩展：先移除最小面板，再延迟初始化确保状态同步
         $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
         console.log(`[${EXTENSION_ID}] 最小面板已移除，延迟100ms调用initExtension`);
+        
+        // 关键修复：强制同步全局设置状态
         setTimeout(() => {
-          console.log(`[${EXTENSION_ID}] 延迟结束，开始调用initExtension`);
+          // 再次确认状态同步
+          const finalSettings = getExtensionSettings();
+          console.log(`[${EXTENSION_ID}] 延迟结束，最终状态: masterEnabled=${finalSettings.masterEnabled}, enabled=${finalSettings.enabled}`);
+          
+          // 强制同步到全局设置
+          if (window.extension_settings && window.extension_settings[EXTENSION_ID]) {
+            window.extension_settings[EXTENSION_ID].masterEnabled = finalSettings.masterEnabled;
+            window.extension_settings[EXTENSION_ID].enabled = finalSettings.enabled;
+            console.log(`[${EXTENSION_ID}] 最终全局设置同步:`, window.extension_settings[EXTENSION_ID]);
+          }
+          
+          console.log(`[${EXTENSION_ID}] 开始调用initExtension`);
           initExtension(); // 延迟初始化，确保状态已同步
         }, 100); // 延迟100ms
         toastr.success("媒体播放器扩展已启用");
@@ -2879,11 +2892,14 @@ jQuery(() => {
         );
 
         // 根据总开关状态决定是否初始化扩展
-        if (settings.masterEnabled) {
-          initExtension();
-        } else {
-          createMinimalSettingsPanel();
-        }
+  if (settings.masterEnabled) {
+    initExtension();
+  } else {
+    console.log(`[${EXTENSION_ID}] 总开关关闭，准备创建最小设置面板`);
+    console.log(`[${EXTENSION_ID}] 检查extensions_settings元素:`, document.getElementById("extensions_settings"));
+    createMinimalSettingsPanel();
+    console.log(`[${EXTENSION_ID}] 最小设置面板创建完成，检查元素:`, $(`#${SETTINGS_PANEL_ID}-minimal`).length);
+  }
 
         console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
         return;
