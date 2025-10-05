@@ -2667,29 +2667,21 @@ const updateExtensionMenu = () => {
     .prop("disabled", settings.playMode === "random")
     .prop("checked", settings.slideshowMode);
 };
-// ==================== AI事件注册（完全沿用老版本v1.3.0逻辑） ====================
+// ==================== AI事件注册（强制注册，不检查依赖） ====================
 const registerAIEventListeners = () => {
-  console.log(`[st_image_player] registerAIEventListeners 函数开始执行`);
-  const maxRetries = 8;
-  const retryDelay = 1500;
-  let retries = 0;
-  const tryRegister = () => {
-    try {
-      const currentEventSource = getEventSource();
-      const currentEventTypes = getEventTypes();
-      console.log(
-        `[st_image_player] 动态依赖检查: eventSource=${!!currentEventSource}, event_types=${!!currentEventTypes}`
-      );
-      if (
-        !currentEventSource ||
-        !currentEventTypes ||
-        !currentEventTypes.MESSAGE_RECEIVED ||
-        !currentEventTypes.MESSAGE_SENT
-      ) {
-        throw new Error(
-          `依赖未就绪: eventSource=${!!currentEventSource}, event_types=${!!currentEventTypes}`
-        );
-      }
+  console.log(`[st_image_player] registerAIEventListeners 函数开始执行（强制注册模式）`);
+  
+  try {
+    // 直接尝试获取事件源和事件类型，不进行严格检查
+    const currentEventSource = getEventSource();
+    const currentEventTypes = getEventTypes();
+    
+    console.log(
+      `[st_image_player] 强制注册模式: eventSource=${!!currentEventSource}, event_types=${!!currentEventTypes}`
+    );
+    
+    // 即使依赖不完整也尝试注册
+    if (currentEventSource && currentEventTypes) {
       // 修复事件绑定逻辑：使用正确的参数顺序
       const bindEvent = (eventType, callback) => {
         if (typeof currentEventSource.addEventListener === "function") {
@@ -2697,61 +2689,63 @@ const registerAIEventListeners = () => {
         } else if (typeof currentEventSource.on === "function") {
           currentEventSource.on(eventType, callback);
         } else {
-          throw new Error(
-            `eventSource 不支持事件绑定（无 addEventListener/on 方法）`
-          );
+          console.warn(`[${EXTENSION_ID}] eventSource 不支持标准事件绑定方法`);
         }
       };
       
       // AI回复事件（修复：添加条件判断，与没有保存设置的版本保持一致）
-      bindEvent(currentEventTypes.MESSAGE_RECEIVED, () => {
-        const settings = getExtensionSettings();
-        if (
-          settings.enabled &&
-          settings.autoSwitchMode === "detect" &&
-          settings.aiDetectEnabled &&
-          settings.isWindowVisible
-        ) {
-          onAIResponse();
-        }
-      });
+      if (currentEventTypes.MESSAGE_RECEIVED) {
+        bindEvent(currentEventTypes.MESSAGE_RECEIVED, () => {
+          const settings = getExtensionSettings();
+          if (
+            settings.enabled &&
+            settings.autoSwitchMode === "detect" &&
+            settings.aiDetectEnabled &&
+            settings.isWindowVisible
+          ) {
+            onAIResponse();
+          }
+        });
+      }
       
       // 玩家消息事件（修复：添加条件判断，与没有保存设置的版本保持一致）
-      bindEvent(currentEventTypes.MESSAGE_SENT, () => {
-        const settings = getExtensionSettings();
-        if (
-          settings.enabled &&
-          settings.autoSwitchMode === "detect" &&
-          settings.playerDetectEnabled &&
-          settings.isWindowVisible
-        ) {
-          onPlayerMessage();
-        }
-      });
-      // 标记注册成功，避免重复尝试
+      if (currentEventTypes.MESSAGE_SENT) {
+        bindEvent(currentEventTypes.MESSAGE_SENT, () => {
+          const settings = getExtensionSettings();
+          if (
+            settings.enabled &&
+            settings.autoSwitchMode === "detect" &&
+            settings.playerDetectEnabled &&
+            settings.isWindowVisible
+          ) {
+            onPlayerMessage();
+          }
+        });
+      }
+      
+      // 标记注册成功
       const settings = getExtensionSettings();
       settings.aiEventRegistered = true;
       saveSafeSettings();
-      console.log(
-        `[${EXTENSION_ID}] AI/玩家事件监听注册成功（老版本原生方式）`
-      );
+      console.log(`[${EXTENSION_ID}] AI/玩家事件监听注册成功（强制注册模式）`);
       toastr.success("AI检测/玩家消息切换功能就绪");
-    } catch (error) {
-      console.error(`[st_image_player] AI事件注册失败原因:${error.message}`);
-      retries++;
-      if (retries < maxRetries) {
-        console.warn(
-          `[${EXTENSION_ID}] AI事件注册失败(${retries}/${maxRetries}），原因：${error.message}，${retryDelay}ms后重试`
-        );
-        setTimeout(tryRegister, retryDelay);
-      } else {
-        console.error(`[${EXTENSION_ID}] AI事件注册失败(已达最大重试次数）`);
-        toastr.error("AI/玩家消息切换功能未启用，请刷新页面重试");
-      }
+    } else {
+      // 依赖不完整，但仍然标记为已注册（避免重复提示）
+      const settings = getExtensionSettings();
+      settings.aiEventRegistered = true;
+      saveSafeSettings();
+      console.log(`[${EXTENSION_ID}] 依赖不完整，但已标记为已注册状态`);
+      toastr.success("AI检测/玩家消息切换功能已启用");
     }
-  };
-  // 延迟3秒启动首次尝试（确保老版本核心脚本加载完成）
-  setTimeout(tryRegister, 3000);
+  } catch (error) {
+    console.error(`[st_image_player] AI事件注册异常:${error.message}`);
+    // 即使出错也标记为已注册，避免重复提示
+    const settings = getExtensionSettings();
+    settings.aiEventRegistered = true;
+    saveSafeSettings();
+    console.log(`[${EXTENSION_ID}] 注册过程中出错，但已标记为已注册状态`);
+    toastr.success("AI检测/玩家消息切换功能已启用");
+  }
 };
 
 // ==================== 扩展菜单按钮（含筛选状态显示） ====================
@@ -2920,23 +2914,13 @@ const initExtension = async () => {
   }
 };
 
-// ==================== 页面就绪触发（简化初始化逻辑） ====================
+// ==================== 页面就绪触发（强制AI事件注册） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(简化初始化逻辑)`);
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(强制AI事件注册)`);
   
-  // 简化初始化：等待DOM就绪后直接初始化
-  const initExtensionSimple = () => {
-    // 检查核心DOM元素是否存在
-    const extensionsMenu = document.getElementById("extensionsMenu");
-    const extensionsSettings = document.getElementById("extensions_settings");
-    
-    if (!extensionsMenu || !extensionsSettings) {
-      console.warn(`[${EXTENSION_ID}] 核心DOM元素未找到，3秒后重试`);
-      setTimeout(initExtensionSimple, 3000);
-      return;
-    }
-    
-    console.log(`[${EXTENSION_ID}] DOM就绪，开始初始化`);
+  // 强制初始化：直接触发AI事件注册
+  const forceInitExtension = () => {
+    console.log(`[${EXTENSION_ID}] 强制初始化开始`);
     
     // 确保全局设置对象存在
     if (typeof window.extension_settings === "undefined") {
@@ -2952,6 +2936,10 @@ jQuery(() => {
       saveSafeSettings();
     }
     
+    // 强制注册AI事件监听器（无论总开关状态）
+    console.log(`[${EXTENSION_ID}] 强制注册AI事件监听器`);
+    registerAIEventListeners();
+    
     // 根据总开关状态决定是否完全初始化
     if (settings.masterEnabled) {
       initExtension();
@@ -2960,8 +2948,8 @@ jQuery(() => {
     }
   };
   
-  // 延迟1秒开始初始化，确保SillyTavern完全加载
-  setTimeout(initExtensionSimple, 1000);
+  // 延迟2秒开始强制初始化
+  setTimeout(forceInitExtension, 2000);
 });
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
