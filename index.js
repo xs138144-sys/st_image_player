@@ -2636,6 +2636,12 @@ const addMenuButton = () => {
     <div id="${menuBtnId}" class="list-group-item flex-container flexGap5">
       <div class="fa-solid fa-film"></div>
       <span>${EXTENSION_NAME}</span>
+      <!-- 新增：启用/关闭播放器按钮 -->
+      <button class="toggle-player-enabled" style="margin-left:8px; padding:2px 6px; font-size:10px; border:1px solid #ccc; border-radius:3px; background:${
+        settings.enabled ? "#4CAF50" : "#f44336"
+      }; color:white; cursor:pointer;">
+        ${settings.enabled ? "启用中" : "已关闭"}
+      </button>
       <!-- 新增：媒体信息显示 -->
       <span class="media-info" style="margin-left:8px; font-size:10px; color:#a0a0a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
         ${settings.showInfo ? "加载中..." : "隐藏信息"}
@@ -2666,6 +2672,27 @@ const addMenuButton = () => {
     });
   });
 
+  // 启用/关闭播放器按钮点击事件
+  $(`#${menuBtnId} .toggle-player-enabled`).on("click", (e) => {
+    e.stopPropagation(); // 阻止冒泡到菜单点击事件
+    const settings = getExtensionSettings();
+    settings.enabled = !settings.enabled;
+    saveSafeSettings();
+    
+    // 更新按钮状态
+    const button = $(e.target);
+    button.text(settings.enabled ? "启用中" : "已关闭");
+    button.css("background", settings.enabled ? "#4CAF50" : "#f44336");
+    
+    // 同步播放器状态
+    updateExtensionMenu();
+    
+    // 显示状态提示
+    toastr.success(`媒体播放器${settings.enabled ? "已启用" : "已关闭"}`);
+    
+    console.log(`[${EXTENSION_ID}] 播放器状态切换: enabled=${settings.enabled}`);
+  });
+
   // 增强菜单状态更新：1秒同步一次，包含媒体信息
   setInterval(() => {
     const settings = getExtensionSettings();
@@ -2673,6 +2700,9 @@ const addMenuButton = () => {
     const win = $(`#${PLAYER_WINDOW_ID}`);
     const infoElement = win.find(".image-info");
 
+    // 0. 同步启用/关闭按钮状态
+    menuBtn.find(".toggle-player-enabled").text(settings.enabled ? "启用中" : "已关闭");
+    menuBtn.find(".toggle-player-enabled").css("background", settings.enabled ? "#4CAF50" : "#f44336");
     // 1. 同步播放状态
     menuBtn.find(".play-status").text(settings.isPlaying ? "播放中" : "已暂停");
     // 2. 同步播放模式
