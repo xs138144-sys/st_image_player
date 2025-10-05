@@ -125,6 +125,7 @@ let slideshowTimer = null;
 
 // 无边框模式下的控制栏自动隐藏/显示
 function setupBorderlessModeInteractions() {
+    const settings = getExtensionSettings();
     const win = $(`#${PLAYER_WINDOW_ID}`);
     const controls = win.find('.image-player-controls');
     
