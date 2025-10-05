@@ -702,11 +702,10 @@ const createPlayerWindow = async () => {
                     </button>
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
                 </div>
-                <div class="controls-group left">
-                    <button class="control-btn toggle-border ${settings.hideBorder ? "active" : ""
+                <!-- 切换边框按钮 - 放在右上角 -->
+                <button class="toggle-border ${settings.hideBorder ? "active" : ""
     }" title="${settings.hideBorder ? "显示边框" : "隐藏边框"
     }"><i class="fa-solid fa-border-none"></i></button>
-                </div>
             </div>
             <div class="image-player-body">
                 <div class="image-container">

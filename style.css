@@ -837,6 +837,35 @@
 }
 
 /* 无边框模式下的切换边框按钮自动隐藏 */
+.toggle-border {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: rgba(114, 137, 218, 0.3);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+    z-index: 25;
+}
+
+.toggle-border:hover {
+    background: rgba(114, 137, 218, 0.5);
+    transform: scale(1.08);
+}
+
+.toggle-border.active {
+    background: rgba(67, 181, 129, 0.5);
+    box-shadow: 0 0 0 2px rgba(67, 181, 129, 0.7);
+}
+
 .image-player-window.no-border .toggle-border {
     opacity: 0;
     transition: opacity 0.3s ease;
