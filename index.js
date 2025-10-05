@@ -119,6 +119,34 @@ const saveSafeSettings = () => {
 let mediaList = [];
 let currentMediaIndex = 0;
 let switchTimer = null;
+let slideshowTimer = null;
+
+
+
+// 无边框模式下的控制栏自动隐藏/显示
+function setupBorderlessModeInteractions() {
+    const win = $(`#${PLAYER_WINDOW_ID}`);
+    const controls = win.find('.image-player-controls');
+    
+    if (settings.hideBorder) {
+        // 无边框模式下，控制栏默认隐藏
+        controls.hide();
+        
+        // 鼠标进入窗口时显示控制栏
+        win.on('mouseenter', function() {
+            controls.stop().fadeIn(200);
+        });
+        
+        // 鼠标离开窗口时隐藏控制栏
+        win.on('mouseleave', function() {
+            controls.stop().fadeOut(200);
+        });
+    } else {
+        // 有边框模式下，移除鼠标事件
+        win.off('mouseenter mouseleave');
+        controls.show();
+    }
+}
 let serviceStatus = {
   active: false,
   totalCount: 0,
@@ -623,7 +651,12 @@ const createPlayerWindow = async () => {
                         <i class="fa-solid fa-video"></i>
                     </button>
                     <button class="hide"><i class="fa-solid fa-minus"></i></button>
-                </div>
+                <button class="toggle-border ${
+                      settings.hideBorder ? "active" : ""
+                    }" title="${
+    settings.hideBorder ? "显示边框" : "隐藏边框"
+  }"><i class="fa-solid fa-border-none"></i></button>
+            </div>
             </div>
             <div class="image-player-body">
                 <div class="image-container">
@@ -663,6 +696,7 @@ const createPlayerWindow = async () => {
                             : "fa-clock"
                         }"></i>
                     </button>
+
                 </div>
                 <div class="controls-group">
                     <button class="control-btn prev" title="上一个"><i class="fa-solid fa-backward-step"></i></button>
@@ -691,6 +725,11 @@ const createPlayerWindow = async () => {
                         <i class="fa-solid ${
                           settings.mediaFitMode === 'fill' ? 'fa-expand' : 'fa-compress'
                         }"></i>
+                    </button>
+                </div>
+                <div class="controls-group">
+                    <button class="control-btn toggle-controls-custom" title="自定义控制栏">
+                        <i class="fa-solid fa-sliders"></i>
                     </button>
                 </div>
             </div>
@@ -1050,6 +1089,32 @@ const setupWindowEvents = () => {
     toastr.info(`已切换到${settings.mediaFitMode === "fill" ? "填充" : "自适应"}模式`);
   });
 
+  // 12. 无边框模式切换
+  win.find(".toggle-border").on("click", function () {
+    settings.hideBorder = !settings.hideBorder;
+    saveSafeSettings();
+    $(this).toggleClass("active", settings.hideBorder);
+    $(this).attr("title", settings.hideBorder ? "显示边框" : "隐藏边框");
+    $(`#${PLAYER_WINDOW_ID}`).toggleClass("no-border", settings.hideBorder);
+    setupBorderlessModeInteractions(); // 初始化无边框模式交互
+    toastr.info(settings.hideBorder ? "已切换到无边框模式" : "已显示边框");
+  });
+
+  // 13. 控制栏自定义设置切换
+  win.find(".toggle-controls-custom").on("click", function () {
+    settings.customVideoControls.showProgress = !settings.customVideoControls.showProgress;
+    settings.customVideoControls.showVolume = !settings.customVideoControls.showVolume;
+    settings.customVideoControls.showLoop = !settings.customVideoControls.showLoop;
+    settings.customVideoControls.showTime = !settings.customVideoControls.showTime;
+    saveSafeSettings();
+    bindVideoControls();
+    toastr.info("控制栏自定义设置已更新");
+    // 应用控制栏自定义设置
+    applyCustomControlsSettings();
+  });
+
+
+
   // 12. 隐藏窗口
   win.find(".hide").on("click", function () {
     win.hide();
@@ -1318,6 +1383,49 @@ const applyTransitionEffect = (imgElement, effect) => {
   if (effect !== "none") {
     imgElement.classList.add(`${effect}-transition`);
   }
+};
+
+// 加载控制栏自定义设置
+const loadCustomControlsSettings = () => {
+  const settings = getExtensionSettings();
+  console.log(`[${EXTENSION_ID}] 加载控制栏自定义设置:`, settings.customVideoControls);
+  applyCustomControlsSettings();
+};
+
+// 应用控制栏自定义设置
+const applyCustomControlsSettings = () => {
+  const settings = getExtensionSettings();
+  const win = $(`#${PLAYER_WINDOW_ID}`);
+  
+  // 应用进度条显示/隐藏
+  if (settings.customVideoControls.showProgress) {
+    win.find(".progress-container").show();
+  } else {
+    win.find(".progress-container").hide();
+  }
+  
+  // 应用音量控制显示/隐藏
+  if (settings.customVideoControls.showVolume) {
+    win.find(".volume-container").show();
+  } else {
+    win.find(".volume-container").hide();
+  }
+  
+  // 应用循环按钮显示/隐藏
+  if (settings.customVideoControls.showLoop) {
+    win.find(".loop-btn").show();
+  } else {
+    win.find(".loop-btn").hide();
+  }
+  
+  // 应用时间戳显示/隐藏
+  if (settings.customVideoControls.showTime) {
+    win.find(".time-display").show();
+  } else {
+    win.find(".time-display").hide();
+  }
+  
+  console.log(`[${EXTENSION_ID}] 控制栏自定义设置已应用`);
 };
 
 const showMedia = async (direction) => {
@@ -1897,14 +2005,6 @@ const createSettingsPanel = async () => {
                         
                         <div class="settings-row">
                             <label class="checkbox_label">
-                                <input type="checkbox" id="player-slideshow-mode" ${
-                                  settings.slideshowMode ? "checked" : ""
-                                } ${
-    settings.playMode === "random" ? "disabled" : ""
-  } />
-                                <i class="fa-solid fa-repeat"></i>图片循环播放
-                            </label>
-                            <label class="checkbox_label">
                                 <input type="checkbox" id="player-video-loop" ${
                                   settings.videoLoop ? "checked" : ""
                                 } />
@@ -2055,9 +2155,7 @@ const setupSettingsEvents = () => {
       .trim();
     settings.playMode = panel.find("#player-play-mode").val();
     settings.mediaFilter = panel.find("#player-media-filter").val();
-    settings.slideshowMode = panel
-      .find("#player-slideshow-mode")
-      .prop("checked");
+
     settings.videoLoop = panel.find("#player-video-loop").prop("checked");
     settings.showInfo = panel.find("#player-show-info").prop("checked");
     settings.preloadImages = panel
@@ -2655,6 +2753,12 @@ const initExtension = async () => {
     
     // 6. 初始化媒体自适应模式
     applyMediaFitMode();
+    
+    // 7. 初始化无边框模式交互
+    setupBorderlessModeInteractions();
+    
+    // 8. 加载控制栏自定义设置
+    loadCustomControlsSettings();
     // 7. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试
     const triggerAIRegister = () => {
       const currentSettings = getExtensionSettings();
