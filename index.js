@@ -8,7 +8,20 @@ const EXTENSION_ID = "st_image_player";
 const EXTENSION_NAME = "媒体播放器";
 const PLAYER_WINDOW_ID = "st-image-player-window";
 const SETTINGS_PANEL_ID = "st-image-player-settings";
-const eventSource = importedEventSource || window.eventSource;
+
+// 修复：为eventSource添加兜底机制和详细调试信息
+let eventSource = importedEventSource || window.eventSource;
+if (!eventSource) {
+  console.warn(`[${EXTENSION_ID}] eventSource未定义，创建兜底空对象`);
+  console.log(`[${EXTENSION_ID}] importedEventSource: ${!!importedEventSource} (${typeof importedEventSource})`);
+  console.log(`[${EXTENSION_ID}] window.eventSource: ${!!window.eventSource} (${typeof window.eventSource})`);
+  
+  // 创建兜底空对象，避免后续检查失败
+  eventSource = {};
+  window.eventSource = eventSource;
+} else {
+  console.log(`[${EXTENSION_ID}] eventSource初始化成功:`, typeof eventSource);
+}
 
 // 修复：为event_types添加兜底默认值
 let event_types = importedEventTypes || window.event_types;
@@ -2852,11 +2865,17 @@ const registerAIEventListeners = () => {
       
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
+        console.log(`[${EXTENSION_ID}] 尝试绑定事件: ${eventName}`);
+        console.log(`[${EXTENSION_ID}] eventSource方法检查: addEventListener=${typeof eventSource.addEventListener}, on=${typeof eventSource.on}`);
+        
         if (typeof eventSource.addEventListener === "function") {
+          console.log(`[${EXTENSION_ID}] 使用addEventListener绑定事件: ${eventName}`);
           eventSource.addEventListener(eventName, callback);
         } else if (typeof eventSource.on === "function") {
+          console.log(`[${EXTENSION_ID}] 使用on方法绑定事件: ${eventName}`);
           eventSource.on(eventName, callback);
         } else {
+          console.error(`[${EXTENSION_ID}] ❌ eventSource不支持事件绑定方法`);
           throw new Error(
             `eventSource 不支持事件绑定（无 addEventListener/on 方法）`
           );
