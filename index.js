@@ -206,10 +206,12 @@ const createMinimalSettingsPanel = () => {
     function () {
       const settings = getExtensionSettings();
       settings.masterEnabled = $(this).prop("checked");
+      settings.enabled = settings.masterEnabled; // 强制同步 enabled 字段
       
       // 关键：同步到全局设置
       if (window.extension_settings && window.extension_settings[EXTENSION_ID]) {
         window.extension_settings[EXTENSION_ID].masterEnabled = settings.masterEnabled;
+        window.extension_settings[EXTENSION_ID].enabled = settings.enabled;
       }
       saveSafeSettings();
 
@@ -2750,6 +2752,10 @@ const initExtension = async () => {
     createMinimalSettingsPanel();
     return;
   }
+  
+  // 关键：初始化前清理旧面板
+  $(`#${SETTINGS_PANEL_ID}-minimal`).remove();
+  $(`#${SETTINGS_PANEL_ID}`).remove();
   try {
     console.log(`[${EXTENSION_ID}] 开始初始化(SillyTavern老版本适配)`);
     // 1. 初始化全局设置容器（兼容老版本存储）
