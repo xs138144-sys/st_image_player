@@ -2684,42 +2684,24 @@ const registerAIEventListeners = () => {
           `依赖未就绪: eventSource=${!!currentEventSource}, event_types=${!!currentEventTypes}`
         );
       }
-      // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
-      const bindEvent = (eventName, callback) => {
+      // 修复事件绑定逻辑：使用正确的参数顺序
+      const bindEvent = (eventType, callback) => {
         if (typeof currentEventSource.addEventListener === "function") {
-          currentEventSource.addEventListener(eventName, callback);
+          currentEventSource.addEventListener(eventType, callback);
         } else if (typeof currentEventSource.on === "function") {
-          currentEventSource.on(eventName, callback);
+          currentEventSource.on(eventType, callback);
         } else {
           throw new Error(
             `eventSource 不支持事件绑定（无 addEventListener/on 方法）`
           );
         }
       };
-      // AI回复事件（使用兼容的绑定方法）
-      bindEvent(currentEventTypes.MESSAGE_RECEIVED, () => {
-        const settings = getExtensionSettings();
-        if (
-          settings.enabled &&
-          settings.autoSwitchMode === "detect" &&
-          settings.aiDetectEnabled &&
-          settings.isWindowVisible
-        ) {
-          onAIResponse();
-        }
-      });
-      // 玩家消息事件（同上）
-      bindEvent(currentEventTypes.MESSAGE_SENT, () => {
-        const settings = getExtensionSettings();
-        if (
-          settings.enabled &&
-          settings.autoSwitchMode === "detect" &&
-          settings.playerDetectEnabled &&
-          settings.isWindowVisible
-        ) {
-          onPlayerMessage();
-        }
-      });
+      
+      // AI回复事件（修复：直接调用事件处理函数）
+      bindEvent(currentEventTypes.MESSAGE_RECEIVED, onAIResponse);
+      
+      // 玩家消息事件（修复：直接调用事件处理函数）
+      bindEvent(currentEventTypes.MESSAGE_SENT, onPlayerMessage);
       // 标记注册成功，避免重复尝试
       const settings = getExtensionSettings();
       settings.aiEventRegistered = true;
@@ -2912,60 +2894,48 @@ const initExtension = async () => {
   }
 };
 
-// ==================== 页面就绪触发（兼容SillyTavern DOM加载顺序） ====================
+// ==================== 页面就绪触发（简化初始化逻辑） ====================
 jQuery(() => {
-  console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
-  const initWhenReady = () => {
-    // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
-    const checkGlobalSettings = () => {
-      const globalSettings = getSafeGlobal("extension_settings", {});
-      // 条件1：DOM就绪（扩展菜单+设置面板容器存在）
-      const isDOMReady =
-        document.getElementById("extensionsMenu") &&
-        document.getElementById("extensions_settings");
-      // 条件2：全局设置已加载（或超时强制尝试）
-      const isSettingsReady =
-        !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
-
-      if (isDOMReady && isSettingsReady) {
-        clearInterval(checkTimer);
-        const settings = getExtensionSettings();
-        console.log(
-          `[${EXTENSION_ID}] 初始化前总开关状态: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`
-        );
-
-        // 根据总开关状态决定是否初始化扩展
-        if (settings.masterEnabled) {
-          initExtension();
-        } else {
-          createMinimalSettingsPanel();
-        }
-
-        console.log(`[${EXTENSION_ID}] DOM+全局设置均就绪,启动初始化`);
-        return;
-      }
-
-      // 超时保护：5秒后强制初始化（避免无限等待）
-      if (Date.now() - startTime > 5000) {
-        clearInterval(checkTimer);
-        const finalDOMReady =
-          document.getElementById("extensionsMenu") &&
-          document.getElementById("extensions_settings");
-        if (finalDOMReady) {
-          console.warn(`[${EXTENSION_ID}] 5秒超时,强制启动初始化`);
-          initExtension();
-        } else {
-          console.error(`[${EXTENSION_ID}] 5秒超时,DOM未就绪,初始化失败`);
-          toastr.error("扩展初始化失败,核心DOM未加载");
-        }
-      }
-    };
-
-    const startTime = Date.now();
-    const checkTimer = setInterval(checkGlobalSettings, 300); // 每300ms检查一次
+  console.log(`[${EXTENSION_ID}] 脚本开始加载(简化初始化逻辑)`);
+  
+  // 简化初始化：等待DOM就绪后直接初始化
+  const initExtensionSimple = () => {
+    // 检查核心DOM元素是否存在
+    const extensionsMenu = document.getElementById("extensionsMenu");
+    const extensionsSettings = document.getElementById("extensions_settings");
+    
+    if (!extensionsMenu || !extensionsSettings) {
+      console.warn(`[${EXTENSION_ID}] 核心DOM元素未找到，3秒后重试`);
+      setTimeout(initExtensionSimple, 3000);
+      return;
+    }
+    
+    console.log(`[${EXTENSION_ID}] DOM就绪，开始初始化`);
+    
+    // 确保全局设置对象存在
+    if (typeof window.extension_settings === "undefined") {
+      window.extension_settings = {};
+    }
+    
+    // 初始化扩展设置
+    const settings = getExtensionSettings();
+    if (!window.extension_settings[EXTENSION_ID]) {
+      window.extension_settings[EXTENSION_ID] = JSON.parse(JSON.stringify(settings));
+      // 初始化关键状态
+      window.extension_settings[EXTENSION_ID].aiEventRegistered = false;
+      saveSafeSettings();
+    }
+    
+    // 根据总开关状态决定是否完全初始化
+    if (settings.masterEnabled) {
+      initExtension();
+    } else {
+      createMinimalSettingsPanel();
+    }
   };
-
-  initWhenReady();
+  
+  // 延迟1秒开始初始化，确保SillyTavern完全加载
+  setTimeout(initExtensionSimple, 1000);
 });
 // 脚本加载完成标识
 console.log(`[${EXTENSION_ID}] 脚本文件加载完成(SillyTavern老版本适配版)`);
