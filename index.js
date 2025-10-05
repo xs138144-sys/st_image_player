@@ -206,6 +206,11 @@ const createMinimalSettingsPanel = () => {
     function () {
       const settings = getExtensionSettings();
       settings.masterEnabled = $(this).prop("checked");
+      
+      // 关键：同步到全局设置
+      if (window.extension_settings && window.extension_settings[EXTENSION_ID]) {
+        window.extension_settings[EXTENSION_ID].masterEnabled = settings.masterEnabled;
+      }
       saveSafeSettings();
 
       if (settings.masterEnabled) {
