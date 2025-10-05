@@ -1544,7 +1544,20 @@ const showMedia = async (direction) => {
     win.find(".control-text").text("加载中...");
     $(imgElement).hide();
     $(videoElement).hide();
-    $(loadingElement).show();
+    
+    // 优化加载动画显示
+    $(loadingElement).css({
+      opacity: "0",
+      display: "flex"
+    });
+    
+    // 使用requestAnimationFrame确保动画流畅
+    requestAnimationFrame(() => {
+      $(loadingElement).css({
+        opacity: "1",
+        transition: "opacity 0.2s ease-out"
+      });
+    });
 
     const status = await checkServiceStatus();
     if (!status.active) throw new Error("媒体服务未连接");
@@ -1617,48 +1630,80 @@ const showMedia = async (direction) => {
     }
 
     currentMediaType = mediaType;
-    $(loadingElement).hide();
+    
+    // 优化加载动画隐藏
+    $(loadingElement).css({
+      opacity: "0",
+      transition: "opacity 0.15s ease-out"
+    });
+    
+    // 延迟隐藏元素，确保动画完成
+    setTimeout(() => {
+      $(loadingElement).hide();
+    }, 150);
 
     if (mediaType === "image") {
-      // 先隐藏图片，应用过渡效果
-      $(imgElement).hide();
+      // 优化：先设置src再应用过渡效果，减少闪烁
+      $(imgElement).attr("src", mediaUrl);
+      
+      // 立即显示图片，但设置透明度为0准备过渡
+      $(imgElement).css({
+        opacity: 0,
+        display: "block"
+      });
+      
+      // 应用过渡效果
       applyTransitionEffect(imgElement, settings.transitionEffect);
       
-      // 使用新的Image对象加载图片，确保事件能正确触发
+      // 使用Promise等待图片加载完成
       await new Promise((resolve, reject) => {
         const tempImg = new Image();
         tempImg.onload = () => {
-          $(imgElement).attr("src", mediaUrl);
-          // 延迟显示以触发过渡效果
+          // 图片加载完成后，立即触发过渡动画
           setTimeout(() => {
-            $(imgElement).show();
-            // 添加show类触发过渡动画
+            $(imgElement).css("opacity", 1);
             imgElement.classList.add("show");
             resolve();
-          }, 50);
+          }, 10); // 减少延迟时间
         };
         tempImg.onerror = () => {
           console.error("图片加载失败:", mediaUrl);
           $(imgElement).attr("src", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQYV2P4z8DwHwAFAAH/l8iC5gAAAABJRU5ErkJggg==");
           setTimeout(() => {
-            $(imgElement).show();
+            $(imgElement).css("opacity", 1);
             imgElement.classList.add("show");
             resolve();
-          }, 50);
+          }, 10);
         };
         tempImg.src = mediaUrl;
       });
       
       $(videoElement).hide();
     } else if (mediaType === "video") {
+      // 优化：先隐藏图片，显示视频容器
+      $(imgElement).hide();
+      
+      // 设置视频属性
       videoElement.currentTime = 0;
       videoElement.loop = settings.videoLoop;
-      $(videoElement).attr("src", mediaUrl).show();
+      
+      // 立即显示视频容器，但设置透明度为0
+      $(videoElement).css({
+        opacity: 0,
+        display: "block"
+      });
+      
+      // 设置视频源
+      $(videoElement).attr("src", mediaUrl);
 
       await new Promise((resolve, reject) => {
         const loadHandler = () => {
           videoElement.removeEventListener("loadedmetadata", loadHandler);
-          resolve();
+          // 视频加载完成后，淡入显示
+          setTimeout(() => {
+            $(videoElement).css("opacity", 1);
+            resolve();
+          }, 10);
         };
         const errorHandler = () => {
           videoElement.removeEventListener("error", errorHandler);
@@ -1668,7 +1713,6 @@ const showMedia = async (direction) => {
         videoElement.addEventListener("error", errorHandler);
       });
 
-      $(imgElement).hide();
       if (settings.isPlaying) {
         videoElement
           .play()
@@ -1708,62 +1752,89 @@ const showMedia = async (direction) => {
 
     retryCount = 0;
     
-    // 增强预加载：预加载接下来3张图片
+    // 优化预加载：智能预加载机制
     const preloadUrls = [];
     const preloadTypes = [];
     
-    if (settings.playMode === "random") {
-      // 随机模式：预加载接下来3个随机索引
-      for (let i = 0; i < 3; i++) {
+    // 根据当前媒体类型决定预加载策略
+    if (mediaType === "image") {
+      // 图片模式：预加载接下来2张图片
+      for (let i = 1; i <= 2; i++) {
+        if (settings.playMode === "random") {
+          const nextIndex = getRandomMediaIndex();
+          if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
+            const nextMedia = settings.randomMediaList[nextIndex];
+            if (nextMedia.media_type === "image") { // 只预加载图片
+              preloadUrls.push(`${settings.serviceUrl}/file/${encodeURIComponent(
+                nextMedia.rel_path
+              )}`);
+              preloadTypes.push("image");
+            }
+          }
+        } else {
+          const nextIndex = (currentMediaIndex + i) % mediaList.length;
+          const nextMedia = mediaList[nextIndex];
+          if (nextMedia.media_type === "image") { // 只预加载图片
+            preloadUrls.push(`${settings.serviceUrl}/file/${encodeURIComponent(
+              nextMedia.rel_path
+            )}`);
+            preloadTypes.push("image");
+          }
+        }
+      }
+    } else if (mediaType === "video") {
+      // 视频模式：预加载接下来1个视频
+      if (settings.playMode === "random") {
         const nextIndex = getRandomMediaIndex();
         if (nextIndex >= 0 && nextIndex < settings.randomMediaList.length) {
           const nextMedia = settings.randomMediaList[nextIndex];
+          if (nextMedia.media_type === "video") { // 只预加载视频
+            preloadUrls.push(`${settings.serviceUrl}/file/${encodeURIComponent(
+              nextMedia.rel_path
+            )}`);
+            preloadTypes.push("video");
+          }
+        }
+      } else {
+        const nextIndex = (currentMediaIndex + 1) % mediaList.length;
+        const nextMedia = mediaList[nextIndex];
+        if (nextMedia.media_type === "video") { // 只预加载视频
           preloadUrls.push(`${settings.serviceUrl}/file/${encodeURIComponent(
             nextMedia.rel_path
           )}`);
-          preloadTypes.push(nextMedia.media_type);
+          preloadTypes.push("video");
         }
-      }
-    } else {
-      // 顺序模式：预加载接下来3张图片
-      for (let i = 1; i <= 3; i++) {
-        const nextIndex = (currentMediaIndex + i) % mediaList.length;
-        const nextMedia = mediaList[nextIndex];
-        preloadUrls.push(`${settings.serviceUrl}/file/${encodeURIComponent(
-          nextMedia.rel_path
-        )}`);
-        preloadTypes.push(nextMedia.media_type);
       }
     }
 
-    // 并行预加载多张图片
+    // 异步预加载，不阻塞主流程
     if (preloadUrls.length > 0) {
-      const preloadPromises = preloadUrls.map((url, index) => 
-        preloadMediaItem(url, preloadTypes[index])
-      );
-      
-      try {
-        const preloadedResults = await Promise.allSettled(preloadPromises);
-        let successCount = 0;
+      setTimeout(() => {
+        const preloadPromises = preloadUrls.map((url, index) => 
+          preloadMediaItem(url, preloadTypes[index])
+        );
         
-        preloadedResults.forEach((result, index) => {
-          if (result.status === "fulfilled" && result.value) {
-            successCount++;
-            console.log(`[${EXTENSION_ID}] 预加载成功: ${preloadUrls[index]}`);
-          } else {
-            console.warn(`[${EXTENSION_ID}] 预加载失败: ${preloadUrls[index]}`);
-          }
+        Promise.allSettled(preloadPromises).then(preloadedResults => {
+          let successCount = 0;
+          
+          preloadedResults.forEach((result, index) => {
+            if (result.status === "fulfilled" && result.value) {
+              successCount++;
+              console.log(`[${EXTENSION_ID}] 预加载成功: ${preloadUrls[index]}`);
+            } else {
+              console.warn(`[${EXTENSION_ID}] 预加载失败: ${preloadUrls[index]}`);
+            }
+          });
+          
+          console.log(`[${EXTENSION_ID}] 预加载完成: ${successCount}/${preloadUrls.length} 成功`);
+          
+          // 主预加载对象设为第一张预加载图片
+          preloadedMedia = preloadedResults[0].status === "fulfilled" ? preloadedResults[0].value : null;
+        }).catch(e => {
+          console.warn(`[${EXTENSION_ID}] 预加载过程中出错:`, e);
+          preloadedMedia = null;
         });
-        
-        console.log(`[${EXTENSION_ID}] 预加载完成: ${successCount}/${preloadUrls.length} 成功`);
-        
-        // 主预加载对象设为第一张预加载图片
-        preloadedMedia = preloadedResults[0].status === "fulfilled" ? preloadedResults[0].value : null;
-        
-      } catch (e) {
-        console.warn(`[${EXTENSION_ID}] 预加载过程中出错:`, e);
-        preloadedMedia = null;
-      }
+      }, 100); // 延迟100ms执行，确保主流程优先
     }
 
     return Promise.resolve();
