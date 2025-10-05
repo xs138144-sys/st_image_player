@@ -199,10 +199,6 @@
     transition: background 0.3s;
 }
 
-.image-player-controls:hover {
-    background: rgba(43, 45, 49, 0.4);
-}
-
 .control-btn {
     width: 30px;
     height: 30px;
@@ -238,14 +234,6 @@
 
 .control-btn.active:hover {
     background: rgba(67, 181, 129, 0.7);
-}
-
-.control-text {
-    text-align: center;
-    color: #a0a0a0;
-    font-size: 11px;
-    padding: 0 6px;
-    min-width: 80px;
 }
 
 .controls-group {
@@ -542,6 +530,76 @@
     color: #d0d0d0;
 }
 
+/* 进度条容器 */
+.progress-container {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+    margin: 0 8px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(to right, #7289da, #5f78d3);
+    border-radius: 2px;
+    position: relative;
+    transition: width 0.1s ease;
+}
+
+.progress-handle {
+    width: 12px;
+    height: 12px;
+    background: #7289da;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.progress-container:hover .progress-handle {
+    opacity: 1;
+}
+
+/* 音量滑块容器 */
+.volume-slider-container {
+    width: 80px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+    margin: 0 8px;
+}
+
+.volume-slider {
+    height: 100%;
+    background: linear-gradient(to right, #7289da, #5f78d3);
+    border-radius: 2px;
+    position: relative;
+    transition: width 0.1s ease;
+}
+
+.volume-handle {
+    width: 12px;
+    height: 12px;
+    background: #7289da;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.volume-slider-container:hover .volume-handle {
+    opacity: 1;
+}
+
 /* ==================== 视频控制栏样式（新增） ==================== */
 .video-controls {
     position: absolute;
@@ -704,41 +762,25 @@
     box-shadow: none;
 }
 
-/* ==================== 边框隐藏模式（新增） ==================== */
+/* 无边框模式 */
 .image-player-window.no-border {
     border: none;
+    border-radius: 0;
     box-shadow: none;
     background: transparent;
     backdrop-filter: none;
 }
 
-.image-player-window.no-border .image-player-header,
-.image-player-window.no-border .image-player-controls,
 .image-player-window.no-border .resize-handle {
     display: none;
 }
 
-.image-player-window.no-border .image-player-body {
-    padding: 0;
-}
-
 .image-player-window.no-border .image-container {
-    padding-bottom: 40px;
-    box-sizing: border-box;
-}
-
-.image-player-window.no-border .video-controls {
-    bottom: -40px;
-    transition: bottom 0.3s ease;
+    border-radius: 0;
 }
 
 .image-player-window.no-border .image-container:hover .video-controls {
-    bottom: 0;
-}
-
-.image-player-window.no-border .image-info {
     opacity: 0;
-    transition: opacity 0.3s ease;
 }
 
 .image-player-window.no-border .image-container:hover .image-info {
