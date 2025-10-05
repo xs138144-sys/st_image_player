@@ -210,12 +210,21 @@ const createMinimalSettingsPanel = () => {
       
       console.log(`[${EXTENSION_ID}] 最小面板点击: masterEnabled=${settings.masterEnabled}, enabled=${settings.enabled}`);
       
-      // 关键：同步到全局设置
-      if (window.extension_settings && window.extension_settings[EXTENSION_ID]) {
-        window.extension_settings[EXTENSION_ID].masterEnabled = settings.masterEnabled;
-        window.extension_settings[EXTENSION_ID].enabled = settings.enabled;
-        console.log(`[${EXTENSION_ID}] 全局设置同步完成:`, window.extension_settings[EXTENSION_ID]);
+      // 关键修复：强制同步到全局设置和本地存储
+      if (window.extension_settings) {
+        window.extension_settings[EXTENSION_ID] = settings;
+        console.log(`[${EXTENSION_ID}] 全局设置强制同步完成:`, window.extension_settings[EXTENSION_ID]);
       }
+      
+      // 强制覆盖本地存储，避免旧数据覆盖新设置
+      try {
+        const key = `st_image_player_settings_${EXTENSION_ID}`;
+        localStorage.setItem(key, JSON.stringify(settings));
+        console.log(`[${EXTENSION_ID}] 本地存储强制覆盖完成`);
+      } catch (error) {
+        console.error(`[${EXTENSION_ID}] 本地存储覆盖失败:`, error);
+      }
+      
       saveSafeSettings();
 
       if (settings.masterEnabled) {
