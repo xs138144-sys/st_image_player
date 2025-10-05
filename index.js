@@ -813,6 +813,7 @@ const positionWindow = () => {
     .toggleClass("no-border", settings.hideBorder);
 
   if (settings.hideBorder && settings.showVideoControls) {
+    // 无边框模式：控制栏和切换按钮自动隐藏
     const container = win.find(".image-container");
     const controls = win.find(".video-controls");
     const toggleBorderBtn = win.find(".toggle-border");
@@ -834,9 +835,13 @@ const positionWindow = () => {
         }
       }, 3000);
     });
-  } else if (settings.showVideoControls) {
-    // 非无边框模式下，确保控制栏正常显示
-    win.find(".video-controls").show();
+  } else {
+    // 有边框模式：控制栏正常显示，切换按钮显示在标题栏
+    if (settings.showVideoControls) {
+      win.find(".video-controls").show();
+    }
+    // 确保切换按钮在有边框模式下正常显示
+    win.find(".toggle-border").css({ opacity: 1 });
   }
 
   adjustVideoControlsLayout();
