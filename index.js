@@ -188,6 +188,13 @@ const createMinimalSettingsPanel = () => {
                 <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
               </label>
             </div>
+            <!-- 播放器开关 -->
+            <div class="settings-row">
+              <label class="checkbox_label" style="min-width:auto;">
+                <input type="checkbox" class="toggle-player-enabled" ${settings.enabled ? 'checked' : ''} />
+                <i class="fa-solid fa-play"></i>启用播放器
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -224,6 +231,18 @@ const createMinimalSettingsPanel = () => {
       } catch (error) {
         console.error(`[${EXTENSION_ID}] 本地存储覆盖失败:`, error);
       }
+  
+  // 播放器开关事件
+  $(`#${SETTINGS_PANEL_ID}-minimal .toggle-player-enabled`).on("change", function () {
+    const settings = getExtensionSettings();
+    settings.enabled = $(this).prop("checked");
+    saveSafeSettings();
+    
+    // 显示状态提示
+    toastr.success(`媒体播放器${settings.enabled ? "已启用" : "已关闭"}`);
+    
+    console.log(`[${EXTENSION_ID}] 播放器状态切换: enabled=${settings.enabled}`);
+  });
       
       saveSafeSettings();
 
@@ -1845,6 +1864,16 @@ const createSettingsPanel = async () => {
                   settings.masterEnabled ? "checked" : ""
                 } />
                 <i class="fa-solid fa-power-off"></i>启用媒体播放器扩展
+              </label>
+            </div>
+            
+            <!-- 播放器开关 -->
+            <div class="settings-row">
+              <label class="checkbox_label" style="min-width:auto;">
+                <input type="checkbox" id="extension-enabled" ${
+                  settings.enabled ? "checked" : ""
+                } />
+                <i class="fa-solid fa-play"></i>启用播放器
               </label>
             </div>
                         
