@@ -155,19 +155,13 @@ const getExtensionSettings = () => {
 
 const saveSafeSettings = () => {
   const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  const settings = getExtensionSettings();
-  
   // 关键：通过 SillyTavern 核心函数保存设置到本地存储
   if (saveFn && typeof saveFn === "function") {
     saveFn();
+    console.log(
+      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
+    );
   }
-  
-  // 同时保存到本地存储
-  saveSettingsToStorage(settings);
-  
-  console.log(
-    `[${EXTENSION_ID}] 设置已保存: enabled=${settings.enabled}`
-  );
 };
 
 // 全局状态（沿用老版本简单管理）
