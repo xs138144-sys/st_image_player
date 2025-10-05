@@ -2804,23 +2804,11 @@ const registerAIEventListeners = () => {
   let retries = 0;
   const tryRegister = () => {
     try {
-      // 检查依赖是否就绪
-      if (!eventSource) {
-        throw new Error('eventSource未就绪');
-      }
-      
-      // 检查event_types是否就绪（允许使用兜底值）
-      if (!event_types) {
-        throw new Error('event_types未就绪');
-      }
-      
-      // 检查事件类型是否就绪（如果使用兜底值，则跳过此检查）
-      const isFallbackEventTypes = event_types.MESSAGE_RECEIVED === "MESSAGE_RECEIVED" && 
-                                   event_types.MESSAGE_SENT === "MESSAGE_SENT";
-      
-      if (!isFallbackEventTypes && (!event_types.MESSAGE_RECEIVED || !event_types.MESSAGE_SENT)) {
+      // 老版本简洁依赖检查
+      if (!eventSource || !event_types || !event_types.MESSAGE_RECEIVED || !event_types.MESSAGE_SENT) {
         throw new Error("依赖未就绪");
       }
+      
       // 新增：兼容性处理：优先使用 addEventListener，其次使用 on 方法
       const bindEvent = (eventName, callback) => {
         if (typeof eventSource.addEventListener === "function") {
@@ -3071,23 +3059,9 @@ const initExtension = async () => {
 
     // 8. 加载控制栏自定义设置
     loadCustomControlsSettings();
-    // 7. 【替换原setTimeout】确保registerAIEventListeners必被触发，添加兜底重试
-    const triggerAIRegister = () => {
-      const currentSettings = getExtensionSettings();
-      if (currentSettings.aiEventRegistered) {
-        return;
-      }
-      registerAIEventListeners();
-      // 兜底：3秒后检查是否注册成功，未成功则重试一次
-      setTimeout(() => {
-        const checkSettings = getExtensionSettings();
-        if (!checkSettings.aiEventRegistered) {
-          registerAIEventListeners();
-        }
-      }, 3000);
-    };
+    // 7. 老版本简洁触发方式
     // 延迟3秒触发（给eventSource最终初始化留足时间）
-    setTimeout(triggerAIRegister, 3000);
+    setTimeout(registerAIEventListeners, 3000);
 
     toastr.success(`${EXTENSION_NAME}扩展加载成功（点击播放按钮开始播放）`);
   } catch (error) {
