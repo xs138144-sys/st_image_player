@@ -1779,12 +1779,13 @@ const onAIResponse = () => {
 };
 
 const onPlayerMessage = () => {
+  console.log(`[${EXTENSION_ID}] 检测到玩家消息事件触发(来自SillyTavern)`); // 新增日志
   const settings = getExtensionSettings();
   if (!settings.enabled || settings.isMediaLoading) return;
 
   const video = $(`#${PLAYER_WINDOW_ID} .image-player-video`)[0];
   if (video && video.style.display !== "none" && settings.videoLoop) {
-    console.log(`[${EXTENSION_ID}] 视频循环中，跳过玩家切换`);
+    console.log(`[${EXTENSION_ID}] 视频循环中,跳过玩家消息切换`);
     return;
   }
 
