@@ -2447,6 +2447,12 @@ const setupSettingsEvents = () => {
     } else {
       settings.autoSwitchMode = "detect";
       settings.isPlaying = true;
+      
+      // 强制注册AI检测功能（如果未启用）
+      if (!settings.aiEventRegistered) {
+        console.log(`[${EXTENSION_ID}] 检测到AI检测模式启用但事件未注册，强制注册AI事件监听器`);
+        registerAIEventListeners();
+      }
     }
 
     saveSafeSettings();
