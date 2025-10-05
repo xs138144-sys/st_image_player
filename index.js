@@ -2855,6 +2855,8 @@ const initExtension = async () => {
 jQuery(() => {
   console.log(`[${EXTENSION_ID}] 脚本开始加载(等待DOM+全局设置就绪)`);
   const initWhenReady = () => {
+    console.log(`[${EXTENSION_ID}] initWhenReady开始执行`);
+    
     // 新增：等待全局设置（含本地存储）加载完成，最多等待5秒
     const checkGlobalSettings = () => {
       const globalSettings = getSafeGlobal("extension_settings", {});
@@ -2865,6 +2867,9 @@ jQuery(() => {
       // 条件2：全局设置已加载（或超时强制尝试）
       const isSettingsReady =
         !!globalSettings[EXTENSION_ID] || Date.now() - startTime > 5000;
+
+      console.log(`[${EXTENSION_ID}] DOM检查: extensionsMenu=${!!document.getElementById("extensionsMenu")}, extensions_settings=${!!document.getElementById("extensions_settings")}`);
+      console.log(`[${EXTENSION_ID}] 设置检查: globalSettings[EXTENSION_ID]=${!!globalSettings[EXTENSION_ID]}, 耗时=${Date.now() - startTime}ms`);
 
       if (isDOMReady && isSettingsReady) {
         clearInterval(checkTimer);
