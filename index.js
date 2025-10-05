@@ -1205,8 +1205,13 @@ const setupWindowEvents = () => {
       .find(".play-pause i")
       .toggleClass("fa-play", !settings.isPlaying)
       .toggleClass("fa-pause", settings.isPlaying);
+    
+    // 修复：只在切换为定时模式且当前有视频播放时才暂停
     const video = win.find(".image-player-video")[0];
-    if (video) video.pause();
+    if (video && settings.autoSwitchMode === "timer" && !video.paused) {
+      video.pause();
+    }
+    
     stopProgressUpdate();
     clearTimeout(switchTimer);
     if (settings.isPlaying && settings.autoSwitchMode === "timer") {
