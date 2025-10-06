@@ -121,28 +121,80 @@ const getSafeToastr = () => {
 const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
-  // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
-  const globalSettings = getSafeGlobal("extension_settings", {});
-  // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
-  if (globalSettings[EXTENSION_ID]) {
-    return globalSettings[EXTENSION_ID];
-  }
-
-  // 兜底机制：如果核心设置不可用，尝试从 localStorage 读取
   try {
-    const key = `st_image_player_settings_${EXTENSION_ID}`;
-    const storedSettings = localStorage.getItem(key);
-    if (storedSettings) {
-      const parsedSettings = JSON.parse(storedSettings);
-      console.log(`[${EXTENSION_ID}] 从本地存储兜底读取设置`);
-      return parsedSettings;
+    // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
+    const globalSettings = getSafeGlobal("extension_settings", {});
+    
+    // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
+    if (globalSettings[EXTENSION_ID]) {
+      console.log(`[${EXTENSION_ID}] 从全局设置读取配置`);
+      return globalSettings[EXTENSION_ID];
     }
-  } catch (error) {
-    console.error(`[${EXTENSION_ID}] 本地存储兜底读取失败:`, error);
-  }
 
-  // 仅当完全无配置时，才创建默认设置（避免覆盖已保存状态）
-  const defaultSettings = {
+    // 兜底机制：如果核心设置不可用，尝试从 localStorage 读取
+    try {
+      const key = `st_image_player_settings_${EXTENSION_ID}`;
+      const storedSettings = localStorage.getItem(key);
+      if (storedSettings) {
+        const parsedSettings = JSON.parse(storedSettings);
+        console.log(`[${EXTENSION_ID}] 从本地存储兜底读取设置`);
+        
+        // 将读取的设置同步到全局设置
+        if (window.extension_settings) {
+          window.extension_settings[EXTENSION_ID] = parsedSettings;
+        }
+        
+        return parsedSettings;
+      }
+    } catch (localStorageError) {
+      console.warn(`[${EXTENSION_ID}] 本地存储兜底读取失败:`, localStorageError);
+    }
+
+    // 终极兜底：尝试读取简化版设置
+    try {
+      const simpleKey = `st_image_player_simple_${EXTENSION_ID}`;
+      const simpleSettings = localStorage.getItem(simpleKey);
+      if (simpleSettings) {
+        const parsedSimple = JSON.parse(simpleSettings);
+        console.log(`[${EXTENSION_ID}] 从简化版设置读取`);
+        
+        // 基于简化版设置创建完整设置
+        const defaultSettings = createDefaultSettings();
+        Object.assign(defaultSettings, parsedSimple);
+        
+        // 同步到全局设置
+        if (window.extension_settings) {
+          window.extension_settings[EXTENSION_ID] = defaultSettings;
+        }
+        
+        return defaultSettings;
+      }
+    } catch (simpleError) {
+      console.warn(`[${EXTENSION_ID}] 简化版设置读取失败:`, simpleError);
+    }
+
+    // 仅当完全无配置时，才创建默认设置
+    const defaultSettings = createDefaultSettings();
+    
+    // 将默认设置写入全局，供后续保存使用
+    if (window.extension_settings) {
+      window.extension_settings[EXTENSION_ID] = defaultSettings;
+    }
+    
+    console.log(`[${EXTENSION_ID}] 使用默认设置`);
+    return defaultSettings;
+    
+  } catch (error) {
+    console.error(`[${EXTENSION_ID}] 设置读取过程中发生严重错误:`, error);
+    
+    // 紧急兜底：返回最基本的默认设置
+    return createDefaultSettings();
+  }
+};
+
+// 创建默认设置的辅助函数
+const createDefaultSettings = () => {
+  return {
     masterEnabled: true, // 新增：总开关，控制整个扩展的启用/禁用
     enabled: true, // 播放器启用状态
     serviceUrl: "http://localhost:9000",
@@ -184,30 +236,63 @@ const getExtensionSettings = () => {
     aiEventRegistered: false,
     filterTriggerSource: null,
   };
-
-  // 将默认设置写入全局，供后续保存使用
-  globalSettings[EXTENSION_ID] = defaultSettings;
-  return defaultSettings;
 };
 
 const saveSafeSettings = () => {
-  const saveFn = getSafeGlobal("saveSettingsDebounced", null);
-  // 关键：通过 SillyTavern 核心函数保存设置到本地存储
-  if (saveFn && typeof saveFn === "function") {
-    saveFn();
-    console.log(
-      `[${EXTENSION_ID}] 设置已保存: enabled=${getExtensionSettings().enabled}`
-    );
-  } else {
-    // 兜底机制：如果核心保存函数不可用，使用 localStorage 直接保存
-    try {
-      const settings = getExtensionSettings();
+  // 防重复保存：检查是否正在保存中
+  if (window._savingSettings) {
+    console.log(`[${EXTENSION_ID}] 设置保存正在进行中，跳过重复调用`);
+    return;
+  }
+  
+  window._savingSettings = true;
+  
+  try {
+    const saveFn = getSafeGlobal("saveSettingsDebounced", null);
+    const settings = getExtensionSettings();
+    
+    // 关键：通过 SillyTavern 核心函数保存设置到本地存储
+    if (saveFn && typeof saveFn === "function") {
+      console.log(`[${EXTENSION_ID}] 使用核心保存函数`);
+      saveFn();
+    } else {
+      // 兜底机制：如果核心保存函数不可用，使用 localStorage 直接保存
+      console.log(`[${EXTENSION_ID}] 使用本地存储兜底保存`);
       const key = `st_image_player_settings_${EXTENSION_ID}`;
       localStorage.setItem(key, JSON.stringify(settings));
-      console.log(`[${EXTENSION_ID}] 设置已保存到本地存储兜底`);
-    } catch (error) {
-      console.error(`[${EXTENSION_ID}] 本地存储兜底保存失败:`, error);
     }
+    
+    // 强制同步到全局设置对象
+    if (window.extension_settings) {
+      window.extension_settings[EXTENSION_ID] = settings;
+      console.log(`[${EXTENSION_ID}] 全局设置同步完成`);
+    }
+    
+    console.log(`[${EXTENSION_ID}] 设置保存成功: enabled=${settings.enabled}, masterEnabled=${settings.masterEnabled}`);
+    
+  } catch (error) {
+    console.error(`[${EXTENSION_ID}] 设置保存失败:`, error);
+    
+    // 终极兜底：尝试使用更简单的保存方式
+    try {
+      const settings = getExtensionSettings();
+      const simpleKey = `st_image_player_simple_${EXTENSION_ID}`;
+      const simpleData = {
+        enabled: settings.enabled,
+        masterEnabled: settings.masterEnabled,
+        serviceUrl: settings.serviceUrl,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(simpleKey, JSON.stringify(simpleData));
+      console.log(`[${EXTENSION_ID}] 终极兜底保存成功`);
+    } catch (simpleError) {
+      console.error(`[${EXTENSION_ID}] 终极兜底也失败:`, simpleError);
+    }
+  } finally {
+    // 清理保存状态标记
+    setTimeout(() => {
+      window._savingSettings = false;
+    }, 100);
   }
 };
 
