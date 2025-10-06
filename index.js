@@ -3396,7 +3396,6 @@ const initExtension = async () => {
         aiEventRegistered: false,
         filterTriggerSource: null
       };
-      saveSafeSettings();
       console.log(`[${EXTENSION_ID}] 初始化默认扩展设置（保留兜底设置）`);
     } else {
       // 如果全局设置已存在，确保与兜底设置同步
@@ -3409,7 +3408,6 @@ const initExtension = async () => {
         console.warn(`[${EXTENSION_ID}] 全局设置与兜底设置不一致，以兜底设置为准`);
         window.extension_settings[EXTENSION_ID].masterEnabled = safeSettings.masterEnabled;
         window.extension_settings[EXTENSION_ID].enabled = safeSettings.enabled;
-        saveSafeSettings();
       }
     }
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
@@ -3511,7 +3509,6 @@ const initExtension = async () => {
     $(`#${PLAYER_WINDOW_ID} .play-pause i`)
       .removeClass("fa-pause")
       .addClass("fa-play");
-    saveSafeSettings();
 
     // 8. 初始化媒体自适应模式
     applyMediaFitMode();
@@ -3531,7 +3528,6 @@ const initExtension = async () => {
     const resetSettings = getExtensionSettings();
     resetSettings.isMediaLoading = false;
     resetSettings.currentRandomIndex = -1;
-    saveSafeSettings();
     setTimeout(initExtension, 1500);
   }
 };
