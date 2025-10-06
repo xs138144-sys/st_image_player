@@ -3368,27 +3368,18 @@ const initExtension = async () => {
       window.extension_settings = {};
     }
     if (!window.extension_settings[EXTENSION_ID]) {
-      // 关键修复：保留兜底读取的正确设置，只补充缺失字段
-      window.extension_settings[EXTENSION_ID] = {
-        ...settings, // 保留兜底读取的正确设置
-        isMediaLoading: false,
-        currentRandomIndex: -1,
-        showMediaUpdateToast: false,
-        aiEventRegistered: false,
-        filterTriggerSource: null
-      };
-      console.log(`[${EXTENSION_ID}] 初始化默认扩展设置（保留兜底设置）`);
+      // 修复：直接使用从localStorage读取的设置，不创建新对象
+      window.extension_settings[EXTENSION_ID] = settings;
+      console.log(`[${EXTENSION_ID}] 初始化扩展设置（使用localStorage设置）`);
     } else {
-      // 如果全局设置已存在，确保与兜底设置同步
+      // 如果全局设置已存在，确保与localStorage设置完全同步
       const globalSettings = window.extension_settings[EXTENSION_ID];
       const safeSettings = getExtensionSettings();
       
-      // 关键：如果全局设置与兜底设置不一致，以兜底设置为准
-      if (globalSettings.masterEnabled !== safeSettings.masterEnabled || 
-          globalSettings.enabled !== safeSettings.enabled) {
-        console.warn(`[${EXTENSION_ID}] 全局设置与兜底设置不一致，以兜底设置为准`);
-        window.extension_settings[EXTENSION_ID].masterEnabled = safeSettings.masterEnabled;
-        window.extension_settings[EXTENSION_ID].enabled = safeSettings.enabled;
+      // 关键：如果全局设置与localStorage设置不一致，以localStorage设置为准
+      if (JSON.stringify(globalSettings) !== JSON.stringify(safeSettings)) {
+        console.warn(`[${EXTENSION_ID}] 全局设置与localStorage设置不一致，以localStorage设置为准`);
+        window.extension_settings[EXTENSION_ID] = safeSettings;
       }
     }
     // 2. 按顺序创建基础组件（菜单→窗口→设置面板）
