@@ -122,35 +122,23 @@ const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
   try {
-    // 关键修复：优先读取 SillyTavern 核心管理的全局设置（含本地存储）
-    const globalSettings = getSafeGlobal("extension_settings", {});
+    // 修复：优先从 localStorage 读取作为唯一持久化源
+    const key = `st_image_player_settings_${EXTENSION_ID}`;
+    const storedSettings = localStorage.getItem(key);
     
-    // 若全局设置中已有该扩展配置，直接返回（确保加载已保存的 enabled 状态）
-    if (globalSettings[EXTENSION_ID]) {
-      console.log(`[${EXTENSION_ID}] 从全局设置读取配置`);
-      return globalSettings[EXTENSION_ID];
-    }
-
-    // 兜底机制：如果核心设置不可用，尝试从 localStorage 读取
-    try {
-      const key = `st_image_player_settings_${EXTENSION_ID}`;
-      const storedSettings = localStorage.getItem(key);
-      if (storedSettings) {
-        const parsedSettings = JSON.parse(storedSettings);
-        console.log(`[${EXTENSION_ID}] 从本地存储兜底读取设置`);
-        
-        // 将读取的设置同步到全局设置
-        if (window.extension_settings) {
-          window.extension_settings[EXTENSION_ID] = parsedSettings;
-        }
-        
-        return parsedSettings;
+    if (storedSettings) {
+      const parsedSettings = JSON.parse(storedSettings);
+      console.log(`[${EXTENSION_ID}] 从本地存储读取设置`);
+      
+      // 将读取的设置同步到全局设置
+      if (window.extension_settings) {
+        window.extension_settings[EXTENSION_ID] = parsedSettings;
       }
-    } catch (localStorageError) {
-      console.warn(`[${EXTENSION_ID}] 本地存储兜底读取失败:`, localStorageError);
+      
+      return parsedSettings;
     }
 
-    // 终极兜底：尝试读取简化版设置
+    // 如果本地存储没有设置，检查是否有简化版设置
     try {
       const simpleKey = `st_image_player_simple_${EXTENSION_ID}`;
       const simpleSettings = localStorage.getItem(simpleKey);
@@ -248,19 +236,12 @@ const saveSafeSettings = () => {
   window._savingSettings = true;
   
   try {
-    const saveFn = getSafeGlobal("saveSettingsDebounced", null);
     const settings = getExtensionSettings();
     
-    // 关键：通过 SillyTavern 核心函数保存设置到本地存储
-    if (saveFn && typeof saveFn === "function") {
-      console.log(`[${EXTENSION_ID}] 使用核心保存函数`);
-      saveFn();
-    } else {
-      // 兜底机制：如果核心保存函数不可用，使用 localStorage 直接保存
-      console.log(`[${EXTENSION_ID}] 使用本地存储兜底保存`);
-      const key = `st_image_player_settings_${EXTENSION_ID}`;
-      localStorage.setItem(key, JSON.stringify(settings));
-    }
+    // 修复：总是写入 localStorage 作为唯一持久化源
+    const key = `st_image_player_settings_${EXTENSION_ID}`;
+    localStorage.setItem(key, JSON.stringify(settings));
+    console.log(`[${EXTENSION_ID}] 设置已保存到本地存储`);
     
     // 强制同步到全局设置对象
     if (window.extension_settings) {
