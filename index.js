@@ -122,20 +122,40 @@ const toastr = getSafeToastr();
 
 const getExtensionSettings = () => {
   try {
-    // 修复：优先从 localStorage 读取作为唯一持久化源
-    const key = `st_image_player_settings_${EXTENSION_ID}`;
-    const storedSettings = localStorage.getItem(key);
+    // 修复：检查所有可能的localStorage键，找到有效的设置数据
+    const possibleKeys = [
+      `st_image_player_settings_${EXTENSION_ID}`,
+      'st_image_player_settings.json',
+      'st_image_player_settings',
+      `st_image_player_simple_${EXTENSION_ID}`
+    ];
     
-    if (storedSettings) {
-      const parsedSettings = JSON.parse(storedSettings);
-      console.log(`[${EXTENSION_ID}] 从本地存储读取设置`);
-      
-      // 将读取的设置同步到全局设置
-      if (window.extension_settings) {
-        window.extension_settings[EXTENSION_ID] = parsedSettings;
+    // 按优先级检查每个键
+    for (const key of possibleKeys) {
+      const storedSettings = localStorage.getItem(key);
+      if (storedSettings) {
+        try {
+          const parsedSettings = JSON.parse(storedSettings);
+          console.log(`[${EXTENSION_ID}] 从本地存储读取设置 (键: ${key})`);
+          
+          // 将读取的设置同步到全局设置
+          if (window.extension_settings) {
+            window.extension_settings[EXTENSION_ID] = parsedSettings;
+          }
+          
+          // 同时将设置保存到主键，确保后续读取一致性
+          const mainKey = `st_image_player_settings_${EXTENSION_ID}`;
+          if (key !== mainKey) {
+            localStorage.setItem(mainKey, storedSettings);
+            console.log(`[${EXTENSION_ID}] 设置已同步到主键: ${mainKey}`);
+          }
+          
+          return parsedSettings;
+        } catch (parseError) {
+          console.warn(`[${EXTENSION_ID}] 键 ${key} 解析失败:`, parseError);
+          continue; // 继续检查下一个键
+        }
       }
-      
-      return parsedSettings;
     }
 
     // 如果本地存储没有设置，检查是否有简化版设置
