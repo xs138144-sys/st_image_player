@@ -119,9 +119,16 @@
     transition: opacity 0.4s;
     object-fit: contain;
     display: block;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
+    image-rendering: -webkit-optimize-contrast; /* Edge兼容性支持 */
+    image-rendering: pixelated; /* 备用方案，更好的浏览器兼容性 */
     -ms-interpolation-mode: bicubic;
+}
+
+/* 仅在支持crisp-edges的浏览器中应用 */
+@supports (image-rendering: crisp-edges) {
+    .image-player-img {
+        image-rendering: crisp-edges;
+    }
 }
 
 /* 视频元素样式 */
