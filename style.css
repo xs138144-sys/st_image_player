@@ -6,11 +6,10 @@
     z-index: 20000;
     border-radius: 8px;
     overflow: hidden;
-    background: rgba(30, 31, 34, 0.15);
-    -webkit-backdrop-filter: blur(5px);
-    backdrop-filter: blur(5px);
-    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.02);
+    background: rgba(30, 31, 34, 0.95);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.3s ease;
     font-family: 'Segoe UI', system-ui, sans-serif;
     min-width: 260px;
@@ -18,8 +17,8 @@
 }
 
 .image-player-window.locked {
-    border-color: rgba(114, 137, 218, 0.3);
-    box-shadow: none;
+    border-color: rgba(114, 137, 218, 0.5);
+    box-shadow: 0 4px 20px rgba(114, 137, 218, 0.2);
     cursor: default;
 }
 
@@ -30,10 +29,9 @@
     align-items: center;
     padding: 0 8px;
     height: 30px;
-    background: rgba(43, 45, 49, 0.25);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    background: rgba(43, 45, 49, 0.7);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     cursor: move;
-    -webkit-user-select: none;
     user-select: none;
     transition: background 0.3s;
 }
@@ -78,7 +76,7 @@
     transform: scale(1.08);
 }
 
-/* ==================== 媒体内容区域（图片+视频通用） ==================== */
+/* ==================== 图片内容区域 ==================== */
 .image-player-body {
     flex: 1;
     display: flex;
@@ -88,6 +86,7 @@
     padding: 0;
 }
 
+/* 图片容器 - 确保图片居中不被遮挡 */
 .image-container {
     flex: 1;
     display: flex;
@@ -119,148 +118,22 @@
     transition: opacity 0.4s;
     object-fit: contain;
     display: block;
-    image-rendering: -webkit-optimize-contrast; /* Edge兼容性支持 */
-    image-rendering: pixelated; /* 备用方案，更好的浏览器兼容性 */
-    -ms-interpolation-mode: bicubic;
 }
 
-/* 仅在支持crisp-edges的浏览器中应用 */
-@supports (image-rendering: crisp-edges) {
-    .image-player-img {
-        image-rendering: crisp-edges;
-    }
-}
-
-/* 视频元素样式 */
-.image-player-video {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    display: none;
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: high-quality;
-    -ms-interpolation-mode: bicubic;
-}
-
-/* 优化过渡效果（图片和视频通用） */
+/* 过渡效果 */
 .fade-transition {
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 0;
-}
-
-.fade-transition.show {
-    opacity: 1;
+    transition: opacity 0.5s ease-in-out;
 }
 
 .slide-transition {
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: translateX(100%);
-}
-
-.slide-transition.show {
-    transform: translateX(0);
+    transition: transform 0.5s ease-in-out;
 }
 
 .zoom-transition {
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: scale(0.9);
-    opacity: 0;
+    transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
 }
 
-.zoom-transition.show {
-    transform: scale(1);
-    opacity: 1;
-}
-
-/* 优化动态漂移效果 */
-.drift-transition {
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: translateX(-30px) translateY(20px) rotate(-3deg);
-    opacity: 0;
-}
-
-.drift-transition.show {
-    transform: translateX(0) translateY(0) rotate(0deg);
-    opacity: 1;
-}
-
-/* 优化推动效果 */
-.push-transition {
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: translateX(-80%) scale(0.95);
-}
-
-.push-transition.show {
-    transform: translateX(0) scale(1);
-}
-
-/* 优化旋转进入效果 */
-.rotate-transition {
-    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: rotate(-90deg) scale(0.7);
-    opacity: 0;
-}
-
-.rotate-transition.show {
-    transform: rotate(0deg) scale(1);
-    opacity: 1;
-}
-
-/* 新增：平滑切换效果 */
-.smooth-transition {
-    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 0;
-    transform: scale(0.95);
-}
-
-.smooth-transition.show {
-    opacity: 1;
-    transform: scale(1);
-}
-
-/* 新增：快速淡入效果 */
-.quick-fade-transition {
-    transition: opacity 0.2s ease-out;
-    opacity: 0;
-}
-
-.quick-fade-transition.show {
-    opacity: 1;
-}
-
-/* 弹跳效果 */
-.bounce-transition {
-    transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    transform: scale(0.3) translateY(100px);
-}
-
-.bounce-transition.show {
-    transform: scale(1) translateY(0);
-}
-
-/* 翻转效果 */
-.flip-transition {
-    transition: transform 0.6s ease-in-out;
-    transform: perspective(1000px) rotateY(90deg);
-}
-
-.flip-transition.show {
-    transform: perspective(1000px) rotateY(0deg);
-}
-
-/* 淡入缩放效果 */
-.fade-scale-transition {
-    transition: transform 0.5s ease-out, opacity 0.5s ease-out;
-    transform: scale(1.2);
-    opacity: 0;
-}
-
-.fade-scale-transition.show {
-    transform: scale(1);
-    opacity: 1;
-}
-
-/* 媒体信息（图片/视频通用） */
+/* 图片信息 - 在图片下方显示 */
 .image-info {
     padding: 2px 4px;
     background: rgba(0, 0, 0, 0.7);
@@ -282,17 +155,13 @@
     position: relative;
     display: flex;
     padding: 4px;
-    background: rgba(43, 45, 49, 0.25);
-    border-top: 1px solid rgba(255, 255, 255, 0.02);
+    background: rgba(43, 45, 49, 0.8);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     height: 40px;
     gap: 4px;
     align-items: center;
     box-sizing: border-box;
     justify-content: space-between;
-    cursor: move;
-    -webkit-user-select: none;
-    user-select: none;
-    transition: background 0.3s;
 }
 
 .control-btn {
@@ -332,116 +201,34 @@
     background: rgba(67, 181, 129, 0.7);
 }
 
+.control-text {
+    text-align: center;
+    color: #a0a0a0;
+    font-size: 11px;
+    padding: 0 6px;
+    min-width: 80px;
+}
+
+/* 控制按钮组 */
 .controls-group {
     display: flex;
-    gap: 2px;
+    gap: 4px;
     align-items: center;
-    margin: 0 2px;
-}
-
-.controls-group.right {
-    margin-left: auto;
-    gap: 1px;
-}
-
-.controls-group.center {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    gap: 2px;
-    display: flex;
-    align-items: center;
-}
-
-.controls-group.left {
-    margin-right: auto;
-    gap: 2px;
 }
 
 /* ==================== 大小调整手柄 ==================== */
 .resize-handle {
     position: absolute;
+    bottom: 1px;
+    right: 1px;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
     z-index: 20;
-    background: rgba(114, 137, 218, 0.3);
-    border-radius: 1px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-/* 鼠标悬停在窗口边缘时才显示拉伸手柄 */
-.image-player-window:hover .resize-handle {
-    opacity: 0;
-}
-
-/* 鼠标悬停在拉伸手柄区域时显示 */
-.resize-handle:hover {
-    opacity: 1;
-}
-
-/* 四个角的手柄 - 缩小尺寸 */
-.resize-handle.top-left {
-    top: 0px;
-    left: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nwse-resize;
-}
-
-.resize-handle.top-right {
-    top: 0px;
-    right: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nesw-resize;
-}
-
-.resize-handle.bottom-left {
-    bottom: 0px;
-    left: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nesw-resize;
-}
-
-.resize-handle.bottom-right {
-    bottom: 0px;
-    right: 0px;
-    width: 6px;
-    height: 6px;
-    cursor: nwse-resize;
-}
-
-/* 四个边的手柄 - 缩小尺寸 */
-.resize-handle.top {
-    top: 0px;
-    left: 6px;
-    right: 6px;
-    height: 3px;
-    cursor: ns-resize;
-}
-
-.resize-handle.bottom {
-    bottom: 0px;
-    left: 6px;
-    right: 6px;
-    height: 3px;
-    cursor: ns-resize;
-}
-
-.resize-handle.left {
-    left: 0px;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    cursor: ew-resize;
-}
-
-.resize-handle.right {
-    right: 0px;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    cursor: ew-resize;
+    background:
+        linear-gradient(135deg, transparent 0%, transparent 70%,
+            rgba(114, 137, 218, 0.5) 70%, rgba(114, 137, 218, 0.5) 100%);
+    border-radius: 2px;
 }
 
 /* ==================== 设置面板样式 ==================== */
@@ -552,7 +339,6 @@
     align-items: center;
     gap: 4px;
     cursor: pointer;
-    -webkit-user-select: none;
     user-select: none;
     font-size: 11px;
 }
@@ -561,7 +347,7 @@
     margin: 0;
 }
 
-/* ==================== 设置面板折叠效果 ==================== */
+/* ==================== 设置面板折叠效果 - 兼容ST ==================== */
 .extension_settings.inline-drawer {
     margin-top: 0.7em;
     position: relative;
@@ -646,350 +432,3 @@
     font-size: 10px;
     color: #d0d0d0;
 }
-
-/* 进度条容器 */
-.progress-container {
-    flex: 1;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-    position: relative;
-    cursor: pointer;
-    margin: 0 8px;
-}
-
-.progress-bar {
-    height: 100%;
-    background: linear-gradient(to right, #7289da, #5f78d3);
-    border-radius: 2px;
-    position: relative;
-    transition: width 0.1s ease;
-}
-
-.progress-handle {
-    width: 12px;
-    height: 12px;
-    background: #7289da;
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-}
-
-.progress-container:hover .progress-handle {
-    opacity: 1;
-}
-
-/* 音量滑块容器 */
-.volume-slider-container {
-    width: 80px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-    position: relative;
-    cursor: pointer;
-    margin: 0 8px;
-}
-
-.volume-slider {
-    height: 100%;
-    background: linear-gradient(to right, #7289da, #5f78d3);
-    border-radius: 2px;
-    position: relative;
-    transition: width 0.1s ease;
-}
-
-.volume-handle {
-    width: 12px;
-    height: 12px;
-    background: #7289da;
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-}
-
-.volume-slider-container:hover .volume-handle {
-    opacity: 1;
-}
-
-/* ==================== 视频控制栏样式（新增） ==================== */
-.video-controls {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 4px 8px;
-    background: rgba(43, 45, 49, 0.9);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    box-sizing: border-box;
-    z-index: 15;
-    display: block;
-}
-
-.progress-container {
-    width: 100%;
-    height: 6px;
-    margin-bottom: 4px;
-    cursor: pointer;
-}
-
-.progress-bar {
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
-    position: relative;
-    overflow: hidden;
-}
-
-.progress-loaded {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-    transition: width 0.3s ease;
-}
-
-.progress-played {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background: #7289da;
-    border-radius: 3px;
-    transition: width 0.1s linear;
-}
-
-.progress-handle {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: white;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-}
-
-.progress-bar:hover .progress-handle {
-    opacity: 1;
-}
-
-.video-control-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 24px;
-}
-
-.video-control-btn {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: none;
-    background: transparent;
-    color: #b0b0b0;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-}
-
-.video-control-btn:hover {
-    background: rgba(114, 137, 218, 0.3);
-    color: #7289da;
-}
-
-.video-control-btn.active {
-    color: #7289da;
-    background: rgba(114, 137, 218, 0.2);
-}
-
-.volume-slider-container {
-    width: 80px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 2px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-}
-
-.volume-slider {
-    width: 100%;
-    height: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    outline: none;
-}
-
-.volume-slider::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 2px;
-}
-
-.volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #7289da;
-    cursor: pointer;
-    margin-top: -3px;
-}
-
-.time-display {
-    color: #b0b0b0;
-    font-size: 10px;
-    min-width: 80px;
-    text-align: right;
-    margin-left: auto;
-}
-
-/* ==================== 媒体筛选按钮组（新增） ==================== */
-.media-filter-group {
-    display: flex;
-    gap: 1px;
-    margin: 0 2px;
-}
-
-.media-filter-btn {
-    width: 24px;
-    height: 24px;
-    background: rgba(43, 45, 49, 0.7);
-    border-radius: 3px;
-    border: none;
-    color: #b0b0b0;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-}
-
-.media-filter-btn:hover {
-    background: rgba(114, 137, 218, 0.3);
-    color: #7289da;
-}
-
-.media-filter-btn.active {
-    background: rgba(114, 137, 218, 0.5);
-    color: #7289da;
-    box-shadow: none;
-}
-
-/* 无边框模式 */
-.image-player-window.no-border {
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    background: transparent;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-}
-
-.image-player-window.no-border .image-player-header {
-    display: none !important;
-}
-
-.image-player-window.no-border .resize-handle {
-    display: none;
-}
-
-.image-player-window.no-border .image-container {
-    border-radius: 0;
-}
-
-.image-player-window.no-border .image-player-controls {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.image-player-window.no-border:hover .image-player-controls {
-    opacity: 1;
-}
-
-.image-player-window.no-border .video-controls {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.image-player-window.no-border .image-container:hover .video-controls {
-    opacity: 1;
-}
-
-/* 有边框模式：视频控制栏基础显示 */
-.image-player-window:not(.no-border) .video-controls {
-    opacity: 1;
-    display: block;
-}
-
-.image-player-window.no-border .image-container:hover .image-info {
-    opacity: 1;
-}
-
-/* 切换边框按钮基础样式 */
-.toggle-border {
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    width: 30px;
-    height: 30px;
-}
-
-.toggle-border:hover {
-    background: rgba(0, 0, 0, 0.9);
-    border-color: rgba(255, 255, 255, 0.6);
-}
-
-.toggle-border.active {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.8);
-}
-
-/* 有边框模式：切换按钮在标题栏内 */
-.image-player-window:not(.no-border) .toggle-border {
-    position: static;
-    width: 24px;
-    height: 24px;
-    border: none;
-    background: rgba(43, 45, 49, 0.7);
-    color: #b0b0b0;
-    border-radius: 3px;
-    margin-left: 5px;
-    transition: all 0.2s ease;
-}
-
-.image-player-window:not(.no-border) .toggle-border:hover {
-    background: rgba(43, 45, 49, 0.9);
-    color: #fff;
-}
-
-.image-player-window:not(.no-border) .toggle-border.active {
-    background: rgba(66, 135, 245, 0.8);
-    color: #fff;
-}
-
