@@ -4,3 +4,6 @@ watchdog>=2.1.6,<3.0.0
 gevent>=23.9.1,<24.0.0
 gevent-websocket>=0.10.1,<1.0.0
 urllib3>=1.26.0,<2.0.0
+send2trash>=1.8.0,<2.0.0
+pystray>=0.19.4,<1.0.0
+Pillow>=10.0.0,<11.0.0

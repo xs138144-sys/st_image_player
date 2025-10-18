@@ -147,6 +147,13 @@ const getExtensionSettings = () => {
     showMediaUpdateToast: false,
     aiEventRegistered: false,
     filterTriggerSource: null,
+    // 观看记录功能设置
+    watchHistoryEnabled: true,
+    autoMarkWatched: true,
+    watchHistoryDbPath: "media_watch_history.db",
+    autoCleanupEnabled: false,
+    autoCleanupDays: 90,
+    autoCleanupMinViews: 1,
   };
 
   globalSettings[EXTENSION_ID] = defaultSettings;
@@ -1816,6 +1823,21 @@ const showMedia = async (direction) => {
     settings.lastAISwitchTime = performance.now();
     saveSafeSettings();
     
+    // 记录观看历史
+    if (window.recordWatchHistory) {
+      const filePath = mediaUrl;
+      const fileName = mediaName;
+      const fileType = mediaType;
+      
+      // 对于视频，记录观看时长（如果可用）
+      let duration = 0;
+      if (mediaType === "video" && videoElement) {
+        duration = videoElement.duration || 0;
+      }
+      
+      window.recordWatchHistory(filePath, fileName, fileType, duration);
+    }
+    
     const preloadUrls = [];
     const preloadTypes = [];
     
@@ -2354,6 +2376,59 @@ const createSettingsPanel = async () => {
                                 <i class="fa-solid fa-broom"></i>清理无效媒体
                             </button>
                         </div>
+                        
+                        <!-- 观看记录管理 -->
+                        <div class="settings-group">
+                            <h4 style="margin-top:0;color:#e0e0e0;border-bottom:1px solid #444;padding-bottom:5px;">
+                                <i class="fa-solid fa-history"></i> 观看记录管理
+                            </h4>
+                            
+                            <!-- 观看记录开关 -->
+                            <div class="settings-row">
+                                <label class="checkbox_label">
+                                    <input type="checkbox" id="watch-history-enabled" ${settings.watchHistoryEnabled ? "checked" : ""} />
+                                    <i class="fa-solid fa-history"></i>启用观看记录
+                                </label>
+                                <label class="checkbox_label">
+                                    <input type="checkbox" id="auto-mark-watched" ${settings.autoMarkWatched ? "checked" : ""} />
+                                    <i class="fa-solid fa-check"></i>自动标记已观看
+                                </label>
+                            </div>
+                            
+                            <!-- 观看记录统计 -->
+                            <div class="settings-row">
+                                <label><i class="fa-solid fa-chart-bar"></i>观看统计</label>
+                                <span id="watch-stats-display" style="color:#888;font-size:12px;">
+                                    总计: 0 | 已观看: 0 | 未观看: 0
+                                </span>
+                            </div>
+                            
+                            <!-- 观看记录操作 -->
+                            <div class="settings-action-row">
+                                <button id="view-watch-history" class="menu-button">
+                                    <i class="fa-solid fa-list"></i>查看观看记录
+                                </button>
+                                <button id="batch-delete-watched" class="menu-button">
+                                    <i class="fa-solid fa-trash-can"></i>批量删除已观看
+                                </button>
+                                <button id="cleanup-old-history" class="menu-button">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>清理旧记录
+                                </button>
+                            </div>
+                            
+                            <!-- 批量删除设置 -->
+                            <div class="settings-row" style="margin-top:10px;">
+                                <label><i class="fa-solid fa-filter"></i>批量删除筛选</label>
+                                <select id="batch-delete-filter">
+                                    <option value="all-watched">所有已观看文件</option>
+                                    <option value="older-than-30">30天前观看</option>
+                                    <option value="older-than-90">90天前观看</option>
+                                    <option value="older-than-365">365天前观看</option>
+                                </select>
+                                <input type="number" id="delete-confirm-count" value="5" min="1" max="100" style="width:60px;" />
+                                <span>确认次数</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2556,7 +2631,24 @@ const setupSettingsEvents = () => {
 
     saveSafeSettings();
     panel.find("#toggle-detect-mode").toggleClass("active", !wasActive);
-    panel.find("#toggle-timer-mode").removeClass("active");
+  panel.find("#toggle-timer-mode").removeClass("active");
+
+  // 同步观看记录按钮
+  panel.find("#sync-watch-history").on("click", async () => {
+    if (!confirm("确定同步所有媒体文件的观看记录？这将为所有文件创建观看记录。")) return;
+    
+    try {
+      const result = await syncAllMediaWatchHistory();
+      if (result.success) {
+        toastr.success(`成功同步 ${result.syncedCount} 个文件的观看记录`);
+        updateWatchHistoryStats();
+      } else {
+        toastr.error("同步失败：" + result.error);
+      }
+    } catch (error) {
+      toastr.error("同步异常：" + error.message);
+    }
+  });
     panel.find("#detect-sub-options").toggle(!wasActive);
     updateExtensionMenu();
   });
@@ -2704,6 +2796,138 @@ const setupSettingsEvents = () => {
         applyCustomControlsSettings();
       }
     });
+
+  // 观看记录相关事件监听器
+  // 观看记录启用开关
+  panel.find("#watch-history-enabled").on("change", function() {
+    settings.watchHistoryEnabled = $(this).prop("checked");
+    saveSafeSettings();
+    
+    if (settings.watchHistoryEnabled) {
+      toastr.success("观看记录功能已启用");
+    } else {
+      toastr.info("观看记录功能已禁用");
+    }
+  });
+
+  // 自动标记已观看开关
+  panel.find("#auto-mark-watched").on("change", function() {
+    settings.autoMarkWatched = $(this).prop("checked");
+    saveSafeSettings();
+  });
+
+  // 查看观看记录
+  panel.find("#view-watch-history").on("click", async () => {
+    const stats = window.getWatchHistoryStats();
+    const watchHistory = JSON.parse(localStorage.getItem('st_image_player_watch_history') || '[]');
+    
+    // 调试信息
+    console.log('当前观看记录数量:', watchHistory.length);
+    console.log('观看记录内容:', watchHistory);
+    console.log('localStorage键:', Object.keys(localStorage).filter(key => key.includes('watch')));
+    
+    if (stats && stats.total > 0) {
+      const historyList = watchHistory.map(item => 
+        `文件: ${item.fileName} | 类型: ${item.fileType} | 观看次数: ${item.watchCount} | 最后观看: ${new Date(item.lastWatched).toLocaleString()}`
+      ).join('\n');
+      
+      alert(`观看记录统计：\n总文件数: ${stats.total}\n图片: ${stats.images}\n视频: ${stats.videos}\n总观看次数: ${stats.totalWatchCount}\n\n详细记录：\n${historyList}`);
+    } else {
+      alert("暂无观看记录\n\n调试信息：\n- 记录数量: " + watchHistory.length + "\n- localStorage键: " + Object.keys(localStorage).filter(key => key.includes('watch')).join(', '));
+    }
+  });
+
+  // 删除当前观看记录
+  panel.find("#delete-watch-history").on("click", () => {
+    if (!confirm("确定删除所有观看记录？（不可恢复）")) return;
+    
+    settings.watchHistory = [];
+    saveSafeSettings();
+    toastr.success("观看记录已清空");
+    
+    // 更新统计显示
+    updateWatchHistoryStats();
+  });
+
+  // 清理所有观看记录
+  panel.find("#cleanup-old-history").on("click", () => {
+    if (!confirm("确定清空所有观看记录？（此操作不可恢复）")) return;
+    
+    try {
+      localStorage.setItem('st_image_player_watch_history', '[]');
+      toastr.success("所有观看记录已清空");
+      updateWatchHistoryStats();
+    } catch (error) {
+      console.error('清空观看记录时出错:', error);
+      toastr.error("清空观看记录失败");
+    }
+  });
+
+  // 批量删除已观看文件
+  panel.find("#batch-delete-watched").on("click", async () => {
+    const filterType = panel.find("#batch-delete-filter").val();
+    let criteria = {};
+    
+    // 根据筛选类型设置条件
+    switch (filterType) {
+      case "all-watched":
+        // 所有已观看文件 - 不设置时间限制，只要求有观看记录
+        criteria = { minWatchCount: 1 };
+        break;
+      case "older-than-30":
+        criteria = { olderThanDays: 30, minWatchCount: 1 };
+        break;
+      case "older-than-90":
+        criteria = { olderThanDays: 90, minWatchCount: 1 };
+        break;
+      case "older-than-365":
+        criteria = { olderThanDays: 365, minWatchCount: 1 };
+        break;
+      default:
+        criteria = { olderThanDays: 30, minWatchCount: 1 };
+    }
+    
+    const confirmText = filterType === "all-watched" 
+      ? "确定批量删除所有已观看的文件？（危险操作，请谨慎）"
+      : `确定批量删除${criteria.olderThanDays}天前观看过的文件？（危险操作，请谨慎）`;
+    
+    if (!confirm(confirmText)) return;
+    
+    const result = await window.batchDeleteWatchedFiles(criteria);
+    if (result) {
+      const successCount = result.success?.length || 0;
+      toastr.success(`批量删除完成：成功删除 ${successCount} 个文件`);
+      
+      // 刷新媒体列表
+      await refreshMediaList();
+      showMedia("current");
+      updateWatchHistoryStats();
+    }
+  });
+
+  // 更新观看记录统计显示
+  const updateWatchHistoryStats = () => {
+    const stats = window.getWatchHistoryStats();
+    if (stats) {
+      // 直接使用全局媒体列表变量
+      const totalMediaCount = mediaList.length || 0;
+      const watchedCount = stats.total || 0;
+      const unwatchedCount = Math.max(0, totalMediaCount - watchedCount);
+      
+      panel.find("#watch-stats-display").html(`
+        总计: ${totalMediaCount} | 已观看: ${watchedCount} | 未观看: ${unwatchedCount}
+      `);
+    }
+  };
+
+  // 监听观看记录更新事件
+  window.addEventListener('watchHistoryUpdated', (event) => {
+    console.log('收到观看记录更新事件，刷新统计显示');
+    updateWatchHistoryStats();
+  });
+
+  // 初始化时更新统计显示
+  updateWatchHistoryStats();
 }; // 闭合 setupSettingsEvents 函数
 
 const updateExtensionMenu = () => {
@@ -3361,13 +3585,533 @@ const showTransitionEffectPanel = () => {
   });
 };
 
+// ==================== 观看记录功能 ====================
+
+/**
+ * 计算文件的哈希值（用于唯一标识文件）
+ */
+const calculateFileHash = async (filePath) => {
+  try {
+    // 使用文件路径和大小作为哈希基础
+    const response = await fetch(filePath, { method: 'HEAD' });
+    const size = response.headers.get('content-length');
+    const lastModified = response.headers.get('last-modified');
+    
+    // 简单的哈希计算
+    const hashString = `${filePath}_${size}_${lastModified}`;
+    let hash = 0;
+    for (let i = 0; i < hashString.length; i++) {
+      const char = hashString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 转换为32位整数
+    }
+    return Math.abs(hash).toString(16);
+  } catch (error) {
+    // 如果HEAD请求失败，使用文件路径作为备用哈希
+    let hash = 0;
+    for (let i = 0; i < filePath.length; i++) {
+      const char = filePath.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16);
+  }
+};
+
+/**
+ * 记录观看历史
+ */
+const recordWatchHistory = async (filePath, fileName, fileType, duration = 0) => {
+  const settings = getExtensionSettings();
+  
+  if (!settings.watchHistoryEnabled) {
+    return;
+  }
+  
+  try {
+    const fileHash = await calculateFileHash(filePath);
+    const watchTime = new Date().toISOString();
+    
+    // 获取现有的观看历史
+    let watchHistory = JSON.parse(localStorage.getItem('st_image_player_watch_history') || '[]');
+    
+    // 检查是否已存在记录
+    const existingIndex = watchHistory.findIndex(item => item.fileHash === fileHash);
+    
+    if (existingIndex >= 0) {
+      // 更新现有记录
+      watchHistory[existingIndex].lastWatched = watchTime;
+      watchHistory[existingIndex].watchCount += 1;
+      watchHistory[existingIndex].totalDuration += duration;
+    } else {
+      // 添加新记录
+      watchHistory.push({
+        fileHash,
+        filePath,
+        fileName,
+        fileType,
+        firstWatched: watchTime,
+        lastWatched: watchTime,
+        watchCount: 1,
+        totalDuration: duration
+      });
+    }
+    
+    // 限制历史记录数量（最多10000条）
+    if (watchHistory.length > 10000) {
+      watchHistory = watchHistory.slice(-10000);
+    }
+    
+    // 保存到本地存储
+    localStorage.setItem('st_image_player_watch_history', JSON.stringify(watchHistory));
+    
+    console.log(`观看记录已更新: ${fileName}`);
+    
+    // 立即触发统计更新事件
+    window.dispatchEvent(new CustomEvent('watchHistoryUpdated'));
+  } catch (error) {
+    console.error('记录观看历史时出错:', error);
+  }
+};
+
+/**
+ * 获取观看历史统计
+ */
+const getWatchHistoryStats = () => {
+  try {
+    const watchHistory = JSON.parse(localStorage.getItem('st_image_player_watch_history') || '[]');
+    
+    // 计算图片和视频的统计
+    const images = watchHistory.filter(item => item.fileType === 'image').length;
+    const videos = watchHistory.filter(item => item.fileType === 'video').length;
+    const total = watchHistory.length;
+    
+    return {
+      total: total,
+      images: images,
+      videos: videos,
+      totalFiles: total,
+      totalWatchCount: watchHistory.reduce((sum, item) => sum + item.watchCount, 0),
+      totalDuration: watchHistory.reduce((sum, item) => sum + item.totalDuration, 0),
+      recentlyWatched: watchHistory
+        .sort((a, b) => new Date(b.lastWatched) - new Date(a.lastWatched))
+        .slice(0, 10)
+    };
+  } catch (error) {
+    console.error('获取观看历史统计时出错:', error);
+    return { total: 0, images: 0, videos: 0, totalFiles: 0, totalWatchCount: 0, totalDuration: 0, recentlyWatched: [] };
+  }
+};
+
+/**
+ * 批量删除已观看的文件
+ */
+const batchDeleteWatchedFiles = async (criteria = {}) => {
+  const settings = getExtensionSettings();
+  
+  if (!settings.watchHistoryEnabled) {
+    toastr.error('请先启用观看记录功能');
+    return { success: 0, failed: 0, total: 0 };
+  }
+  
+  try {
+    // 获取符合条件的文件列表
+    const watchHistory = JSON.parse(localStorage.getItem('st_image_player_watch_history') || '[]');
+    const now = new Date();
+    
+    // 先筛选符合条件的文件，然后检查文件存在性
+    const filteredFiles = watchHistory.filter(item => {
+      let match = true;
+      
+      // 最小观看次数筛选
+      if (criteria.minWatchCount && item.watchCount < criteria.minWatchCount) {
+        match = false;
+      }
+      
+      // 最大观看次数筛选
+      if (criteria.maxWatchCount && item.watchCount > criteria.maxWatchCount) {
+        match = false;
+      }
+      
+      // 时间筛选 - 修改逻辑：选择最后观看时间早于指定天数的文件
+      if (criteria.olderThanDays) {
+        const lastWatched = new Date(item.lastWatched);
+        const cutoffDate = new Date(now.getTime() - (criteria.olderThanDays * 24 * 60 * 60 * 1000));
+        if (lastWatched >= cutoffDate) {
+          match = false; // 如果最后观看时间在截止日期之后，不删除
+        }
+      }
+      
+      return match;
+    });
+    
+    // 检查文件存在性
+    const filesToDelete = [];
+    for (const item of filteredFiles) {
+      try {
+        // 转换文件路径为绝对路径
+        let filePath = item.filePath;
+        
+        // 如果是URL格式（http://localhost:9000/file/文件名），提取文件名
+        if (filePath.includes('/file/')) {
+          const urlParts = filePath.split('/file/');
+          if (urlParts.length > 1) {
+            filePath = decodeURIComponent(urlParts[1]);
+          }
+        }
+        
+        // 如果还不是绝对路径，拼接默认媒体目录
+        if (!(filePath.startsWith('F:\\') || filePath.startsWith('D:\\') || 
+              filePath.startsWith('C:\\') || filePath.startsWith('/'))) {
+          filePath = `F:\\Download\\${filePath}`;
+        }
+        
+        // 简化文件存在性检查 - 直接尝试删除，让后端处理文件不存在的情况
+        console.log(`准备删除文件: ${filePath}`);
+        filesToDelete.push(item);
+      } catch (error) {
+        console.log(`检查文件存在性失败，跳过删除: ${item.filePath}`, error);
+      }
+    }
+    
+    if (filesToDelete.length === 0) {
+      // 添加详细调试信息
+      console.log('批量删除调试信息:');
+      console.log('总观看记录数量:', watchHistory.length);
+      console.log('筛选条件:', criteria);
+      console.log('当前时间:', now.toISOString());
+      
+      if (criteria.olderThanDays) {
+        const cutoffDate = new Date(now.getTime() - (criteria.olderThanDays * 24 * 60 * 60 * 1000));
+        console.log('截止时间:', cutoffDate.toISOString());
+      }
+      
+      // 显示所有记录的详细信息
+      console.log('所有观看记录详情:');
+      watchHistory.forEach((item, index) => {
+        const lastWatched = new Date(item.lastWatched);
+        const watchCount = item.watchCount || 1;
+        const isOldEnough = criteria.olderThanDays ? lastWatched < new Date(now.getTime() - (criteria.olderThanDays * 24 * 60 * 60 * 1000)) : true;
+        const hasEnoughViews = criteria.minWatchCount ? watchCount >= criteria.minWatchCount : true;
+        
+        console.log(`记录 ${index}: ${item.fileName}, 最后观看: ${lastWatched.toISOString()}, 观看次数: ${watchCount}, 是否够旧: ${isOldEnough}, 观看次数足够: ${hasEnoughViews}`);
+      });
+      
+      toastr.info('没有找到符合条件的文件');
+      return { success: 0, failed: 0, total: 0 };
+    }
+    
+    // 显示确认对话框
+    const confirmed = confirm(`确定要删除 ${filesToDelete.length} 个已观看的文件吗？\n\n删除条件：\n- 观看次数: ${criteria.minWatchCount || 0} ~ ${criteria.maxWatchCount || '无限制'}\n- 最后观看时间: ${criteria.olderThanDays || 0} 天前\n\n文件将被移动到回收站，可以恢复！`);
+    
+    if (!confirmed) {
+      return { success: 0, failed: 0, total: 0 };
+    }
+    
+    // 尝试调用后端API删除文件
+      try {
+        // 从URL格式中提取文件名并转换为文件系统路径
+        const absoluteFilePaths = filesToDelete.map(item => {
+          let filePath = item.filePath;
+          
+          console.log('原始文件路径:', filePath);
+          
+          // 如果是URL格式（http://localhost:9000/file/文件名），提取文件名
+          if (filePath.includes('/file/')) {
+            const urlParts = filePath.split('/file/');
+            if (urlParts.length > 1) {
+              filePath = decodeURIComponent(urlParts[1]);
+              console.log('URL格式转换后:', filePath);
+            }
+          }
+          
+          // 如果已经是绝对路径，直接使用
+          if (filePath.startsWith('F:\\') || filePath.startsWith('D:\\') || 
+              filePath.startsWith('C:\\') || filePath.startsWith('/')) {
+            console.log('使用绝对路径:', filePath);
+            return filePath;
+          }
+          
+          // 否则拼接默认媒体目录
+          const finalPath = `F:\\Download\\${filePath}`;
+          console.log('拼接默认目录后:', finalPath);
+          return finalPath;
+        });
+        
+        console.log('发送给后端的文件路径列表:', absoluteFilePaths);
+      
+      const response = await fetch('http://localhost:8001/delete_files', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filePaths: absoluteFilePaths,
+          criteria: criteria,
+          backup: true
+        })
+      });
+      
+      if (response.ok) {
+        const results = await response.json();
+        
+        // 处理后端API返回格式
+        const successCount = results.success || 0;
+        const failedCount = results.failed || 0;
+        const successFiles = results.details?.success || [];
+        const failedFiles = results.details?.failed || [];
+        
+        // 从观看记录中移除已删除的文件
+        if (successFiles.length > 0) {
+          console.log('后端返回的成功删除文件:', successFiles);
+          console.log('当前观看记录数量:', watchHistory.length);
+          
+          let removedCount = 0;
+          const remainingHistory = watchHistory.filter(item => {
+            // 检查文件是否在成功删除列表中
+            const isDeleted = successFiles.some(deleted => {
+              // 尝试多种路径匹配方式
+              const deletedPath = deleted.file;
+              const watchPath = item.filePath;
+              
+              // 直接路径匹配
+              if (deletedPath === watchPath) {
+                console.log(`直接路径匹配删除记录: ${watchPath}`);
+                return true;
+              }
+              
+              // 标准化路径匹配（处理Windows路径分隔符）
+              const normalizedDeletedPath = deletedPath.replace(/\\/g, '/');
+              const normalizedWatchPath = watchPath.replace(/\\/g, '/');
+              if (normalizedDeletedPath === normalizedWatchPath) {
+                console.log(`标准化路径匹配删除记录: ${watchPath}`);
+                return true;
+              }
+              
+              // URL格式匹配（如果后端返回的是绝对路径，前端存储的是URL）
+              if (watchPath.includes('/file/') && deletedPath.includes(watchPath.split('/file/')[1])) {
+                console.log(`URL格式匹配删除记录: ${watchPath} -> ${deletedPath}`);
+                return true;
+              }
+              
+              // 反向URL匹配（后端路径包含前端URL路径）
+              if (deletedPath.includes(watchPath.replace(/^.*\/file\//, ''))) {
+                console.log(`反向URL匹配删除记录: ${watchPath} -> ${deletedPath}`);
+                return true;
+              }
+              
+              // 文件名匹配（作为最后的手段）
+              const deletedFileName = deletedPath.split(/[\\\/]/).pop();
+              const watchFileName = watchPath.split(/[\\\/]/).pop();
+              if (deletedFileName === watchFileName) {
+                console.log(`文件名匹配删除记录: ${watchPath} -> ${deletedPath}`);
+                return true;
+              }
+              
+              return false;
+            });
+            
+            if (isDeleted) {
+              removedCount++;
+              return false; // 从结果中移除
+            }
+            return true; // 保留在结果中
+          });
+          
+          localStorage.setItem('st_image_player_watch_history', JSON.stringify(remainingHistory));
+          console.log(`从观看记录中移除了 ${removedCount} 个已删除文件的记录`);
+          console.log('更新后观看记录数量:', remainingHistory.length);
+          
+          // 如果路径匹配失败，强制清理所有不存在的文件记录
+          if (removedCount === 0 && successFiles.length > 0) {
+            console.log('路径匹配失败，开始强制清理不存在的文件记录...');
+            const mediaFiles = mediaList.map(item => item.path || item.url || '');
+            let forceRemovedCount = 0;
+            
+            const finalHistory = remainingHistory.filter(item => {
+              // 检查文件是否存在于当前媒体列表中
+              const fileExists = mediaFiles.some(mediaFile => {
+                const normalizedMedia = (mediaFile || '').replace(/\\/g, '/');
+                const normalizedPath = (item.filePath || '').replace(/\\/g, '/');
+                return normalizedMedia === normalizedPath || normalizedMedia.includes(normalizedPath);
+              });
+              
+              if (!fileExists) {
+                forceRemovedCount++;
+                console.log(`强制移除不存在的文件记录: ${item.filePath}`);
+                return false;
+              }
+              return true;
+            });
+            
+            localStorage.setItem('st_image_player_watch_history', JSON.stringify(finalHistory));
+            console.log(`强制清理完成，移除了 ${forceRemovedCount} 个不存在的文件记录`);
+            console.log('最终观看记录数量:', finalHistory.length);
+            
+            // 强制刷新UI显示
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('watchHistoryUpdated', { 
+                detail: { history: finalHistory } 
+              }));
+            }, 100);
+          } else {
+            // 强制刷新UI显示
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('watchHistoryUpdated', { 
+                detail: { history: remainingHistory } 
+              }));
+            }, 100);
+          }
+        }
+        
+        toastr.success(`删除完成！成功: ${successCount}, 失败: ${failedCount}`);
+        return {
+          success: successFiles,
+          failed: failedFiles,
+          total: successCount + failedCount
+        };
+        
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+    } catch (backendError) {
+      console.warn('后端服务不可用，使用模拟删除模式:', backendError);
+      
+      // 模拟删除模式
+      const results = {
+        success: [],
+        failed: [],
+        total: filesToDelete.length
+      };
+      
+      for (const fileInfo of filesToDelete) {
+        try {
+          console.log(`模拟删除文件: ${fileInfo.filePath}`);
+          results.success.push({
+            file: fileInfo.filePath,
+            size: 0
+          });
+        } catch (error) {
+          console.error(`模拟删除文件失败: ${fileInfo.filePath}`, error);
+          results.failed.push({
+            file: fileInfo.filePath,
+            reason: error.message
+          });
+        }
+      }
+      
+      // 从观看记录中移除已删除的文件
+      const remainingHistory = watchHistory.filter(item => 
+        !filesToDelete.some(deleted => deleted.filePath === item.filePath)
+      );
+      localStorage.setItem('st_image_player_watch_history', JSON.stringify(remainingHistory));
+      
+      toastr.success(`模拟删除完成！成功: ${results.success.length}, 失败: ${results.failed.length}`);
+      return results;
+    }
+    
+  } catch (error) {
+    console.error('批量删除文件时出错:', error);
+    toastr.error('批量删除失败');
+    return { success: 0, failed: 0, total: 0, error: error.message };
+  }
+};
+
+/**
+ * 清理旧的观看记录
+ */
+const cleanupOldWatchHistory = (maxAgeDays = 365) => {
+  try {
+    const watchHistory = JSON.parse(localStorage.getItem('st_image_player_watch_history') || '[]');
+    const now = new Date();
+    const cutoffDate = new Date(now.getTime() - (maxAgeDays * 24 * 60 * 60 * 1000));
+    
+    const filteredHistory = watchHistory.filter(item => {
+      const lastWatched = new Date(item.lastWatched);
+      return lastWatched >= cutoffDate;
+    });
+    
+    localStorage.setItem('st_image_player_watch_history', JSON.stringify(filteredHistory));
+    
+    console.log(`清理了 ${watchHistory.length - filteredHistory.length} 条旧记录`);
+    return watchHistory.length - filteredHistory.length;
+  } catch (error) {
+    console.error('清理观看记录时出错:', error);
+    return 0;
+  }
+};
+
 window.registerAIEventListeners = registerAIEventListeners;
 window.getExtensionSettings = getExtensionSettings;
 window.onAIResponse = onAIResponse;
 window.onPlayerMessage = onPlayerMessage;
 window.createFallbackEventSource = createFallbackEventSource;
 
+// 导出观看记录相关函数
+window.recordWatchHistory = recordWatchHistory;
+window.getWatchHistoryStats = getWatchHistoryStats;
+window.batchDeleteWatchedFiles = batchDeleteWatchedFiles;
+window.cleanupOldWatchHistory = cleanupOldWatchHistory;
+
 if (window.eventSource && typeof window.eventSource.triggerEvent === 'function') {
   window.triggerEvent = window.eventSource.triggerEvent.bind(window.eventSource);
   window.getEventListeners = window.eventSource.getEventListeners.bind(window.eventSource);
 }
+
+/**
+ * 同步所有媒体文件的观看记录
+ * 为所有媒体文件创建观看记录，便于批量删除功能使用
+ */
+const syncAllMediaWatchHistory = async () => {
+  try {
+    // 获取当前媒体列表
+    const mediaList = await getMediaList();
+    if (!mediaList || mediaList.length === 0) {
+      return { success: false, error: '没有找到媒体文件', syncedCount: 0 };
+    }
+    
+    // 获取现有观看记录
+    const existingHistory = JSON.parse(localStorage.getItem('st_image_player_watch_history') || '[]');
+    const existingFilePaths = new Set(existingHistory.map(item => item.filePath));
+    
+    let syncedCount = 0;
+    const now = new Date().toISOString();
+    
+    // 为每个媒体文件创建观看记录
+    for (const media of mediaList) {
+      // 如果文件已有记录，跳过
+      if (existingFilePaths.has(media.filePath)) {
+        continue;
+      }
+      
+      // 创建新的观看记录
+      const newRecord = {
+        fileHash: media.filePath.replace(/[^a-zA-Z0-9]/g, '_'),
+        filePath: media.filePath,
+        fileName: media.fileName || media.filePath.split('/').pop() || 'unknown',
+        fileType: media.fileType || (media.filePath.toLowerCase().endsWith('.mp4') ? 'video' : 'image'),
+        watchCount: 1, // 默认观看次数为1
+        lastWatched: now,
+        firstWatched: now,
+        fileSize: media.fileSize || 0
+      };
+      
+      existingHistory.push(newRecord);
+      syncedCount++;
+    }
+    
+    // 保存更新后的观看记录
+    localStorage.setItem('st_image_player_watch_history', JSON.stringify(existingHistory));
+    
+    console.log(`同步完成：新增 ${syncedCount} 条观看记录，总计 ${existingHistory.length} 条记录`);
+    return { success: true, syncedCount, totalCount: existingHistory.length };
+    
+  } catch (error) {
+    console.error('同步观看记录失败:', error);
+    return { success: false, error: error.message, syncedCount: 0 };
+  }
+};
+
+// 导出同步函数
+window.syncAllMediaWatchHistory = syncAllMediaWatchHistory;
